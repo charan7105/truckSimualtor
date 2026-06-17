@@ -12,7 +12,7 @@ struct ContentView: View {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
         }
-        .frame(minWidth: 1480, minHeight: 940)
+        .frame(minWidth: 1500, minHeight: 1010)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -30,21 +30,21 @@ struct ContentView: View {
 
     private var clusterFace: some View {
         let live = sim.phase == .live
-        return VStack(spacing: 12) {
+        return VStack(spacing: 18) {
             TopRail().panelReveal(live, delay: 0.0)
 
             // Hero band: speed + drive | nav + map + telemetry | tach + route
-            HStack(alignment: .top, spacing: 14) {
-                VStack(spacing: 12) {
-                    SpeedGauge(speed: sim.speedMph, diameter: 270)
+            HStack(alignment: .top, spacing: 22) {
+                VStack(spacing: 16) {
+                    SpeedGauge(speed: sim.speedMph, diameter: 300)
                     GearIndicator()
                     DrivePanel()
                     Spacer(minLength: 0)
                 }
-                .frame(width: 360)
+                .frame(width: 384)
                 .panelReveal(live, delay: 0.08)
 
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     NavStrip()
                     ClusterMap(sim: sim).frame(maxWidth: .infinity, maxHeight: .infinity)
                     TelemetryDock()
@@ -52,39 +52,39 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
                 .panelReveal(live, delay: 0.12)
 
-                VStack(spacing: 12) {
-                    TachGauge(rpm: sim.rpm, diameter: 270)
+                VStack(spacing: 16) {
+                    TachGauge(rpm: sim.rpm, diameter: 300)
                     miniArcs
                     RoutePanel()
                     Spacer(minLength: 0)
                 }
-                .frame(width: 360)
+                .frame(width: 384)
                 .panelReveal(live, delay: 0.08)
             }
             .frame(maxHeight: .infinity)
 
             // Bottom band: scenario · diagnostics · network · live packet stream
-            HStack(alignment: .top, spacing: 12) {
-                ScenarioPanel().frame(width: 250)
-                DiagnosticsPanel().frame(width: 300)
-                NetworkPanel().frame(width: 280)
+            HStack(alignment: .top, spacing: 16) {
+                ScenarioPanel().frame(width: 260)
+                DiagnosticsPanel().frame(width: 320)
+                NetworkPanel().frame(width: 300)
                 PacketConsole()
             }
-            .frame(height: 200)
+            .frame(height: 210)
             .panelReveal(live, delay: 0.2)
 
             footer.panelReveal(live, delay: 0.26)
         }
-        .padding(16)
+        .padding(22)
     }
 
     private var miniArcs: some View {
-        HStack(spacing: 22) {
-            RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 76)
-            RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 76)
+        HStack(spacing: 28) {
+            RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 88)
+            RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 88)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, 18)
         .glassPanel()
     }
 

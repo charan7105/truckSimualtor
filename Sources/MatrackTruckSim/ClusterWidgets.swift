@@ -183,10 +183,10 @@ struct TelemetryDock: View {
         HStack(spacing: 12) {
             MetricTile(icon: "gauge.with.dots.needle.67percent", title: "Odometer", value: fmt(sim.odometerMiles, 0), unit: "mi", tint: Theme.ice)
             MetricTile(icon: "arrow.triangle.swap", title: "Trip", value: fmt(sim.tripMiles, 1), unit: "mi", tint: Theme.blue)
-            MetricTile(icon: "clock.fill", title: "Engine Hrs", value: fmt(sim.engineHours, 1), unit: "h", tint: Theme.blue)
+            MetricTile(icon: "clock.fill", title: "Eng Hrs", value: fmt(sim.engineHours, 1), unit: "h", tint: Theme.blue)
             MetricTile(icon: "location.north.fill", title: "Heading", value: "\(sim.headingDeg)", unit: "°", tint: Theme.ice)
-            MetricTile(icon: "antenna.radiowaves.left.and.right", title: "Satellites", value: "\(sim.satellites)", tint: sim.satellites >= 4 ? Theme.green : Theme.amber)
-            MetricTile(icon: "bonjour", title: "ECM", value: sim.ecmActive ? "ACTIVE" : "OFF", tint: sim.ecmActive ? Theme.green : Theme.dim)
+            MetricTile(icon: "antenna.radiowaves.left.and.right", title: "Sats", value: "\(sim.satellites)", tint: sim.satellites >= 4 ? Theme.green : Theme.amber)
+            MetricTile(icon: "bonjour", title: "ECM", value: sim.ecmActive ? "ON" : "OFF", tint: sim.ecmActive ? Theme.green : Theme.dim)
         }
     }
     private func fmt(_ v: Double, _ d: Int) -> String { String(format: "%.\(d)f", v) }
