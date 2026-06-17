@@ -92,7 +92,7 @@ struct RouteMapView: NSViewRepresentable {
             if (driving && !wasDriving) || (driving && bigJump) {
                 dispLat = sim.currentLat; dispLon = sim.currentLon
                 map.setRegion(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: dispLat, longitude: dispLon),
-                                                 span: MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)),
+                                                 span: MKCoordinateSpan(latitudeDelta: 0.22, longitudeDelta: 0.22)),
                               animated: false)
             } else if driving {
                 let f = 1 - exp(-(1.0 / 30.0) / 0.20)

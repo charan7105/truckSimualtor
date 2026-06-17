@@ -12,9 +12,9 @@ struct SimConfig: Codable, Equatable {
     /// odometer/engine-hours we report, not the app's 11/14/70h timers. Documented limitation.
     var timeMultiplier: Double = 1.0
     /// Internal time compression while driving a planned route, so the truck visibly crosses the
-    /// map (1.0 = real time, far too slow to watch). Not user-facing — the single mph SPEED control
-    /// sets the pace (faster mph → arrives sooner); this just keeps the timescale watchable.
-    var routeTimeScale: Double = 25
+    /// map (1.0 = real time, far too slow to watch). Kept modest so the map motion reads natural
+    /// relative to the displayed speed; the mph SPEED control still sets the pace.
+    var routeTimeScale: Double = 5
 
     // MARK: Driving dynamics
     var targetSpeedMph: Double = 65
