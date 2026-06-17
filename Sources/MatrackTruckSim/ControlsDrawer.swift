@@ -65,6 +65,18 @@ struct DrivePanel: View {
             Slider(value: Binding(get: { sim.speedMph * 1.60934 },
                                   set: { sim.setSpeed(sim.drivingRoute ? max(8, $0) / 1.60934 : $0 / 1.60934) }),
                    in: 0...130).tint(Theme.ice)
+
+            HStack {
+                Text("SIM SPEED · MAP PACE").sectionLabel(); Spacer()
+                Text("how fast the route plays").font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+            }
+            HStack(spacing: 8) {
+                ForEach([1, 3, 5, 10], id: \.self) { x in
+                    NeonButton(title: "\(x)×", tint: Theme.amber, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
+                        sim.config.routeTimeScale = Double(x)
+                    }
+                }
+            }
         }
     }
 
