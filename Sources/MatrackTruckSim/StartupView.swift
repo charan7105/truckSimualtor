@@ -16,21 +16,17 @@ struct IgnitionView: View {
             if sim.phase == .cold {
                 startButton
                 // low-opacity descriptor, top-middle ("what is this")
-                VStack(spacing: 10) {
-                    Text("VIRTUAL TRUCK · J1939 / MT TRACKER")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(4)
-                        .foregroundStyle(Theme.ice.opacity(0.45))
+                VStack(spacing: 6) {
                     Text("MATRACK TRUCK SIMULATOR")
-                        .font(.system(size: 17, weight: .heavy, design: .rounded)).tracking(5)
-                        .foregroundStyle(Theme.text.opacity(0.45))
-                    Text("Streams a real truck's engine, GPS, and diagnostics to the Matrack ELD app\nover Bluetooth — no hardware required.")
-                        .font(.system(size: 11.5, weight: .medium, design: .rounded)).tracking(0.5)
-                        .foregroundStyle(Theme.dim.opacity(0.6))
-                        .lineSpacing(3)
+                        .font(.system(size: 15, weight: .heavy, design: .rounded)).tracking(5)
+                        .foregroundStyle(Theme.text.opacity(0.4))
+                    Text("Virtual J1939 / MT tracker")
+                        .font(.system(size: 11, weight: .medium, design: .rounded)).tracking(2)
+                        .foregroundStyle(Theme.dim.opacity(0.55))
                 }
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 56)
+                .padding(.top, 52)
             } else {
                 sweepStage
             }
