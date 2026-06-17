@@ -16,17 +16,21 @@ struct IgnitionView: View {
             if sim.phase == .cold {
                 startButton
                 // low-opacity descriptor, top-middle ("what is this")
-                VStack(spacing: 7) {
+                VStack(spacing: 10) {
+                    Text("VIRTUAL TRUCK · J1939 / MT TRACKER")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(4)
+                        .foregroundStyle(Theme.ice.opacity(0.45))
                     Text("MATRACK TRUCK SIMULATOR")
-                        .font(.system(size: 14, weight: .heavy, design: .rounded)).tracking(5)
-                        .foregroundStyle(Theme.text.opacity(0.32))
-                    Text("Software J1939 / MT tracker · feeds the Matrack ELD app over Bluetooth")
-                        .font(.system(size: 11, weight: .medium, design: .rounded)).tracking(1.5)
-                        .foregroundStyle(Theme.dim.opacity(0.5))
+                        .font(.system(size: 17, weight: .heavy, design: .rounded)).tracking(5)
+                        .foregroundStyle(Theme.text.opacity(0.45))
+                    Text("Streams a real truck's engine, GPS, and diagnostics to the Matrack ELD app\nover Bluetooth — no hardware required.")
+                        .font(.system(size: 11.5, weight: .medium, design: .rounded)).tracking(0.5)
+                        .foregroundStyle(Theme.dim.opacity(0.6))
+                        .lineSpacing(3)
                 }
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 46)
+                .padding(.top, 56)
             } else {
                 sweepStage
             }
@@ -38,7 +42,6 @@ struct IgnitionView: View {
 
     private var startButton: some View {
         VStack(spacing: 24) {
-            HaulLogo(size: 72)
             Button { sim.beginStartup() } label: {
                 ZStack {
                     Circle().stroke(Theme.red.opacity(0.4), lineWidth: 2).frame(width: 156, height: 156)
