@@ -8,72 +8,81 @@ private struct GaugeRing: View {
     var arc: [Color]
     var diameter: CGFloat = 232
     var labels: [(Double, String)] = []     // (fraction 0…1, text) for numbered ticks
+    var tickCount: Int = 40
+    var majorEvery: Int = 8
     var showRedlineBand: Bool = false
     var redlineStart: Double = 0.82
     var showCometTip: Bool = false
     var tipColor: Color = Theme.ice
     var arcOpacity: Double = 1.0
 
-    private let sweep = 0.78
-    private let startAngle = 144.0
+    // One convention for everything: degrees measured clockwise from 12 o'clock.
+    // 0 sits at the lower-left (225°) and sweeps 270° clockwise to the lower-right.
+    private let startDeg = 225.0
+    private let sweepDeg = 270.0
     @State private var breathe = false
 
     var body: some View {
         let f = max(0, min(1, frac))
-        let lw = diameter * 0.072
-        let s = diameter / 232.0
-        let tickR = diameter / 2 - lw - 4 * s
-        let labelR = diameter / 2 - lw - 20 * s
-        let innerD = diameter - lw * 2 - 18 * s
+        let lw = diameter * 0.060
+        let arcInset = diameter * 0.090
+        let arcR = diameter / 2 - arcInset
+        let tickR = diameter * 0.460
+        let labelR = diameter * 0.335
+        let faceD = diameter * 0.560
+        let sweepFrac = sweepDeg / 360.0
+        let arcRot = startDeg - 90.0
         ZStack {
-            // tick marks (fine)
-            ForEach(0..<37) { i in
+            // tick marks
+            ForEach(0...tickCount, id: \.self) { i in
+                let major = i % majorEvery == 0
                 Capsule()
-                    .fill(Color.white.opacity(i % 6 == 0 ? 0.32 : 0.10))
-                    .frame(width: i % 6 == 0 ? 2.5 : 1.5, height: (i % 6 == 0 ? 11 : 6) * s)
+                    .fill(Color.white.opacity(major ? 0.35 : 0.12))
+                    .frame(width: major ? 2.5 : 1.5, height: major ? diameter * 0.045 : diameter * 0.026)
                     .offset(y: -tickR)
-                    .rotationEffect(.degrees(startAngle + sweep * 360 * Double(i) / 36.0))
+                    .rotationEffect(.degrees(startDeg + sweepDeg * Double(i) / Double(tickCount)))
             }
-            // numbered tick labels (upright, trig-placed)
+            // numbered labels (upright, same convention as ticks)
             ForEach(labels.indices, id: \.self) { k in
-                let a = (startAngle + sweep * 360 * labels[k].0) * .pi / 180
+                let rad = (startDeg + sweepDeg * labels[k].0) * .pi / 180
                 Text(labels[k].1)
-                    .font(.system(size: diameter * 0.040, weight: .semibold, design: .rounded))
+                    .font(.system(size: diameter * 0.044, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.dim)
-                    .offset(x: labelR * sin(a), y: -labelR * cos(a))
+                    .offset(x: labelR * sin(rad), y: -labelR * cos(rad))
             }
             // track
-            Circle().trim(from: 0, to: sweep)
-                .stroke(Color.white.opacity(0.06), style: .init(lineWidth: lw, lineCap: .round))
-                .rotationEffect(.degrees(startAngle))
+            Circle().trim(from: 0, to: sweepFrac)
+                .stroke(Color.white.opacity(0.07), style: .init(lineWidth: lw, lineCap: .round))
+                .rotationEffect(.degrees(arcRot))
+                .padding(arcInset)
             // redline danger band
             if showRedlineBand {
-                Circle().trim(from: sweep * redlineStart, to: sweep)
+                Circle().trim(from: sweepFrac * redlineStart, to: sweepFrac)
                     .stroke(Theme.redlineBand, style: .init(lineWidth: lw, lineCap: .round))
-                    .rotationEffect(.degrees(startAngle))
+                    .rotationEffect(.degrees(arcRot))
+                    .padding(arcInset)
             }
-            // value arc (thick gradient)
-            Circle().trim(from: 0, to: sweep * f)
-                .stroke(AngularGradient(gradient: Gradient(colors: arc),
-                                        center: .center,
-                                        startAngle: .degrees(startAngle),
-                                        endAngle: .degrees(startAngle + sweep * 360)),
+            // value arc (thick gradient, fills from 0 at lower-left)
+            Circle().trim(from: 0, to: sweepFrac * f)
+                .stroke(AngularGradient(gradient: Gradient(colors: arc), center: .center,
+                                        startAngle: .degrees(0), endAngle: .degrees(sweepDeg)),
                         style: .init(lineWidth: lw, lineCap: .round))
-                .rotationEffect(.degrees(startAngle))
+                .rotationEffect(.degrees(arcRot))
+                .padding(arcInset)
                 .opacity(arcOpacity)
-                .shadow(color: (arc.last ?? Theme.ice).opacity(arcOpacity * 0.5), radius: 8)
+                .shadow(color: (arc.last ?? Theme.ice).opacity(arcOpacity * 0.45), radius: 7)
                 .animation(.easeOut(duration: 0.4), value: f)
                 .animation(.easeOut(duration: 0.3), value: arcOpacity)
             // inner dial-face
-            Circle().fill(Theme.bg0.opacity(0.55)).frame(width: innerD, height: innerD)
-            Circle().stroke(Theme.stroke, lineWidth: 1).frame(width: innerD, height: innerD)
-            // comet tip
+            Circle().fill(Theme.bg0.opacity(0.5)).frame(width: faceD, height: faceD)
+            Circle().stroke(Theme.stroke, lineWidth: 1).frame(width: faceD, height: faceD)
+            // comet tip at the value head
             if showCometTip && f > 0.001 {
                 Circle().fill(tipColor)
-                    .frame(width: lw * 0.6, height: lw * 0.6)
+                    .frame(width: lw * 0.62, height: lw * 0.62)
                     .glow(tipColor, breathe ? 14 : 7)
-                    .offset(y: -tickR)
-                    .rotationEffect(.degrees(startAngle + sweep * 360 * f))
+                    .offset(y: -arcR)
+                    .rotationEffect(.degrees(startDeg + sweepDeg * f))
                     .animation(.easeOut(duration: 0.4), value: f)
                     .onAppear {
                         withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { breathe = true }
@@ -125,6 +134,7 @@ struct TachGauge: View {
                       arc: hot ? Theme.tachArc : [Theme.dimmer, Theme.dimmer],
                       diameter: diameter,
                       labels: labels,
+                      tickCount: 36, majorEvery: 6,
                       showRedlineBand: true,
                       arcOpacity: hot ? 1.0 : 0.6)
             VStack(spacing: -2) {

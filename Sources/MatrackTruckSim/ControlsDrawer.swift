@@ -5,22 +5,38 @@ import SwiftUI
 
 private struct Card<C: View>: View {
     let title: String
+    var icon: String = ""
+    var tint: Color = Theme.ice
     @ViewBuilder var content: () -> C
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).sectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
+                if !icon.isEmpty {
+                    Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
+                }
+                Text(title).sectionLabel()
+                Spacer()
+            }
             content()
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel()
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel.opacity(0.85))
+        )
+        .overlay(alignment: .top) {
+            LinearGradient(colors: [tint.opacity(0.55), .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(height: 2).clipShape(Capsule()).padding(.horizontal, 14).padding(.top, 0)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.stroke, lineWidth: 1))
+        .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
     }
 }
 
 struct DrivePanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        Card(title: "DRIVE") {
+        Card(title: "DRIVE", icon: "power", tint: Theme.green) {
             HStack(spacing: 10) {
                 Toggle(isOn: Binding(get: { sim.ignitionOn }, set: { sim.setEngine($0) })) {
                     Label("ENGINE", systemImage: "power").font(.system(size: 12, weight: .bold, design: .rounded))
@@ -53,7 +69,7 @@ struct DrivePanel: View {
 struct RoutePanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        Card(title: "ROUTE · NAVIGATION") {
+        Card(title: "ROUTE · NAVIGATION", icon: "map.fill", tint: Theme.ice) {
             TextField("From — e.g. Dallas, TX", text: $sim.routeFrom).textFieldStyle(.roundedBorder)
             TextField("To — e.g. Houston, TX", text: $sim.routeTo).textFieldStyle(.roundedBorder)
             HStack(spacing: 8) {
@@ -81,7 +97,7 @@ struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var selectedScenarioId = 5
     var body: some View {
-        Card(title: "SCENARIO") {
+        Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
             Menu {
                 ForEach(Scenarios.all, id: \.id) { s in
                     Button("\(s.id). \(s.name)") { selectedScenarioId = s.id }
@@ -106,7 +122,7 @@ struct ScenarioPanel: View {
 struct DiagnosticsPanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        Card(title: "DIAGNOSTICS · DTC") {
+        Card(title: "DIAGNOSTICS · DTC", icon: "wrench.and.screwdriver.fill", tint: Theme.amber) {
             HStack(spacing: 6) {
                 ForEach(["P0143", "P0217", "C0035", "U0101"], id: \.self) { code in
                     NeonButton(title: code, tint: Theme.amber, filled: sim.faults.contains(code)) { sim.injectFault(code) }
@@ -134,7 +150,7 @@ struct DiagnosticsPanel: View {
 struct NetworkPanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        Card(title: "NETWORK EFFECTS") {
+        Card(title: "NETWORK EFFECTS", icon: "wifi", tint: Theme.blue) {
             cfgSlider("Loss", \.packetLossPct, 0...50, "%", 0)
             cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
             cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
