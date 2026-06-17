@@ -3,29 +3,16 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var sim: SimController
-    @State private var drawerOpen = false
 
     var body: some View {
         ZStack {
             DashboardBackground()
             clusterFace
-
-            if drawerOpen {
-                Theme.glassScrim.ignoresSafeArea()
-                    .onTapGesture { withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { drawerOpen = false } }
-                    .transition(.opacity).zIndex(15)
-                HStack(spacing: 0) {
-                    Spacer()
-                    ControlsDrawer(open: $drawerOpen).frame(width: 420)
-                }
-                .transition(.move(edge: .trailing)).zIndex(16)
-            }
-
             if sim.phase != .live {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
         }
-        .frame(minWidth: 1440, minHeight: 900)
+        .frame(minWidth: 1480, minHeight: 940)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -41,71 +28,79 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Live cluster face
-
     private var clusterFace: some View {
         let live = sim.phase == .live
-        return VStack(spacing: 14) {
-            TopRail().panelReveal(live, delay: 0.00)
-            NavStrip().panelReveal(live, delay: 0.05)
+        return VStack(spacing: 12) {
+            TopRail().panelReveal(live, delay: 0.0)
 
-            HStack(alignment: .top, spacing: 16) {
-                VStack(spacing: 14) {
-                    SpeedGauge(speed: sim.speedMph).panelReveal(live, delay: 0.10)
-                    GearIndicator().panelReveal(live, delay: 0.16)
+            // Hero band: speed + drive | nav + map + telemetry | tach + route
+            HStack(alignment: .top, spacing: 14) {
+                VStack(spacing: 12) {
+                    SpeedGauge(speed: sim.speedMph, diameter: 270)
+                    GearIndicator()
+                    DrivePanel()
                     Spacer(minLength: 0)
                 }
                 .frame(width: 360)
+                .panelReveal(live, delay: 0.08)
 
-                ClusterMap(sim: sim)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .panelReveal(live, delay: 0.12)
+                VStack(spacing: 12) {
+                    NavStrip()
+                    ClusterMap(sim: sim).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    TelemetryDock()
+                }
+                .frame(maxWidth: .infinity)
+                .panelReveal(live, delay: 0.12)
 
-                VStack(spacing: 14) {
-                    TachGauge(rpm: sim.rpm).panelReveal(live, delay: 0.10)
-                    miniArcs.panelReveal(live, delay: 0.18)
+                VStack(spacing: 12) {
+                    TachGauge(rpm: sim.rpm, diameter: 270)
+                    miniArcs
+                    RoutePanel()
                     Spacer(minLength: 0)
                 }
                 .frame(width: 360)
+                .panelReveal(live, delay: 0.08)
             }
             .frame(maxHeight: .infinity)
 
-            TelemetryDock().panelReveal(live, delay: 0.22)
-            footer.panelReveal(live, delay: 0.28)
+            // Bottom band: scenario · diagnostics · network · live packet stream
+            HStack(alignment: .top, spacing: 12) {
+                ScenarioPanel().frame(width: 250)
+                DiagnosticsPanel().frame(width: 300)
+                NetworkPanel().frame(width: 280)
+                PacketConsole()
+            }
+            .frame(height: 200)
+            .panelReveal(live, delay: 0.2)
+
+            footer.panelReveal(live, delay: 0.26)
         }
-        .padding(18)
+        .padding(16)
     }
 
     private var miniArcs: some View {
-        HStack(spacing: 24) {
-            RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 92)
-            RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 92)
+        HStack(spacing: 22) {
+            RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 76)
+            RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 76)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, 14)
         .glassPanel()
     }
 
     private var footer: some View {
         HStack(spacing: 14) {
             Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 12)).foregroundStyle(sim.statusColor)
-            Text(sim.log.last?.text ?? "—").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
+            Text("Advertising as ELD-MA · \(sim.streaming ? "streaming" : "waiting for ELD app")")
+                .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
             Spacer()
             Button { sim.rearmStartup() } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.dim)
-            }.buttonStyle(.plain).help("Replay ignition").hoverGlow()
-            Button { withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { drawerOpen.toggle() } } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "slider.horizontal.3")
-                    Text("FLIGHT DECK").font(.system(size: 12, weight: .bold, design: .rounded))
+                    Image(systemName: "arrow.clockwise"); Text("REPLAY IGNITION").font(.system(size: 11, weight: .bold, design: .rounded))
                 }
-                .foregroundStyle(Theme.ice)
-                .padding(.horizontal, 13).padding(.vertical, 7)
-                .background(Capsule().fill(Theme.ice.opacity(0.12)))
-                .overlay(Capsule().stroke(Theme.ice.opacity(0.5), lineWidth: 1))
-            }
-            .buttonStyle(.plain).keyboardShortcut(".", modifiers: .command).hoverGlow()
+                .foregroundStyle(Theme.dim)
+            }.buttonStyle(.plain).hoverGlow()
         }
-        .frame(height: 30)
+        .frame(height: 24)
     }
 }
