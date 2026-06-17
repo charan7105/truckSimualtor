@@ -10,6 +10,7 @@ private struct GaugeRing: View {
     var labels: [(Double, String)] = []     // (fraction 0…1, text) for numbered ticks
     var tickCount: Int = 40
     var majorEvery: Int = 8
+    var redTickFrom: Double = 1.1            // ticks at/after this fraction render red (1.1 = never)
     var showRedlineBand: Bool = false
     var redlineStart: Double = 0.82
     var showCometTip: Bool = false
@@ -36,8 +37,9 @@ private struct GaugeRing: View {
             // tick marks
             ForEach(0...tickCount, id: \.self) { i in
                 let major = i % majorEvery == 0
+                let inRed = Double(i) / Double(tickCount) >= redTickFrom
                 Capsule()
-                    .fill(Color.white.opacity(major ? 0.35 : 0.12))
+                    .fill(inRed ? Theme.red.opacity(major ? 0.95 : 0.65) : Color.white.opacity(major ? 0.35 : 0.12))
                     .frame(width: major ? 2.5 : 1.5, height: major ? diameter * 0.045 : diameter * 0.026)
                     .offset(y: -tickR)
                     .rotationEffect(.degrees(startDeg + sweepDeg * Double(i) / Double(tickCount)))
@@ -125,30 +127,33 @@ struct TachGauge: View {
     var rpm: Int
     var maxRpm: Double = 3000
     var diameter: CGFloat = 300
-    private let labels: [(Double, String)] = [(0, "0"), (0.333, "1"), (0.667, "2"), (1.0, "3")]
+    private let labels: [(Double, String)] = [(0, "0"), (0.333, "1k"), (0.667, "2k"), (1.0, "3k")]
     var body: some View {
         let frac = Double(rpm) / maxRpm
         let hot = frac > 0.82
         ZStack {
             GaugeRing(frac: frac,
-                      arc: hot ? Theme.tachArc : [Theme.dimmer, Theme.dimmer],
+                      arc: Theme.tachArc,
                       diameter: diameter,
                       labels: labels,
                       tickCount: 36, majorEvery: 6,
+                      redTickFrom: 0.82,
                       showRedlineBand: true,
-                      arcOpacity: hot ? 1.0 : 0.6)
+                      showCometTip: true,
+                      tipColor: hot ? Theme.red : Theme.amber)
             VStack(spacing: -2) {
                 Text("\(rpm)")
                     .font(.system(size: diameter * 0.19, weight: .bold, design: .rounded))
                     .foregroundStyle(hot ? Theme.red : Theme.text)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.3), value: rpm)
-                Text("× RPM").font(.system(size: diameter * 0.045, weight: .bold, design: .rounded))
-                    .tracking(5).foregroundStyle(Theme.dim)
+                Text("RPM").font(.system(size: diameter * 0.045, weight: .bold, design: .rounded))
+                    .tracking(6).foregroundStyle(hot ? Theme.red.opacity(0.8) : Theme.dim)
+                    .animation(.easeOut(duration: 0.3), value: hot)
             }
         }
         .frame(width: diameter, height: diameter)
-        .shadow(color: (hot ? Theme.red : .clear).opacity(0.7), radius: 14)
+        .shadow(color: (hot ? Theme.red : .clear).opacity(0.7), radius: 16)
         .animation(.easeOut(duration: 0.3), value: hot)
     }
 }
