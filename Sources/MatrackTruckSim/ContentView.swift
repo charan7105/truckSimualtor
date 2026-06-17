@@ -16,6 +16,9 @@ struct ContentView: View {
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
+            let renderer = ImageRenderer(content: HaulLogo(size: 256))
+            renderer.scale = 2
+            if let icon = renderer.nsImage { NSApp.applicationIconImage = icon }
             sim.startBLE()
             if ProcessInfo.processInfo.arguments.contains("demo") {
                 Task { @MainActor in

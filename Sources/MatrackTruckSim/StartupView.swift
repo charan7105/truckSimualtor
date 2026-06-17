@@ -26,6 +26,7 @@ struct IgnitionView: View {
 
     private var startButton: some View {
         VStack(spacing: 24) {
+            HaulLogo(size: 72)
             Button { sim.beginStartup() } label: {
                 ZStack {
                     Circle().stroke(Theme.red.opacity(0.4), lineWidth: 2).frame(width: 156, height: 156)

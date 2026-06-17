@@ -6,7 +6,7 @@ struct TopRail: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "bolt.horizontal.circle.fill").font(.system(size: 22)).foregroundStyle(Theme.ice)
+            HaulLogo(size: 30)
             Text("MATRACK").font(.system(size: 16, weight: .heavy, design: .rounded)).tracking(3).foregroundStyle(Theme.text)
             ClockTempWidget()
             Spacer()

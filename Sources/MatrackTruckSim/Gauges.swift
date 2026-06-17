@@ -298,6 +298,36 @@ struct StatusPill: View {
     }
 }
 
+// MARK: - App logo (native rebuild of haul-app-icon.svg — truck wheel)
+
+struct HaulLogo: View {
+    var size: CGFloat = 28
+    var body: some View {
+        let s = size / 100
+        let bg = LinearGradient(colors: [Color(hex: 0x2B2F3A), Color(hex: 0x0C0E14)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing)
+        ZStack {
+            RoundedRectangle(cornerRadius: 22 * s, style: .continuous).fill(bg)
+            RoundedRectangle(cornerRadius: 22 * s, style: .continuous)
+                .fill(LinearGradient(colors: [Color.white.opacity(0.14), .clear], startPoint: .top, endPoint: .center))
+            Circle().fill(Color.white).frame(width: 62 * s, height: 62 * s)   // wheel ring (r31)
+            Circle().fill(bg).frame(width: 41 * s, height: 41 * s)            // ring inner (r20.5)
+            Circle().fill(Color.white).frame(width: 19 * s, height: 19 * s)   // hub (r9.5)
+            ForEach([0.0, 120.0, 240.0], id: \.self) { ang in                 // 3 spokes
+                RoundedRectangle(cornerRadius: 4 * s, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: 8 * s, height: 22 * s)
+                    .offset(y: 11 * s)
+                    .frame(width: size, height: size)
+                    .rotationEffect(.degrees(ang))
+            }
+            RoundedRectangle(cornerRadius: 2.2 * s, style: .continuous)       // 12 o'clock marker cut
+                .fill(bg).frame(width: 5 * s, height: 6 * s).offset(y: -26.5 * s)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 // MARK: - Premium toggle chip (replaces the plain macOS switch)
 
 struct ToggleChip: View {
