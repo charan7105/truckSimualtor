@@ -230,6 +230,55 @@ struct StatusPill: View {
     }
 }
 
+// MARK: - Premium toggle chip (replaces the plain macOS switch)
+
+struct ToggleChip: View {
+    var title: String
+    var icon: String
+    var isOn: Bool
+    var tint: Color
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 12, weight: .bold))
+                Text(title).font(.system(size: 12, weight: .bold, design: .rounded))
+                Spacer()
+                Circle().fill(isOn ? tint : Theme.dimmer).frame(width: 8, height: 8)
+                    .shadow(color: isOn ? tint.opacity(0.9) : .clear, radius: 6)
+            }
+            .foregroundStyle(isOn ? tint : Theme.dim)
+            .padding(.horizontal, 12).padding(.vertical, 11)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(isOn ? tint.opacity(0.14) : Theme.bg0.opacity(0.4)))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(isOn ? tint.opacity(0.6) : Theme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain).hoverGlow()
+        .animation(.easeOut(duration: 0.2), value: isOn)
+    }
+}
+
+// MARK: - Nav-style input field
+
+struct NavField: View {
+    var placeholder: String
+    @Binding var text: String
+    var icon: String
+    var tint: Color
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(tint).frame(width: 14)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(Theme.text)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.bg0.opacity(0.45)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+    }
+}
+
 // MARK: - Button
 
 struct NeonButton: View {

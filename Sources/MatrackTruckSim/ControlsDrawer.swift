@@ -38,31 +38,49 @@ struct DrivePanel: View {
     var body: some View {
         Card(title: "DRIVE", icon: "power", tint: Theme.green) {
             HStack(spacing: 10) {
-                Toggle(isOn: Binding(get: { sim.ignitionOn }, set: { sim.setEngine($0) })) {
-                    Label("ENGINE", systemImage: "power").font(.system(size: 12, weight: .bold, design: .rounded))
-                }.toggleStyle(.switch).tint(Theme.green)
-                Spacer()
-                Toggle(isOn: Binding(get: { sim.autoDrive }, set: { sim.setAutoDrive($0) })) {
-                    Label("AUTO", systemImage: "wand.and.stars").font(.system(size: 12, weight: .bold, design: .rounded))
-                }.toggleStyle(.switch).tint(Theme.red)
+                ToggleChip(title: "ENGINE", icon: "power", isOn: sim.ignitionOn, tint: Theme.green) { sim.setEngine(!sim.ignitionOn) }
+                ToggleChip(title: "AUTO", icon: "wand.and.stars", isOn: sim.autoDrive, tint: Theme.red) { sim.setAutoDrive(!sim.autoDrive) }
             }
-            .foregroundStyle(Theme.text)
+            HStack {
+                Text("MODE").sectionLabel(); Spacer()
+                Text(modeText).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1.5)
+                    .foregroundStyle(modeTint)
+            }
+            Text("QUICK SET · KM/H").sectionLabel()
             HStack(spacing: 8) {
                 ForEach([0, 60, 90, 110], id: \.self) { v in
-                    NeonButton(title: v == 0 ? "STOP" : "\(v)", tint: v == 0 ? Theme.red : Theme.ice) {
+                    NeonButton(title: v == 0 ? "STOP" : "\(v)",
+                               tint: v == 0 ? Theme.red : Theme.ice,
+                               filled: presetActive(v)) {
                         sim.setSpeed(Double(v) / 1.60934)
                     }
                 }
             }
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text("SPEED").sectionLabel(); Spacer()
-                Text("\(Int((sim.speedMph * 1.60934).rounded())) km/h")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundStyle(Theme.ice)
+                Text("\(Int((sim.speedMph * 1.60934).rounded()))")
+                    .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
+                Text("km/h").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
             }
             Slider(value: Binding(get: { sim.speedMph * 1.60934 },
                                   set: { sim.setSpeed(sim.drivingRoute ? max(8, $0) / 1.60934 : $0 / 1.60934) }),
                    in: 0...130).tint(Theme.ice)
         }
+    }
+
+    private var modeText: String {
+        if sim.drivingRoute { return "ROUTE" }
+        if sim.autoDrive { return "AUTO CRUISE" }
+        return sim.ignitionOn ? "MANUAL" : "PARKED"
+    }
+    private var modeTint: Color {
+        if sim.drivingRoute { return Theme.green }
+        if sim.autoDrive { return Theme.red }
+        return sim.ignitionOn ? Theme.ice : Theme.dim
+    }
+    private func presetActive(_ v: Int) -> Bool {
+        let kmh = sim.speedMph * 1.60934
+        return v == 0 ? sim.speedMph < 0.5 : abs(kmh - Double(v)) < 4
     }
 }
 
@@ -70,14 +88,20 @@ struct RoutePanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
         Card(title: "ROUTE · NAVIGATION", icon: "map.fill", tint: Theme.ice) {
-            TextField("From — e.g. Dallas, TX", text: $sim.routeFrom).textFieldStyle(.roundedBorder)
-            TextField("To — e.g. Houston, TX", text: $sim.routeTo).textFieldStyle(.roundedBorder)
+            NavField(placeholder: "From — e.g. Dallas, TX", text: $sim.routeFrom, icon: "smallcircle.filled.circle", tint: Theme.green)
+            NavField(placeholder: "To — e.g. Houston, TX", text: $sim.routeTo, icon: "mappin.circle.fill", tint: Theme.red)
             HStack(spacing: 8) {
                 NeonButton(title: sim.routeBusy ? "…" : "PLAN", icon: "map", tint: Theme.ice) {
                     Task { await sim.loadRoute(from: sim.routeFrom, to: sim.routeTo) }
                 }
                 NeonButton(title: "RANDOM", icon: "shuffle", tint: Theme.amber) {
                     Task { await sim.loadRandomRoute() }
+                }
+            }
+            if !sim.routeInfo.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill").font(.system(size: 10)).foregroundStyle(Theme.ice)
+                    Text(sim.routeInfo).font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(Theme.dim).lineLimit(1)
                 }
             }
             if sim.drivingRoute {
@@ -87,7 +111,11 @@ struct RoutePanel: View {
             }
             if sim.drivingRoute || sim.routeProgress > 0 {
                 SegmentedProgress(progress: sim.routeProgress)
-                Text("\(Int(sim.routeProgress * 100))% complete").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                HStack {
+                    Text("\(Int(sim.routeProgress * 100))% complete").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                    Spacer()
+                    Text("\(sim.routeMilesLeft) mi left").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.ice)
+                }
             }
         }
     }
