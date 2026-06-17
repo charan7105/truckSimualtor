@@ -1,0 +1,15 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Xcode / DerivedData
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+
+# misc
+*.log
