@@ -210,5 +210,9 @@ enum Scenarios {
                      [Phase(seconds: 10, targetSpeedMph: 65, ignition: true),
                       Phase(seconds: 6, targetSpeedMph: 0, ignition: true)]
                  }),
+        Scenario(id: 21, name: "Unassigned Driving (log out first)",
+                 expect: "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
+                 phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),
+                          Phase(seconds: 300, targetSpeedMph: 60, ignition: true)]),
     ]
 }
