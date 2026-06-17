@@ -183,6 +183,72 @@ struct RingGauge: View {
     }
 }
 
+// MARK: - Animated fuel cylinder (liquid tank with a moving wave surface)
+
+private struct Wave: Shape {
+    var phase: Double            // degrees, animated
+    var level: Double            // 0…1 fill
+    var amplitude: CGFloat = 3
+    var animatableData: Double { get { phase } set { phase = newValue } }
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let lv = max(0, min(1, level))
+        let yBase = rect.height * (1 - CGFloat(lv))
+        p.move(to: CGPoint(x: 0, y: rect.height))
+        p.addLine(to: CGPoint(x: 0, y: yBase))
+        var x: CGFloat = 0
+        while x <= rect.width {
+            let rel = Double(x / max(1, rect.width))
+            let y = yBase + sin(rel * 2 * .pi * 1.6 + phase * .pi / 180) * amplitude
+            p.addLine(to: CGPoint(x: x, y: y))
+            x += 2
+        }
+        p.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        p.closeSubpath()
+        return p
+    }
+}
+
+struct FuelCylinder: View {
+    var value: Double            // 0–100
+    var caption: String
+    var tint: Color
+    var width: CGFloat = 56
+    var height: CGFloat = 104
+    var body: some View {
+        let level = max(0, min(1, value / 100))
+        let shape = RoundedRectangle(cornerRadius: width * 0.26, style: .continuous)
+        VStack(spacing: 6) {
+            ZStack {
+                shape.fill(Theme.bg0.opacity(0.55))
+                TimelineView(.periodic(from: .now, by: 0.05)) { ctx in
+                    let phase = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4 * 360
+                    Wave(phase: phase, level: level)
+                        .fill(LinearGradient(colors: [tint, tint.opacity(0.5)], startPoint: .bottom, endPoint: .top))
+                }
+                .clipShape(shape)
+                .animation(.easeOut(duration: 0.5), value: level)
+                // capacity gridlines
+                VStack(spacing: 0) {
+                    ForEach(0..<4) { i in
+                        Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                        if i < 3 { Spacer() }
+                    }
+                }
+                .padding(.vertical, 12).padding(.horizontal, 7)
+                shape.stroke(Theme.stroke, lineWidth: 1.5)
+                Text("\(Int(value))%")
+                    .font(.system(size: width * 0.27, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+                    .shadow(color: .black.opacity(0.7), radius: 2)
+            }
+            .frame(width: width, height: height)
+            Label(caption, systemImage: "fuelpump.fill")
+                .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+        }
+    }
+}
+
 // MARK: - Telemetry tile
 
 struct MetricTile: View {

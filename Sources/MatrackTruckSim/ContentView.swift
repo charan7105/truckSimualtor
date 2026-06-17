@@ -80,33 +80,27 @@ struct ContentView: View {
 
     private var miniArcs: some View {
         VStack(spacing: 14) {
-            HStack(spacing: 28) {
-                RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 88)
-                RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 88)
+            HStack(spacing: 36) {
+                FuelCylinder(value: sim.fuelPct, caption: "FUEL 1", tint: sim.fuelPct < 20 ? Theme.red : Theme.green)
+                FuelCylinder(value: sim.fuel2Pct, caption: "FUEL 2", tint: sim.fuel2Pct < 20 ? Theme.red : Theme.blue)
             }
-            HStack(spacing: 8) {
-                Button { sim.setFuel(sim.fuelPct - 5) } label: {
-                    Image(systemName: "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
-                        .frame(width: 26, height: 26)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ice.opacity(0.12)))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.ice.opacity(0.5), lineWidth: 1))
-                }.buttonStyle(.plain).hoverGlow()
-                Slider(value: Binding(get: { sim.fuelPct }, set: { sim.setFuel($0) }), in: 0...100)
-                    .tint(sim.fuelPct < 20 ? Theme.red : Theme.green)
-                Button { sim.setFuel(sim.fuelPct + 5) } label: {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
-                        .frame(width: 26, height: 26)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ice.opacity(0.12)))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.ice.opacity(0.5), lineWidth: 1))
-                }.buttonStyle(.plain).hoverGlow()
-                Text("\(Int(sim.fuelPct))%").font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(sim.fuelPct < 20 ? Theme.red : Theme.green).frame(width: 38, alignment: .trailing)
-            }
-            .padding(.horizontal, 14)
+            fuelRow("FUEL 1", value: sim.fuelPct, set: { sim.setFuel($0) }, tint: sim.fuelPct < 20 ? Theme.red : Theme.green)
+            fuelRow("FUEL 2", value: sim.fuel2Pct, set: { sim.setFuel2($0) }, tint: sim.fuel2Pct < 20 ? Theme.red : Theme.blue)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+        .padding(.horizontal, 14)
         .glassPanel()
+    }
+
+    private func fuelRow(_ label: String, value: Double, set: @escaping (Double) -> Void, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(.system(size: 9, weight: .semibold, design: .rounded)).tracking(1)
+                .foregroundStyle(Theme.dim).frame(width: 46, alignment: .leading)
+            Slider(value: Binding(get: { value }, set: { set($0) }), in: 0...100).tint(tint)
+            Text("\(Int(value))%").font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(tint).frame(width: 36, alignment: .trailing)
+        }
     }
 
     private var footer: some View {

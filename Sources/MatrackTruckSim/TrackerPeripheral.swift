@@ -33,6 +33,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var odometerMiles = 25_000.0
     @Published var engineHours = 4_352.5
     @Published var fuelPct = 78.0
+    @Published var fuel2Pct = 60.0
     @Published var satellites = 11
     @Published var headingDeg = 103
     @Published var ecmActive = true
@@ -195,6 +196,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func injectFault(_ code: String) { if !device.dtcCodes.contains(code) { device.dtcCodes.append(code) }; faults = device.dtcCodes; info("fault \(code) armed (app sees it on next readdtc)") }
     func clearFaults() { device.dtcCodes = []; faults = []; info("faults cleared") }
     func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
+    func setFuel2(_ pct: Double) { engine.fuelLevel2Pct = max(0, min(100, pct)); mirror() }
     func sendVINNow() { sendReliable(MTPacket.version(device)) }
 
     // MARK: - Route driving (from → to)
@@ -312,6 +314,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if odometerMiles.rounded() != engine.odometerMiles.rounded() { odometerMiles = engine.odometerMiles }
         if (engineHours * 10).rounded() != (engine.engineHours * 10).rounded() { engineHours = engine.engineHours }
         if fuelPct.rounded() != engine.fuelLevelPct.rounded() { fuelPct = engine.fuelLevelPct }
+        if fuel2Pct.rounded() != engine.fuelLevel2Pct.rounded() { fuel2Pct = engine.fuelLevel2Pct }
         if satellites != engine.satellites { satellites = engine.satellites }
         if headingDeg != engine.headingDeg { headingDeg = engine.headingDeg }
         if ignitionOn != engine.ignitionOn { ignitionOn = engine.ignitionOn }
