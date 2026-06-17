@@ -194,6 +194,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
     func injectFault(_ code: String) { if !device.dtcCodes.contains(code) { device.dtcCodes.append(code) }; faults = device.dtcCodes; info("fault \(code) armed (app sees it on next readdtc)") }
     func clearFaults() { device.dtcCodes = []; faults = []; info("faults cleared") }
+    func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
     func sendVINNow() { sendReliable(MTPacket.version(device)) }
 
     // MARK: - Route driving (from → to)

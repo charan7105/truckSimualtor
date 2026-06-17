@@ -79,12 +79,33 @@ struct ContentView: View {
     }
 
     private var miniArcs: some View {
-        HStack(spacing: 28) {
-            RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 88)
-            RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 88)
+        VStack(spacing: 14) {
+            HStack(spacing: 28) {
+                RingGauge(value: sim.fuelPct, caption: "FUEL", tint: sim.fuelPct < 20 ? Theme.red : Theme.green, diameter: 88)
+                RingGauge(value: 64, caption: "DEF", tint: Theme.blue, diameter: 88)
+            }
+            HStack(spacing: 8) {
+                Button { sim.setFuel(sim.fuelPct - 5) } label: {
+                    Image(systemName: "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
+                        .frame(width: 26, height: 26)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ice.opacity(0.12)))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.ice.opacity(0.5), lineWidth: 1))
+                }.buttonStyle(.plain).hoverGlow()
+                Slider(value: Binding(get: { sim.fuelPct }, set: { sim.setFuel($0) }), in: 0...100)
+                    .tint(sim.fuelPct < 20 ? Theme.red : Theme.green)
+                Button { sim.setFuel(sim.fuelPct + 5) } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
+                        .frame(width: 26, height: 26)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ice.opacity(0.12)))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.ice.opacity(0.5), lineWidth: 1))
+                }.buttonStyle(.plain).hoverGlow()
+                Text("\(Int(sim.fuelPct))%").font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(sim.fuelPct < 20 ? Theme.red : Theme.green).frame(width: 38, alignment: .trailing)
+            }
+            .padding(.horizontal, 14)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, 16)
         .glassPanel()
     }
 
