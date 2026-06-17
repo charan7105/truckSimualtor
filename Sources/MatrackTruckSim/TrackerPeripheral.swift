@@ -6,6 +6,9 @@ import SwiftUI
 // The simulator core: a BLE peripheral that impersonates a legacy Matrack "MT" tracker,
 // exposed as an ObservableObject so the SwiftUI control panel can drive + observe it.
 
+/// Power-on state machine for the cinematic ignition sequence.
+enum ClusterPhase { case cold, igniting, sweep, settle, live }
+
 struct LogLine: Identifiable {
     enum Kind { case out, inbound, info, drop }
     let id = UUID()
@@ -20,6 +23,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var statusColor = Theme.dim
     @Published var connected = false
     @Published var streaming = false
+    @Published var phase: ClusterPhase = .cold      // ignition power-on state
 
     // Live telemetry (mirrored from EngineState each tick)
     @Published var ignitionOn = false
@@ -38,7 +42,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     var currentLon = -121.977687
 
     // Identity / diagnostics
-    @Published var vin = ""
+    @Published var vin = "" { didSet { device.vin = vin } }   // editable; flows into the LV/VIN packet
     @Published var firmware = ""
     @Published var faults: [String] = []
     @Published var log: [LogLine] = []
@@ -69,6 +73,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pending: [Data] = []
     private var lastIgnitionSent: Bool?
     private var heldPacket: String?            // for out-of-order injection
+    private let bootOdometerMiles = SimConfig.default.startOdometerMiles   // for trip distance
     private let uiTickSec = 0.2                // smooth sim/UI clock (decoupled from packet cadence)
     private var sinceLastPacket = 0.0
     private var autoSpeedCountdown = 0.0       // AUTO: seconds until the next random target-speed change
@@ -84,6 +89,52 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard manager == nil else { return }
         manager = CBPeripheralManager(delegate: self, queue: nil)
     }
+
+    // MARK: - Cluster-derived display helpers (computed from existing state)
+    var ambientTempC: Int { 22 }
+    var tripMiles: Double { max(0, odometerMiles - bootOdometerMiles) }
+    var routeRemainingMeters: Double { max(0, route.totalMeters * (1 - routeProgress)) }
+    var routeMilesLeft: Int { Int((route.totalMiles * (1 - routeProgress)).rounded()) }
+    var hasRoute: Bool { routeCoords.count >= 2 }
+    var gear: String { !ignitionOn ? "P" : (speedMph > 0.5 ? "D" : "N") }
+    var cardinal: String {
+        let dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+        let i = Int(((Double(headingDeg) + 22.5) / 45).rounded(.down))
+        return dirs[((i % 8) + 8) % 8]
+    }
+    /// Next-turn icon + signed bearing delta, from a look-ahead along the route.
+    var nextTurn: (icon: String, deltaDeg: Int) {
+        guard route.hasRoute else { return ("location.slash", 0) }
+        let t = route.traveledMeters
+        let h1 = route.positionAt(t).headingDeg
+        let h2 = route.positionAt(min(route.totalMeters, t + 400)).headingDeg
+        var d = h2 - h1
+        while d > 180 { d -= 360 }
+        while d < -180 { d += 360 }
+        let icon: String
+        if abs(d) > 150 { icon = "arrow.uturn.up" }
+        else if d > 25 { icon = "arrow.turn.up.right" }
+        else if d < -25 { icon = "arrow.turn.up.left" }
+        else { icon = "arrow.up" }
+        return (icon, d)
+    }
+
+    // MARK: - Ignition power-on sequence (visual only; BLE keeps running)
+    func beginStartup() {
+        guard phase == .cold else { return }
+        setEngine(true)                                   // real telemetry spins up "under the curtain"
+        withAnimation(.easeIn(duration: 0.3)) { phase = .igniting }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            withAnimation(.easeOut(duration: 0.6)) { phase = .sweep }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(.easeOut(duration: 0.4)) { phase = .settle }
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            withAnimation(.easeOut(duration: 0.45)) { phase = .live }
+        }
+    }
+    func skipStartup() { withAnimation(.easeOut(duration: 0.3)) { phase = .live } }
+    func rearmStartup() { withAnimation(.easeIn(duration: 0.3)) { phase = .cold } }
 
     private func applyConfigToEngine() {
         engine.odometerMiles = config.startOdometerMiles
@@ -125,9 +176,20 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if on {
             engine.ignitionOn = true
             autoSpeedCountdown = 0                                  // pick a fresh auto speed immediately
-            if route.hasRoute && !drivingRoute { beginDrive() }     // continue the current route, no reset
+            if route.hasRoute {
+                if !drivingRoute { beginDrive() }                  // continue the current route, no reset
+            } else {
+                Task { @MainActor in                               // no route yet → grab one and start driving
+                    await self.loadRandomRoute()
+                    guard self.autoDrive, self.route.hasRoute else { return }
+                    self.beginDrive()
+                }
+            }
             ensureClock()
+        } else {
+            config.targetSpeedMph = 65                              // restore a sane manual default after auto
         }
+        mirror()
         info("auto speed \(on ? "on" : "off")")
     }
     func injectFault(_ code: String) { if !device.dtcCodes.contains(code) { device.dtcCodes.append(code) }; faults = device.dtcCodes; info("fault \(code) armed (app sees it on next readdtc)") }
@@ -142,13 +204,13 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             let pts = try await Directions.route(from: from, to: to)
             route.setRoute(pts)
             routeCoords = pts
+            drivingRoute = false            // freshly planned route returns to overview; press DRIVE to go
             routeVersion += 1
             routeInfo = "\(from) → \(to) · \(String(format: "%.0f", route.totalMiles)) mi"
             routeProgress = 0
             info("route loaded: \(routeInfo)")
         } catch {
-            routeInfo = "Route error: \(error.localizedDescription)"
-            info(routeInfo)
+            info("route error: \(error.localizedDescription)")    // keep prior route shown; surface error in log only
         }
     }
 
@@ -179,7 +241,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func beginDrive() {
         guard route.hasRoute else { info("load a route first"); return }
         if runningScenario != nil { stopScenario() }
-        if route.isComplete { route.reset() }   // re-drive a finished route from the start
+        if route.progressFraction >= 0.999 { route.reset() }   // re-drive a finished route from the start
         drivingRoute = true
         engine.ignitionOn = true
         routeProgress = route.progressFraction
