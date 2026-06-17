@@ -213,38 +213,35 @@ struct FuelCylinder: View {
     var value: Double            // 0–100
     var caption: String
     var tint: Color
-    var width: CGFloat = 56
-    var height: CGFloat = 104
+    var width: CGFloat = 50
+    var height: CGFloat = 110
     var body: some View {
         let level = max(0, min(1, value / 100))
-        let shape = RoundedRectangle(cornerRadius: width * 0.26, style: .continuous)
-        VStack(spacing: 6) {
+        let shape = RoundedRectangle(cornerRadius: width * 0.46, style: .continuous)
+        VStack(spacing: 8) {
             ZStack {
-                shape.fill(Theme.bg0.opacity(0.55))
-                TimelineView(.periodic(from: .now, by: 0.05)) { ctx in
-                    let phase = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4 * 360
-                    Wave(phase: phase, level: level)
-                        .fill(LinearGradient(colors: [tint, tint.opacity(0.5)], startPoint: .bottom, endPoint: .top))
+                // glass body
+                shape.fill(LinearGradient(colors: [Theme.bg1.opacity(0.75), Theme.bg0.opacity(0.6)],
+                                          startPoint: .top, endPoint: .bottom))
+                // liquid with a gentle moving surface
+                TimelineView(.periodic(from: .now, by: 0.06)) { ctx in
+                    let phase = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3.0) / 3.0 * 360
+                    Wave(phase: phase, level: level, amplitude: 2)
+                        .fill(LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.5)], startPoint: .bottom, endPoint: .top))
                 }
                 .clipShape(shape)
                 .animation(.easeOut(duration: 0.5), value: level)
-                // capacity gridlines
-                VStack(spacing: 0) {
-                    ForEach(0..<4) { i in
-                        Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
-                        if i < 3 { Spacer() }
-                    }
-                }
-                .padding(.vertical, 12).padding(.horizontal, 7)
+                // glass gloss
+                shape.fill(LinearGradient(colors: [Color.white.opacity(0.14), .clear], startPoint: .topLeading, endPoint: .center))
+                    .allowsHitTesting(false)
+                // rim
                 shape.stroke(Theme.stroke, lineWidth: 1.5)
-                Text("\(Int(value))%")
-                    .font(.system(size: width * 0.27, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.text)
-                    .shadow(color: .black.opacity(0.7), radius: 2)
             }
             .frame(width: width, height: height)
-            Label(caption, systemImage: "fuelpump.fill")
-                .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+            VStack(spacing: 1) {
+                Text("\(Int(value))%").font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(tint)
+                Text(caption).font(.system(size: 9, weight: .semibold, design: .rounded)).tracking(1).foregroundStyle(Theme.dim)
+            }
         }
     }
 }
