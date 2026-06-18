@@ -31,6 +31,7 @@ struct Scenario {
     let expect: String
     var phases: [Phase]
     var transport: Transport = .clean
+    var appSteps: [String] = []          // what to do in the ELD app to observe this scenario
 }
 
 /// Deterministically simulates a scenario tick-by-tick and returns the exact wire sequence.
@@ -213,6 +214,12 @@ enum Scenarios {
         Scenario(id: 21, name: "Unassigned Driving (log out first)",
                  expect: "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
                  phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),
-                          Phase(seconds: 300, targetSpeedMph: 60, ignition: true)]),
+                          Phase(seconds: 300, targetSpeedMph: 60, ignition: true)],
+                 appSteps: [
+                    "Log OUT of the ELD app (no driver assigned)",
+                    "Tap RUN — the truck drives with nobody logged in",
+                    "Log back IN → app shows pending Unassigned Driving",
+                    "Claim or reject the driving block",
+                 ]),
     ]
 }

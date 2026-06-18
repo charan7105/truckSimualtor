@@ -139,14 +139,14 @@ struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var selectedScenarioId = 5
     var body: some View {
-        Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
+        let sel = Scenarios.all.first { $0.id == selectedScenarioId }
+        return Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
             Menu {
                 ForEach(Scenarios.all, id: \.id) { s in
                     Button("\(s.id). \(s.name)") { selectedScenarioId = s.id }
                 }
             } label: {
-                let name = Scenarios.all.first { $0.id == selectedScenarioId }?.name ?? "Pick"
-                Text("\(selectedScenarioId). \(name)")
+                Text("\(selectedScenarioId). \(sel?.name ?? "Pick")")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.text).frame(maxWidth: .infinity, alignment: .leading)
             }.menuStyle(.borderlessButton)
@@ -154,8 +154,25 @@ struct ScenarioPanel: View {
                 NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopScenario() }
             } else {
                 NeonButton(title: "RUN", icon: "play.fill", tint: Theme.red, filled: true) {
-                    if let s = Scenarios.all.first(where: { $0.id == selectedScenarioId }) { sim.runScenario(s) }
+                    if let s = sel { sim.runScenario(s) }
                 }
+            }
+            if let steps = sel?.appSteps, !steps.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Label("DO THIS IN THE APP", systemImage: "list.bullet.clipboard")
+                        .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.amber)
+                    ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("\(i + 1)").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(Theme.amber)
+                            Text(s).font(.system(size: 10.5, design: .rounded)).foregroundStyle(Theme.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.amber.opacity(0.08)))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.amber.opacity(0.3), lineWidth: 1))
             }
         }
     }

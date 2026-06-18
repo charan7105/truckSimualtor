@@ -73,7 +73,7 @@ struct ContentView: View {
                 NetworkPanel().frame(width: 300)
                 PacketConsole()
             }
-            .frame(height: 210)
+            .frame(height: 248)
             .panelReveal(live, delay: 0.2)
 
             footer.panelReveal(live, delay: 0.26)
