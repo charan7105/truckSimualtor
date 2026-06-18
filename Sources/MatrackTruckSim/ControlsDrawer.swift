@@ -138,6 +138,7 @@ struct RoutePanel: View {
 struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var selectedScenarioId = 5
+    @State private var showSteps = false
     var body: some View {
         let sel = Scenarios.all.first { $0.id == selectedScenarioId }
         return Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
@@ -158,21 +159,45 @@ struct ScenarioPanel: View {
                 }
             }
             if let steps = sel?.appSteps, !steps.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label("DO THIS IN THE APP", systemImage: "list.bullet.clipboard")
-                        .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.amber)
-                    ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("\(i + 1)").font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(Theme.amber)
-                            Text(s).font(.system(size: 10.5, design: .rounded)).foregroundStyle(Theme.text)
-                                .fixedSize(horizontal: false, vertical: true)
+                Button { showSteps.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle")
+                        Text("WHAT & HOW (\(steps.count))").font(.system(size: 11, weight: .bold, design: .rounded))
+                        Spacer()
+                        Image(systemName: "chevron.up").font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.amber)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .frame(maxWidth: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.amber.opacity(0.14)))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.amber.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain).hoverGlow()
+                .popover(isPresented: $showSteps, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("\(selectedScenarioId). \(sel?.name ?? "")")
+                            .font(.system(size: 13, weight: .heavy, design: .rounded)).foregroundStyle(Theme.text)
+                        if let ex = sel?.expect, !ex.isEmpty {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("WHAT IT DOES").font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.5).foregroundStyle(Theme.dim)
+                                Text(ex).font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Divider().overlay(Theme.stroke)
+                        Label("DO THIS IN THE APP", systemImage: "list.bullet.clipboard")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(Theme.amber)
+                        ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(i + 1)").font(.system(size: 13, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Theme.amber).frame(width: 18, alignment: .trailing)
+                                Text(s).font(.system(size: 13, design: .rounded)).foregroundStyle(Theme.text)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
+                    .padding(18).frame(width: 340)
+                    .background(Theme.bg1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.amber.opacity(0.08)))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.amber.opacity(0.3), lineWidth: 1))
             }
         }
     }
