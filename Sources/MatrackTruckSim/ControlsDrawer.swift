@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 // On-screen operator panels (all visible on the cluster — no hidden drawer).
 // Each reuses the existing control logic verbatim.
@@ -212,10 +214,13 @@ struct PacketConsole: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 10) {
                 Text("LIVE PACKET STREAM").sectionLabel()
                 Spacer()
                 Text("\(sim.log.count) lines").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                Button { exportLog() } label: {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
+                }.buttonStyle(.plain).hoverGlow().help("Export packet log to a file")
             }
             ScrollViewReader { proxy in
                 ScrollView {
@@ -242,4 +247,18 @@ struct PacketConsole: View {
     }
     private func symbol(_ k: LogLine.Kind) -> String { k == .out ? "→" : (k == .inbound ? "←" : (k == .drop ? "⨯" : "•")) }
     private func color(_ k: LogLine.Kind) -> Color { k == .out ? Theme.ice : (k == .inbound ? Theme.amber : (k == .drop ? Theme.red : Theme.dim)) }
+
+    private func exportLog() {
+        let header = "Matrack Truck Sim — packet log\nVIN: \(sim.vin)\nExported: \(Date())\nLines: \(sim.log.count)\n\n"
+        let body = sim.log.map { "\($0.time)  \(symbol($0.kind))  \($0.text)" }.joined(separator: "\n")
+        let text = header + body
+        let panel = NSSavePanel()
+        panel.title = "Export Packet Log"
+        panel.nameFieldStringValue = "matrack-packets.txt"
+        panel.allowedContentTypes = [.plainText]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? text.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
 }
