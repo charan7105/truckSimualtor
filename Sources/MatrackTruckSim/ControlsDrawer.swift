@@ -194,8 +194,16 @@ struct ScenarioPanel: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        Divider().overlay(Theme.stroke)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label("SETUP (ONCE)", systemImage: "dot.radiowaves.left.and.right")
+                                .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.ice)
+                            Text("In the ELD app, open the Bluetooth / ELD-device screen, select \"ELD-MA\", and connect. A vehicle must be assigned to the driver first.")
+                                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .padding(18).frame(width: 340)
+                    .padding(18).frame(width: 360)
                     .background(Theme.bg1)
                 }
             }
