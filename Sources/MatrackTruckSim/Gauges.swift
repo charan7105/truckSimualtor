@@ -137,8 +137,9 @@ struct TachGauge: View {
                       diameter: diameter,
                       labels: labels,
                       tickCount: 36, majorEvery: 6,
-                      redTickFrom: 0.82,
+                      redTickFrom: 30.0 / 36.0,
                       showRedlineBand: true,
+                      redlineStart: 30.0 / 36.0,
                       showCometTip: true,
                       tipColor: hot ? Theme.red : Theme.amber)
             VStack(spacing: -2) {

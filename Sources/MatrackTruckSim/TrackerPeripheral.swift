@@ -179,8 +179,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             autoSpeedCountdown = 0                                  // pick a fresh auto speed immediately
             if route.hasRoute {
                 if !drivingRoute { beginDrive() }                  // continue the current route, no reset
-            } else {
-                Task { @MainActor in                               // no route yet → grab one and start driving
+            } else if !routeBusy {                                 // no route yet → grab one (skip if a load is already in flight)
+                Task { @MainActor in
                     await self.loadRandomRoute()
                     guard self.autoDrive, self.route.hasRoute else { return }
                     self.beginDrive()
@@ -293,7 +293,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     // MARK: - Logging
-    private func stamp() -> String { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f.string(from: Date()) }
+    private static let stampFormatter: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f }()
+    private func stamp() -> String { Self.stampFormatter.string(from: Date()) }
     private func info(_ s: String) { push(LogLine(time: stamp(), text: s, kind: .info)) }
     private func push(_ l: LogLine) {
         log.append(l); if log.count > 250 { log.removeFirst(log.count - 250) }
@@ -405,7 +406,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             if let pos = route.advance(meters: metersThisTick) {
                 engine.latitude = pos.coord.latitude; engine.longitude = pos.coord.longitude; engine.headingDeg = pos.headingDeg
             }
-            routeProgress = route.progressFraction
+            let pf = route.progressFraction                  // publish only on whole-% change (avoid 5 Hz churn)
+            if Int(pf * 100) != Int(routeProgress * 100) { routeProgress = pf }
             engine.advance(dt: driveDt)
             if route.isComplete || route.progressFraction >= 0.999 {
                 engine.speedMph = 0; drivingRoute = false; routeProgress = 1

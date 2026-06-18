@@ -39,9 +39,8 @@ struct ClockTempWidget: View {
             }
         }
     }
-    private func timeString(_ d: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: d)
-    }
+    private static let hhmm: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm"; return f }()
+    private func timeString(_ d: Date) -> String { Self.hhmm.string(from: d) }
 }
 
 /// Editable VIN — taps to an inline field bound straight to sim.vin (flows into the LV packet).
@@ -60,6 +59,7 @@ struct VINChip: View {
                     .frame(width: 170)
                     .focused($focused)
                     .onSubmit { editing = false }
+                    .onChange(of: focused) { if !$0 { editing = false } }
             } else {
                 Text(sim.vin.isEmpty ? "SET VIN" : sim.vin)
                     .font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1)
