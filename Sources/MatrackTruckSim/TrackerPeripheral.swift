@@ -74,6 +74,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pending: [Data] = []
     private var lastIgnitionSent: Bool?
     private var heldPacket: String?            // for out-of-order injection
+    private var lastWatchdog = Date()          // app sends $wdg every ~20s; a real tracker stops streaming if it stops
     private let bootOdometerMiles = SimConfig.default.startOdometerMiles   // for trip distance
     private let uiTickSec = 0.2                // smooth sim/UI clock (decoupled from packet cadence)
     private var sinceLastPacket = 0.0
@@ -380,7 +381,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     private func startStreaming() {
-        streaming = true; lastIgnitionSent = nil
+        streaming = true; lastIgnitionSent = nil; lastWatchdog = Date()
         sinceLastPacket = config.packetIntervalSec          // emit the first live packet promptly
         status = "Connected · streaming"; statusColor = Theme.green
         ensureClock()
@@ -424,6 +425,13 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             if lastIgnitionSent != engine.ignitionOn { sendReliable(MTPacket.ignition(engine, on: engine.ignitionOn)); lastIgnitionSent = engine.ignitionOn }
             sendPacket(MTPacket.livePosition(engine))
         }
+        // Real-tracker watchdog: app sends $wdg every ~20s; if it stops, the tracker stops streaming
+        // (resumes on the next readdata). 90s is a safe margin so normal operation never trips it.
+        if streaming && Date().timeIntervalSince(lastWatchdog) > 90 {
+            streaming = false
+            status = "Watchdog lost — stream paused"; statusColor = Theme.amber
+            info("no watchdog ≥90s — a real tracker stops streaming (resumes on readdata)")
+        }
     }
 
     private func updateRouteSpeed(dt: Double) {
@@ -453,6 +461,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
         else if c.hasPrefix("clrdtc") { device.dtcCodes = []; faults = [] }
         else if c.hasPrefix("stopdata") { sendRaw("ACK,STOP") }
+        else if c.hasPrefix("$wdg") || c.hasPrefix("wdg") { lastWatchdog = Date() }   // keepalive: consume like a real tracker (no reply)
     }
 
     // MARK: - CBPeripheralManagerDelegate
