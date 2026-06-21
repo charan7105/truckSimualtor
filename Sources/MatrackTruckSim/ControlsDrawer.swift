@@ -284,8 +284,8 @@ struct NetworkPanel: View {
                     }
                     countSlider
                     cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
-                    NeonButton(title: sim.runningScenario != nil ? "DUMPING…" : "DUMP STORED",
-                               icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: sim.runningScenario != nil) {
+                    NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
+                               icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: isDumping) {
                         sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
                     }
                     Text("≈500ms reproduces the disconnect · 1s is safe.")
@@ -303,6 +303,8 @@ struct NetworkPanel: View {
             }
         }
     }
+
+    private var isDumping: Bool { sim.runningScenario?.hasPrefix("Stored dump") == true }
 
     private var signalTint: Color {
         if sim.linkDown || sim.config.signalPct < 20 { return Theme.red }

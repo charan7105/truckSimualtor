@@ -212,10 +212,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// Signal 100→0. Above 0 it ramps packet loss (weak signal); at 0 it goes out of range (drops the link).
     /// macOS has no TX-power API, so this is emulated: loss reuses the existing emitNow() gate, and
     /// "out of range" = going silent so the *app* times out (~75s) → disconnects → auto-reconnects.
+    private var preDropSignalPct: Double = 100          // signal level to restore after a transient outage
     func setSignal(_ pct: Double) {
         config.signalPct = pct
         config.packetLossPct = max(0, 100 - pct)        // reuse the emitNow() loss gate
-        if pct <= 0 { dropLink(seconds: config.rangeOutageSec) }
+        if pct <= 0 { if !linkDown { dropLink(seconds: config.rangeOutageSec) } }   // idempotent: a slider drag to 0 arms once
         else if linkDown { resumeLink() }
     }
 
@@ -223,6 +224,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// reconnects by scanning, so it must stay discoverable). After ~75s of silence the app disconnects
     /// and auto-reconnects on its own — exactly the real out-of-range round-trip.
     func dropLink(seconds: Double) {
+        preDropSignalPct = config.signalPct >= 1 ? config.signalPct : 100   // remember weak level to restore on return
         linkDown = true
         config.signalPct = 0
         status = "OUT OF RANGE — silent \(Int(seconds))s"; statusColor = Theme.red
@@ -236,7 +238,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func resumeLink() {
         dropTimer?.invalidate(); dropTimer = nil
         linkDown = false
-        if config.signalPct < 1 { config.signalPct = 100 }
+        if config.signalPct < 1 { config.signalPct = preDropSignalPct }    // restore the pre-drop weak level (or 100)
         config.packetLossPct = max(0, 100 - config.signalPct)
         info("📶 back in range — telemetry resumes")
         if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
@@ -362,7 +364,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var runningScenario: String?
 
     func runScenario(_ s: Scenario) {
-        autoDrive = false; drivingRoute = false             // step() pauses normal emission while a scenario runs
+        autoDrive = false; drivingRoute = false; dayDriving = false   // step() pauses normal emission while a scenario runs
         scenarioQueue = ScenarioRunner.run(s, config: config)
         runningScenario = s.name
         info("▶ scenario '\(s.name)' — \(scenarioQueue.count) packets (effects baked in)")
@@ -379,8 +381,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
     /// disconnect (≈0.5s breaks the app; 1.0s completes cleanly). The SIM never fails — it reproduces
     /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
-    func dumpStoredPackets(count: Int, cadenceSec: Double) {
-        autoDrive = false; drivingRoute = false; dayDriving = false
+    func dumpStoredPackets(count: Int, cadenceSec: Double, stopDrive: Bool = true) {
+        if stopDrive { autoDrive = false; drivingRoute = false; dayDriving = false }   // app-issued readstr keeps the drive (resumes when queue drains)
         scenarioQueue = ScenarioRunner.storedDump(count: count, config: config)
         runningScenario = "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
         info("▶ stored dump — \(count) packets @ \(Int(cadenceSec * 1000))ms cadence (≈500ms repros the disconnect)")
@@ -572,7 +574,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             startStreaming()
         } else if c.hasPrefix("readvin") { sendReliable(MTPacket.version(device)) }
         else if c.hasPrefix("readstr") {
-            if config.storedDumpCount > 0 { dumpStoredPackets(count: config.storedDumpCount, cadenceSec: config.storedDumpCadenceSec) }
+            if config.storedDumpCount > 0 { dumpStoredPackets(count: config.storedDumpCount, cadenceSec: config.storedDumpCadenceSec, stopDrive: false) }
             else { sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0") }
         }
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
@@ -614,8 +616,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         info("✓ iPhone subscribed to data characteristic")
     }
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        connected = false; streaming = false; heldPacket = nil   // drop any stale out-of-order hold
+        connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
         if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
+        dropTimer?.invalidate(); dropTimer = nil; linkDown = false   // out-of-range ends when the link actually drops → reconnect resumes streaming
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber
         info("iPhone disconnected")
     }
