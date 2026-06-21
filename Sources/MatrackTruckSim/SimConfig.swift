@@ -24,6 +24,12 @@ struct SimConfig: Codable, Equatable {
     /// rpm = idleRpm + speedMph * rpmPerMph  (rough engine model)
     var rpmPerMph: Double = 26
 
+    // MARK: DRIVE MY DAY (F3) — one-click full-day trip with baked-in event violations
+    var dayCruiseMph: Double = 68
+    var speedingViolationMph: Double = 82
+    var violationEveryMiles: Double = 75
+    var idleStopSec: Double = 45
+
     // MARK: Starting telemetry
     var startOdometerMiles: Double = 25_000
     var startEngineHours: Double = 4_352.5
@@ -37,12 +43,21 @@ struct SimConfig: Codable, Equatable {
     var outOfOrderPct: Double = 0
     /// Extra random delay added before sending each packet (ms).
     var extraDelayMs: Double = 0
+    /// Emulated BLE signal strength 0–100 (100 = full). Maps to packetLossPct = 100 − signalPct;
+    /// 0 = out of range. (macOS has no TX-power API, so "weak signal" is emulated via loss + drop.)
+    var signalPct: Double = 100
 
     // MARK: Disconnect / reconnect / stored backlog
     /// When a disconnect scenario fires, how long to stay disconnected (sim seconds).
     var reconnectDelaySec: Double = 600
     /// Packets buffered while disconnected, replayed (as stored 'S' packets) on reconnect.
     var storedBacklogCount: Int = 0
+    /// F1 out-of-range outage: how long to go silent. The ELD app only DISCONNECTS after ~75s of
+    /// silence (15s+30s+30s retry escalation), so ≥80 = a real disconnect+reconnect; 15–75 = a stall demo.
+    var rangeOutageSec: Double = 80
+    /// F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.
+    var storedDumpCount: Int = 80
+    var storedDumpCadenceSec: Double = 0.5
 
     // MARK: HOS cycle (for cycle-exhaustion/reset scenarios)
     var cycleDriveLimitHours: Double = 11

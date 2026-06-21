@@ -72,8 +72,8 @@ struct DrivePanel: View {
                 Text("SIM SPEED · MAP PACE").sectionLabel(); Spacer()
                 Text("how fast the route plays").font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
             }
-            HStack(spacing: 8) {
-                ForEach([1, 3, 5, 10], id: \.self) { x in
+            HStack(spacing: 6) {
+                ForEach([1, 5, 10, 25, 30], id: \.self) { x in
                     NeonButton(title: "\(x)×", tint: Theme.amber, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
                         sim.config.routeTimeScale = Double(x)
                     }
@@ -123,6 +123,14 @@ struct RoutePanel: View {
             } else {
                 NeonButton(title: "DRIVE ROUTE", icon: "play.fill", tint: Theme.green, filled: sim.hasRoute) { sim.startRouteDrive() }
             }
+            if sim.dayDriving {
+                NeonButton(title: "END DAY", icon: "stop.fill", tint: Theme.amber, filled: true) { sim.stopDay() }
+            } else {
+                NeonButton(title: "DRIVE MY DAY", icon: "sun.max.fill", tint: Theme.amber) { Task { await sim.driveMyDay() } }
+            }
+            Text("Full state-crossing day at 30× · IFTA mileage + speeding/idle events. (HOS hour-clocks run real-time.)")
+                .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
             if sim.drivingRoute || sim.routeProgress > 0 {
                 SegmentedProgress(progress: sim.routeProgress)
                 HStack {
@@ -242,13 +250,74 @@ struct DiagnosticsPanel: View {
 struct NetworkPanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        Card(title: "NETWORK EFFECTS", icon: "wifi", tint: Theme.blue) {
-            cfgSlider("Loss", \.packetLossPct, 0...50, "%", 0)
-            cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
-            cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
-            cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
+        Card(title: "CONNECTION · SIGNAL", icon: "antenna.radiowaves.left.and.right", tint: Theme.blue) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+
+                    // F1 — signal strength + out-of-range emulation
+                    HStack {
+                        Text("SIGNAL").sectionLabel(); Spacer()
+                        if sim.linkDown {
+                            Text("OUT OF RANGE").font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(Theme.red)
+                        } else {
+                            Text("\(Int(sim.config.signalPct))%").font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundStyle(signalTint)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: sim.linkDown ? "wifi.slash" : "wifi").font(.system(size: 11)).foregroundStyle(signalTint).frame(width: 18)
+                        Slider(value: Binding(get: { sim.config.signalPct }, set: { sim.setSignal($0) }), in: 0...100).tint(signalTint)
+                    }
+                    NeonButton(title: sim.linkDown ? "BACK IN RANGE" : "DROP · OUT OF RANGE",
+                               icon: sim.linkDown ? "wifi" : "wifi.slash", tint: Theme.red, filled: sim.linkDown) {
+                        if sim.linkDown { sim.resumeLink() } else { sim.dropLink(seconds: sim.config.rangeOutageSec) }
+                    }
+                    cfgSlider("Outage", \.rangeOutageSec, 15...180, "s", 0)
+                    Text("≥80s ⇒ real app disconnect+reconnect · <75s ⇒ stall demo. (Out-of-range is emulated by going silent.)")
+                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
+
+                    Divider().overlay(Theme.stroke)
+
+                    // F2 — stored-packet dump (reproduce Harshith's fast-dump disconnect)
+                    HStack {
+                        Text("STORED DUMP").sectionLabel(); Spacer()
+                        Text("\(sim.config.storedDumpCount) pkts").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                    }
+                    countSlider
+                    cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
+                    NeonButton(title: sim.runningScenario != nil ? "DUMPING…" : "DUMP STORED",
+                               icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: sim.runningScenario != nil) {
+                        sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
+                    }
+                    Text("≈500ms reproduces the disconnect · 1s is safe.")
+                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+
+                    Divider().overlay(Theme.stroke)
+
+                    // Raw transport effects (advanced)
+                    Text("RAW EFFECTS").sectionLabel()
+                    cfgSlider("Loss", \.packetLossPct, 0...50, "%", 0)
+                    cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
+                    cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
+                    cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
+                }
+            }
         }
     }
+
+    private var signalTint: Color {
+        if sim.linkDown || sim.config.signalPct < 20 { return Theme.red }
+        if sim.config.signalPct < 50 { return Theme.amber }
+        return Theme.green
+    }
+
+    private var countSlider: some View {
+        HStack(spacing: 8) {
+            Text("Count").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
+            Slider(value: Binding(get: { Double(sim.config.storedDumpCount) }, set: { sim.config.storedDumpCount = Int($0) }), in: 0...300).tint(Theme.ice)
+            Text("\(sim.config.storedDumpCount)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
+        }
+    }
+
     private func cfgSlider(_ label: String, _ kp: WritableKeyPath<SimConfig, Double>,
                            _ range: ClosedRange<Double>, _ unit: String, _ dec: Int) -> some View {
         HStack(spacing: 8) {

@@ -69,8 +69,8 @@ struct ContentView: View {
             // Bottom band: scenario · diagnostics · network · live packet stream
             HStack(alignment: .top, spacing: 16) {
                 ScenarioPanel().frame(width: 260)
-                DiagnosticsPanel().frame(width: 320)
-                NetworkPanel().frame(width: 300)
+                DiagnosticsPanel().frame(width: 300)
+                NetworkPanel().frame(width: 344)
                 PacketConsole()
             }
             .frame(height: 248)

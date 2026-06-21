@@ -137,13 +137,35 @@ enum ScenarioRunner {
         }
     }
 
-    private static func toStored(_ live: String) -> String {
+    static func toStored(_ live: String) -> String {
         guard let first = live.first, first == "L" else { return live }
         return "S" + live.dropFirst()
     }
 
-    private static func backdated(_ i: Int, _ count: Int, _ dt: Double) -> Date {
+    static func backdated(_ i: Int, _ count: Int, _ dt: Double) -> Date {
         Date(timeIntervalSinceNow: -Double(count - i) * dt)
+    }
+
+    /// F2: the exact wire sequence a real `readstr` dump produces — N stored 'S' packets + footers.
+    /// Played back at a configurable cadence to reproduce the fast-dump disconnect (≈0.5s breaks, 1s is fine).
+    static func storedDump(count: Int, config: SimConfig) -> [Emitted] {
+        let e = EngineState()
+        e.odometerMiles = config.startOdometerMiles
+        e.engineHours = config.startEngineHours
+        e.fuelLevelPct = config.startFuelPct
+        e.idleRpmConfig = config.idleRpm
+        e.rpmPerMphConfig = config.rpmPerMph
+        e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
+        e.ignitionOn = true
+        let dt = config.packetIntervalSec
+        var out: [Emitted] = []
+        for i in 0..<max(0, count) {
+            e.advance(dt: dt)
+            out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(i, count, dt))), kind: .stored))
+        }
+        out.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
+        out.append(Emitted(wire: "SAVED PACKET COUNT:\(count)", kind: .raw))
+        return out
     }
 }
 

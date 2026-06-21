@@ -23,6 +23,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var statusColor = Theme.dim
     @Published var connected = false
     @Published var streaming = false
+    @Published var linkDown = false                 // F1: emulated out-of-range (we go silent; the app times out)
     @Published var phase: ClusterPhase = .cold      // ignition power-on state
 
     // Live telemetry (mirrored from EngineState each tick)
@@ -53,6 +54,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // Route driving
     @Published var drivingRoute = false
+    @Published var dayDriving = false               // F3: DRIVE MY DAY (distinct from a plain ROUTE drive)
     @Published var routeInfo = ""
     @Published var routeProgress = 0.0
     @Published var routeCoords: [CLLocationCoordinate2D] = []
@@ -79,6 +81,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private let uiTickSec = 0.2                // smooth sim/UI clock (decoupled from packet cadence)
     private var sinceLastPacket = 0.0
     private var autoSpeedCountdown = 0.0       // AUTO: seconds until the next random target-speed change
+    private var dropTimer: Timer?             // F1: out-of-range outage timer
+    private var nextViolationAtMeters = 0.0   // F3: distance-triggered violation scheduler
+    private var violationHoldSec = 0.0        // F3: remaining seconds of the active violation
+    private var violationIsIdle = false       // F3: alternate speeding ↔ idle
 
     override init() {
         super.init()
@@ -151,7 +157,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - Manual controls
     func setEngine(_ on: Bool) {
         if runningScenario != nil { stopScenario() }
-        autoDrive = false; drivingRoute = false
+        autoDrive = false; drivingRoute = false; dayDriving = false
         engine.ignitionOn = on
         if !on { engine.speedMph = 0 }
         ensureClock(); mirror(); info("engine \(on ? "ON" : "OFF")")
@@ -159,6 +165,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     func setSpeed(_ mph: Double) {
         if runningScenario != nil { stopScenario() }
+        dayDriving = false                          // a manual speed set ends DRIVE MY DAY automation
         if drivingRoute {
             if mph <= 0 { stopRouteDrive(); return }    // STOP pauses (keeps position)
             autoDrive = false                           // manual speed override; keep driving
@@ -174,6 +181,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// it takes over speed on the *current* drive and gradually settles to a cruising speed.
     func setAutoDrive(_ on: Bool) {
         if runningScenario != nil { stopScenario() }
+        dayDriving = false                          // AUTO cruise takes over from DRIVE MY DAY automation
         autoDrive = on
         if on {
             engine.ignitionOn = true
@@ -199,6 +207,41 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
     func setFuel2(_ pct: Double) { engine.fuelLevel2Pct = max(0, min(100, pct)); mirror() }
     func sendVINNow() { sendReliable(MTPacket.version(device)) }
+
+    // MARK: - F1: signal strength + out-of-range emulation
+    /// Signal 100→0. Above 0 it ramps packet loss (weak signal); at 0 it goes out of range (drops the link).
+    /// macOS has no TX-power API, so this is emulated: loss reuses the existing emitNow() gate, and
+    /// "out of range" = going silent so the *app* times out (~75s) → disconnects → auto-reconnects.
+    func setSignal(_ pct: Double) {
+        config.signalPct = pct
+        config.packetLossPct = max(0, 100 - pct)        // reuse the emitNow() loss gate
+        if pct <= 0 { dropLink(seconds: config.rangeOutageSec) }
+        else if linkDown { resumeLink() }
+    }
+
+    /// EMULATED out-of-range: suppress telemetry for `seconds`. We never stop advertising (the app
+    /// reconnects by scanning, so it must stay discoverable). After ~75s of silence the app disconnects
+    /// and auto-reconnects on its own — exactly the real out-of-range round-trip.
+    func dropLink(seconds: Double) {
+        linkDown = true
+        config.signalPct = 0
+        status = "OUT OF RANGE — silent \(Int(seconds))s"; statusColor = Theme.red
+        info("📵 out of range: telemetry suppressed for \(Int(seconds))s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)")
+        dropTimer?.invalidate()
+        dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
+    }
+
+    /// Back in range: resume telemetry. Restores the streaming status only if the app is still connected;
+    /// if the silence already made the app disconnect, the next readdata re-arms streaming normally.
+    func resumeLink() {
+        dropTimer?.invalidate(); dropTimer = nil
+        linkDown = false
+        if config.signalPct < 1 { config.signalPct = 100 }
+        config.packetLossPct = max(0, 100 - config.signalPct)
+        info("📶 back in range — telemetry resumes")
+        if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
+        else if connected { status = "iPhone connected"; statusColor = Theme.green }
+    }
 
     // MARK: - Route driving (from → to)
     @MainActor
@@ -256,7 +299,62 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         info("driving route…")
     }
 
-    func stopRouteDrive() { drivingRoute = false; engine.speedMph = 0; mirror(); info("route drive stopped") }
+    func stopRouteDrive() { drivingRoute = false; dayDriving = false; engine.speedMph = 0; mirror(); info("route drive stopped") }
+
+    // MARK: - F3: DRIVE MY DAY (one-click full-day, state-crossing, with event violations)
+    /// Curated long interstate pairs so the day crosses a state line (IFTA is per-jurisdiction mileage).
+    private let dayRoutes: [(String, String)] = [
+        ("Dallas, TX", "Oklahoma City, OK"),
+        ("Atlanta, GA", "Nashville, TN"),
+        ("Phoenix, AZ", "Las Vegas, NV"),
+        ("Chicago, IL", "Indianapolis, IN"),
+        ("Portland, OR", "Seattle, WA"),
+        ("Kansas City, MO", "Omaha, NE"),
+    ]
+
+    /// One click: load a long state-crossing route and drive it end-to-end at 30×, with baked-in
+    /// speeding + idle EVENT violations — a full day of IFTA per-jurisdiction mileage in ~10 min.
+    /// HONEST LIMIT: the app's 11/14/70h HOS *hour* clocks run on real wall-clock and CANNOT be
+    /// compressed — use 1× + a long route for genuine HOS exhaustion. This produces mileage + events.
+    @MainActor
+    func driveMyDay() async {
+        let pick = dayRoutes.randomElement() ?? ("Dallas, TX", "Oklahoma City, OK")
+        routeFrom = pick.0; routeTo = pick.1
+        await loadRoute(from: pick.0, to: pick.1)
+        guard route.hasRoute else { info("DRIVE MY DAY: route load failed (check network)"); return }
+        config.routeTimeScale = 30
+        autoDrive = false                                   // steady cruise → deterministic IFTA mileage
+        config.targetSpeedMph = config.dayCruiseMph
+        nextViolationAtMeters = config.violationEveryMiles / 0.000621371
+        violationHoldSec = 0; violationIsIdle = false
+        dayDriving = true
+        beginDrive()
+        info("▶ DRIVE MY DAY — \(pick.0) → \(pick.1) at 30× with auto speeding/idle events")
+    }
+
+    func stopDay() { dayDriving = false; stopRouteDrive() }
+
+    /// F3 event scheduler — alternates a speeding spike and an idle stop every `violationEveryMiles`,
+    /// distance-triggered so it fires identically at any timescale. Holds are real-time so the LP
+    /// stream (sampled ~1/s) actually records each event.
+    private func runDayViolations(dt: Double) {
+        if violationHoldSec > 0 {
+            violationHoldSec -= dt
+            if violationHoldSec <= 0 { config.targetSpeedMph = config.dayCruiseMph }   // resume cruise
+            return
+        }
+        guard route.traveledMeters >= nextViolationAtMeters else { return }
+        let atMi = Int(route.totalMiles * route.progressFraction)
+        if violationIsIdle {
+            config.targetSpeedMph = 0; violationHoldSec = config.idleStopSec            // idle stop, ignition stays on
+            info("⚠︎ DRIVE MY DAY: idle stop ~\(Int(config.idleStopSec))s at \(atMi) mi")
+        } else {
+            config.targetSpeedMph = config.speedingViolationMph; violationHoldSec = 6   // speeding spike
+            info("⚠︎ DRIVE MY DAY: speeding \(Int(config.speedingViolationMph)) mph at \(atMi) mi")
+        }
+        violationIsIdle.toggle()
+        nextViolationAtMeters += config.violationEveryMiles / 0.000621371
+    }
 
     // MARK: - Live scenario playback (plays a scenario's exact packet sequence over BLE)
     private var scenarioTimer: Timer?
@@ -276,6 +374,20 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     func stopScenario() {
         scenarioTimer?.invalidate(); scenarioQueue.removeAll(); runningScenario = nil; info("scenario stopped")
+    }
+
+    /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
+    /// disconnect (≈0.5s breaks the app; 1.0s completes cleanly). The SIM never fails — it reproduces
+    /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
+    func dumpStoredPackets(count: Int, cadenceSec: Double) {
+        autoDrive = false; drivingRoute = false; dayDriving = false
+        scenarioQueue = ScenarioRunner.storedDump(count: count, config: config)
+        runningScenario = "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
+        info("▶ stored dump — \(count) packets @ \(Int(cadenceSec * 1000))ms cadence (≈500ms repros the disconnect)")
+        scenarioTimer?.invalidate()
+        scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, cadenceSec), repeats: true) { [weak self] _ in
+            self?.popScenario()
+        }
     }
 
     private func popScenario() {
@@ -383,7 +495,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func startStreaming() {
         streaming = true; lastIgnitionSent = nil; lastWatchdog = Date()
         sinceLastPacket = config.packetIntervalSec          // emit the first live packet promptly
-        status = "Connected · streaming"; statusColor = Theme.green
+        if !linkDown { status = "Connected · streaming"; statusColor = Theme.green }  // don't override OUT OF RANGE
         ensureClock()
     }
 
@@ -407,11 +519,13 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             if let pos = route.advance(meters: metersThisTick) {
                 engine.latitude = pos.coord.latitude; engine.longitude = pos.coord.longitude; engine.headingDeg = pos.headingDeg
             }
+            if dayDriving { runDayViolations(dt: dt) }       // F3: bake in speeding + idle events along the day
             let pf = route.progressFraction                  // publish only on whole-% change (avoid 5 Hz churn)
             if Int(pf * 100) != Int(routeProgress * 100) { routeProgress = pf }
             engine.advance(dt: driveDt)
             if route.isComplete || route.progressFraction >= 0.999 {
                 engine.speedMph = 0; drivingRoute = false; routeProgress = 1
+                if dayDriving { dayDriving = false; info("✓ DRIVE MY DAY complete — full day of IFTA mileage logged") }
                 info("route complete — arrived")
             }
         } else {
@@ -420,7 +534,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         mirror()
 
         sinceLastPacket += dt
-        if streaming && sinceLastPacket >= config.packetIntervalSec {
+        if streaming && !linkDown && sinceLastPacket >= config.packetIntervalSec {   // linkDown = out of range → silent
             sinceLastPacket = 0
             if lastIgnitionSent != engine.ignitionOn { sendReliable(MTPacket.ignition(engine, on: engine.ignitionOn)); lastIgnitionSent = engine.ignitionOn }
             sendPacket(MTPacket.livePosition(engine))
@@ -457,7 +571,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             sendReliable(MTPacket.version(device)); sendReliable(MTPacket.version(device))   // ≥2 LV so app learns VIN/firmware
             startStreaming()
         } else if c.hasPrefix("readvin") { sendReliable(MTPacket.version(device)) }
-        else if c.hasPrefix("readstr") { sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0") }
+        else if c.hasPrefix("readstr") {
+            if config.storedDumpCount > 0 { dumpStoredPackets(count: config.storedDumpCount, cadenceSec: config.storedDumpCadenceSec) }
+            else { sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0") }
+        }
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
         else if c.hasPrefix("clrdtc") { device.dtcCodes = []; faults = [] }
         else if c.hasPrefix("stopdata") { sendRaw("ACK,STOP") }
@@ -498,6 +615,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         connected = false; streaming = false; heldPacket = nil   // drop any stale out-of-order hold
+        if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber
         info("iPhone disconnected")
     }
