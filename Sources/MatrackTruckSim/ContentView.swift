@@ -4,15 +4,19 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var sim: SimController
 
+    // The cluster is designed at this size; on smaller windows the whole face scales down to fit
+    // (looks identical, never clips). On larger windows it fills via its own flexible internals.
+    private let designSize = CGSize(width: 1500, height: 1010)
+
     var body: some View {
-        ZStack {
-            DashboardBackground()
-            clusterFace
-            if sim.phase != .live {
-                IgnitionView().transition(.opacity).zIndex(30)
+        GeometryReader { geo in
+            ZStack {
+                DashboardBackground()            // fills the actual window (unscaled)
+                scaledFace(for: geo.size)
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(minWidth: 1500, minHeight: 1010)
+        .frame(minWidth: 820, idealWidth: 1500, minHeight: 560, idealHeight: 1010)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -28,6 +32,25 @@ struct ContentView: View {
                     sim.startRouteDrive()
                 }
             }
+        }
+    }
+
+    /// Lay the cluster out at its design size and scale it down to fit smaller windows; fill larger ones.
+    @ViewBuilder
+    private func scaledFace(for size: CGSize) -> some View {
+        let scale = min(1.0, min(size.width / designSize.width, size.height / designSize.height))
+        let face = ZStack {
+            clusterFace
+            if sim.phase != .live {
+                IgnitionView().transition(.opacity).zIndex(30)
+            }
+        }
+        if scale >= 1.0 {
+            face.frame(width: size.width, height: size.height)        // large window → fill via flexible internals
+        } else {
+            face
+                .frame(width: designSize.width, height: designSize.height)
+                .scaleEffect(scale, anchor: .center)                 // small window → shrink the whole face to fit
         }
     }
 
