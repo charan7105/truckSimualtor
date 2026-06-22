@@ -10,13 +10,21 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let scale = min(1.0, min(geo.size.width / designSize.width, geo.size.height / designSize.height))
             ZStack {
                 DashboardBackground()            // fills the actual window (unscaled)
-                scaledFace(for: geo.size)
+                face
+                    .frame(width: designSize.width, height: designSize.height)   // lay out at design size
+                    .scaleEffect(scale, anchor: .center)                         // shrink to fit smaller windows
+                    .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint to the window → centers, never clips
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .frame(minWidth: 820, idealWidth: 1500, minHeight: 560, idealHeight: 1010)
+        // maxWidth/Height .infinity makes the GeometryReader report the ACTUAL window size (not the ideal),
+        // so the scale-to-fit math uses real dimensions; idealWidth/Height just sets the default open size.
+        .frame(minWidth: 1000, idealWidth: 1500, maxWidth: .infinity,
+               minHeight: 680, idealHeight: 1010, maxHeight: .infinity)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -35,22 +43,14 @@ struct ContentView: View {
         }
     }
 
-    /// Lay the cluster out at its design size and scale it down to fit smaller windows; fill larger ones.
+    /// The cluster face + the ignition overlay, laid out at the design size.
     @ViewBuilder
-    private func scaledFace(for size: CGSize) -> some View {
-        let scale = min(1.0, min(size.width / designSize.width, size.height / designSize.height))
-        let face = ZStack {
+    private var face: some View {
+        ZStack {
             clusterFace
             if sim.phase != .live {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
-        }
-        if scale >= 1.0 {
-            face.frame(width: size.width, height: size.height)        // large window → fill via flexible internals
-        } else {
-            face
-                .frame(width: designSize.width, height: designSize.height)
-                .scaleEffect(scale, anchor: .center)                 // small window → shrink the whole face to fit
         }
     }
 
