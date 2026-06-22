@@ -254,25 +254,33 @@ struct NetworkPanel: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
 
-                    // F1 — signal strength + out-of-range emulation
+                    // F1 — signal / out-of-range: one-tap presets
                     HStack {
+                        Image(systemName: sim.linkDown ? "wifi.slash" : "wifi").font(.system(size: 12, weight: .bold)).foregroundStyle(signalTint)
                         Text("SIGNAL").sectionLabel(); Spacer()
-                        if sim.linkDown {
-                            Text("OUT OF RANGE").font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(Theme.red)
-                        } else {
-                            Text("\(Int(sim.config.signalPct))%").font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundStyle(signalTint)
+                        Text(signalState).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(signalTint)
+                    }
+                    HStack(spacing: 6) {
+                        signalPreset("FULL", 100)
+                        signalPreset("WEAK", 60)
+                        signalPreset("POOR", 25)
+                        NeonButton(title: sim.linkDown ? "BACK" : "DROP", icon: sim.linkDown ? "wifi" : "wifi.slash",
+                                   tint: Theme.red, filled: sim.linkDown) {
+                            if sim.linkDown { sim.resumeLink() } else { sim.dropLink(seconds: sim.config.rangeOutageSec) }
                         }
                     }
-                    HStack(spacing: 8) {
-                        Image(systemName: sim.linkDown ? "wifi.slash" : "wifi").font(.system(size: 11)).foregroundStyle(signalTint).frame(width: 18)
-                        Slider(value: Binding(get: { sim.config.signalPct }, set: { sim.setSignal($0) }), in: 0...100).tint(signalTint)
+                    if sim.linkDown {
+                        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.arrow.circlepath").font(.system(size: 11)).foregroundStyle(Theme.amber)
+                                Text(outageCountdown).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
+                                Spacer()
+                                NeonButton(title: "BACK NOW", icon: "wifi", tint: Theme.green) { sim.resumeLink() }.frame(width: 120)
+                            }
+                        }
                     }
-                    NeonButton(title: sim.linkDown ? "BACK IN RANGE" : "DROP · OUT OF RANGE",
-                               icon: sim.linkDown ? "wifi" : "wifi.slash", tint: Theme.red, filled: sim.linkDown) {
-                        if sim.linkDown { sim.resumeLink() } else { sim.dropLink(seconds: sim.config.rangeOutageSec) }
-                    }
-                    cfgSlider("Outage", \.rangeOutageSec, 15...180, "s", 0)
-                    Text("≥80s ⇒ real app disconnect+reconnect · <75s ⇒ stall demo. (Out-of-range is emulated by going silent.)")
+                    cfgSlider("Auto-return", \.rangeOutageSec, 15...180, "s", 0)
+                    Text("Tap DROP to go out of range — it auto-reconnects after the timer (≥80s = a real app reconnect). FULL/WEAK/POOR set signal strength.")
                         .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
 
                     Divider().overlay(Theme.stroke)
@@ -310,6 +318,26 @@ struct NetworkPanel: View {
         if sim.linkDown || sim.config.signalPct < 20 { return Theme.red }
         if sim.config.signalPct < 50 { return Theme.amber }
         return Theme.green
+    }
+
+    private var signalState: String {
+        if sim.linkDown { return "OUT OF RANGE" }
+        let p = Int(sim.config.signalPct.rounded())
+        if p >= 80 { return "FULL · \(p)%" }
+        if p >= 40 { return "WEAK · \(p)%" }
+        return "POOR · \(p)%"
+    }
+
+    private var outageCountdown: String {
+        guard let ends = sim.dropEndsAt else { return "out of range" }
+        let r = Int(ceil(ends.timeIntervalSinceNow))
+        return r > 0 ? "back in range in \(r)s" : "reconnecting…"
+    }
+
+    private func signalPreset(_ title: String, _ pct: Double) -> some View {
+        let tint: Color = pct >= 80 ? Theme.green : (pct >= 40 ? Theme.amber : Theme.red)
+        let active = !sim.linkDown && Int(sim.config.signalPct.rounded()) == Int(pct)
+        return NeonButton(title: title, tint: tint, filled: active) { sim.setSignal(pct) }
     }
 
     private var countSlider: some View {

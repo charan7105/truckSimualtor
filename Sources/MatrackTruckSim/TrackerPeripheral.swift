@@ -24,6 +24,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var connected = false
     @Published var streaming = false
     @Published var linkDown = false                 // F1: emulated out-of-range (we go silent; the app times out)
+    @Published var dropEndsAt: Date?                // F1: when the outage auto-recovers (for the UI countdown)
     @Published var phase: ClusterPhase = .cold      // ignition power-on state
 
     // Live telemetry (mirrored from EngineState each tick)
@@ -229,6 +230,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         config.signalPct = 0
         status = "OUT OF RANGE — silent \(Int(seconds))s"; statusColor = Theme.red
         info("📵 out of range: telemetry suppressed for \(Int(seconds))s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)")
+        dropEndsAt = Date().addingTimeInterval(max(1, seconds))
         dropTimer?.invalidate()
         dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
     }
@@ -236,7 +238,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// Back in range: resume telemetry. Restores the streaming status only if the app is still connected;
     /// if the silence already made the app disconnect, the next readdata re-arms streaming normally.
     func resumeLink() {
-        dropTimer?.invalidate(); dropTimer = nil
+        dropTimer?.invalidate(); dropTimer = nil; dropEndsAt = nil
         linkDown = false
         if config.signalPct < 1 { config.signalPct = preDropSignalPct }    // restore the pre-drop weak level (or 100)
         config.packetLossPct = max(0, 100 - config.signalPct)
@@ -618,7 +620,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
         if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
-        dropTimer?.invalidate(); dropTimer = nil; linkDown = false   // out-of-range ends when the link actually drops → reconnect resumes streaming
+        dropTimer?.invalidate(); dropTimer = nil; linkDown = false; dropEndsAt = nil   // out-of-range ends when the link actually drops → reconnect resumes streaming
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber
         info("iPhone disconnected")
     }
