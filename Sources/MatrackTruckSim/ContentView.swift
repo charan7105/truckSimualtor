@@ -4,26 +4,27 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var sim: SimController
 
-    // The cluster is designed at this size; the whole face scales down to fit smaller windows
-    // (looks identical, never clips).
+    // The cluster is designed at this size; on smaller windows the whole face scales down to fit
+    // (looks identical, never clips). On larger windows it fills via its own flexible internals.
     private let designSize = CGSize(width: 1500, height: 1010)
 
-    // The TRUE window content size, read from AppKit (SwiftUI's GeometryReader misreports it for
-    // this hidden-title-bar window — it returns the design height, not the real window height).
-    @State private var winSize = CGSize(width: 1366, height: 854)
-
     var body: some View {
-        ZStack {
-            DashboardBackground()            // fills the actual window (unscaled)
-            scaledFace(for: winSize)
-            WindowAccessor { size in         // report the real window content size
-                if size.width > 1, size.height > 1, size != winSize { winSize = size }
+        GeometryReader { geo in
+            let scale = min(1.0, min(geo.size.width / designSize.width, geo.size.height / designSize.height))
+            ZStack {
+                DashboardBackground()            // fills the actual window (unscaled)
+                face
+                    .frame(width: designSize.width, height: designSize.height)   // lay out at design size
+                    .scaleEffect(scale, anchor: .center)                         // shrink to fit smaller windows
+                    .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint to the window → centers, never clips
             }
-            .frame(width: 0, height: 0)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill + center the scaled face in the window
-        .clipped()
-        .frame(minWidth: 700, minHeight: 460)
+        // maxWidth/Height .infinity makes the GeometryReader report the ACTUAL window size (not the ideal),
+        // so the scale-to-fit math uses real dimensions; idealWidth/Height just sets the default open size.
+        .frame(minWidth: 1000, idealWidth: 1500, maxWidth: .infinity,
+               minHeight: 680, idealHeight: 1010, maxHeight: .infinity)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -42,7 +43,7 @@ struct ContentView: View {
         }
     }
 
-    /// The cluster face + the ignition overlay.
+    /// The cluster face + the ignition overlay, laid out at the design size.
     @ViewBuilder
     private var face: some View {
         ZStack {
@@ -51,15 +52,6 @@ struct ContentView: View {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
         }
-    }
-
-    /// Always lay the cluster out at its design size and scale it to fit (capped at 1× so it never
-    /// enlarges past design). Centered by the parent's maxWidth/maxHeight frame. Works for every screen.
-    private func scaledFace(for size: CGSize) -> some View {
-        let scale = min(1, min(size.width / designSize.width, size.height / designSize.height))
-        return face
-            .frame(width: designSize.width, height: designSize.height)
-            .scaleEffect(scale, anchor: .center)
     }
 
     private var clusterFace: some View {
@@ -151,37 +143,5 @@ struct ContentView: View {
             }.buttonStyle(.plain).hoverGlow()
         }
         .frame(height: 24)
-    }
-}
-
-/// Reports the host window's true content size (and updates on every resize), because SwiftUI's
-/// GeometryReader misreports it for this hidden-title-bar window. Drives the scale-to-fit.
-private struct WindowAccessor: NSViewRepresentable {
-    let onSize: (CGSize) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { [weak v] in context.coordinator.attach(to: v?.window, report: onSize) }
-        return v
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { [weak nsView] in context.coordinator.attach(to: nsView?.window, report: onSize) }
-    }
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator {
-        private weak var window: NSWindow?
-        private var token: NSObjectProtocol?
-        func attach(to window: NSWindow?, report: @escaping (CGSize) -> Void) {
-            guard let window, window !== self.window else { if let w = self.window { report(size(of: w)) }; return }
-            self.window = window
-            report(size(of: window))
-            if let token { NotificationCenter.default.removeObserver(token) }
-            token = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak window] _ in
-                if let window { report(Self.size(of: window)) }
-            }
-        }
-        private func size(of w: NSWindow) -> CGSize { Self.size(of: w) }
-        static func size(of w: NSWindow) -> CGSize { w.contentView?.bounds.size ?? w.frame.size }
     }
 }
