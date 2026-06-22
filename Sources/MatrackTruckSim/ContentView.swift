@@ -10,21 +10,16 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let scale = min(1.0, min(geo.size.width / designSize.width, geo.size.height / designSize.height))
             ZStack {
                 DashboardBackground()            // fills the actual window (unscaled)
-                face
-                    .frame(width: designSize.width, height: designSize.height)   // lay out at design size
-                    .scaleEffect(scale, anchor: .center)                         // shrink to fit smaller windows
-                    .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint to the window → centers, never clips
+                scaledFace(for: geo.size)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
-        // maxWidth/Height .infinity makes the GeometryReader report the ACTUAL window size (not the ideal),
-        // so the scale-to-fit math uses real dimensions; idealWidth/Height just sets the default open size.
-        .frame(minWidth: 1000, idealWidth: 1500, maxWidth: .infinity,
-               minHeight: 680, idealHeight: 1010, maxHeight: .infinity)
+        // Only a (small) minimum — NO ideal here. The default open size is set on the WindowGroup
+        // (App.swift). This keeps the GeometryReader reading the TRUE window size so scale-to-fit works.
+        .frame(minWidth: 700, minHeight: 460)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -43,7 +38,7 @@ struct ContentView: View {
         }
     }
 
-    /// The cluster face + the ignition overlay, laid out at the design size.
+    /// The cluster face + the ignition overlay.
     @ViewBuilder
     private var face: some View {
         ZStack {
@@ -51,6 +46,21 @@ struct ContentView: View {
             if sim.phase != .live {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
+        }
+    }
+
+    /// Fit the design-size cluster to the window: shrink-to-fit on smaller screens (no clipping),
+    /// fill via flexible internals on larger ones. Works for every screen size.
+    @ViewBuilder
+    private func scaledFace(for size: CGSize) -> some View {
+        let scale = min(size.width / designSize.width, size.height / designSize.height)
+        if scale >= 1 {
+            face.frame(width: size.width, height: size.height)            // large screen → fill
+        } else {
+            face
+                .frame(width: designSize.width, height: designSize.height)
+                .scaleEffect(scale, anchor: .center)                     // small screen → shrink whole cluster to fit
+                .frame(width: size.width, height: size.height)           // center the scaled footprint in the window
         }
     }
 
