@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows-only: WPF UI + WinRT BLE peripheral (Windows.Devices.Bluetooth).
+       Build this on Windows (Visual Studio 2022 or `dotnet build` on Windows). It will NOT build on macOS. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>MatrackSim.App</RootNamespace>
+    <AssemblyName>MatrackSim</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MatrackSim.Core/MatrackSim.Core.csproj" />
+  </ItemGroup>
+</Project>

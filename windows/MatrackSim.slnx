@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="MatrackSim.App/MatrackSim.App.csproj" />
+  <Project Path="MatrackSim.Core/MatrackSim.Core.csproj" />
+  <Project Path="MatrackSim.SelfTest/MatrackSim.SelfTest.csproj" />
+</Solution>

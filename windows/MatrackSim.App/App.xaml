@@ -1,0 +1,98 @@
+<Application x:Class="MatrackSim.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Dark operator-panel theme. Colours mirror Theme.* from the Swift cluster. -->
+        <Color x:Key="BgColor">#FF0B0E13</Color>
+        <Color x:Key="Bg1Color">#FF121620</Color>
+        <Color x:Key="PanelColor">#FF161B26</Color>
+        <Color x:Key="StrokeColor">#33FFFFFF</Color>
+        <Color x:Key="TextColor">#FFE8EDF4</Color>
+        <Color x:Key="DimColor">#FF8A93A6</Color>
+        <Color x:Key="IceColor">#FF5AC8FA</Color>
+        <Color x:Key="BlueColor">#FF4A8BFF</Color>
+        <Color x:Key="GreenColor">#FF34C759</Color>
+        <Color x:Key="AmberColor">#FFFFB020</Color>
+        <Color x:Key="RedColor">#FFFF3B30</Color>
+
+        <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
+        <SolidColorBrush x:Key="Bg1" Color="{StaticResource Bg1Color}" />
+        <SolidColorBrush x:Key="Panel" Color="{StaticResource PanelColor}" />
+        <SolidColorBrush x:Key="Stroke" Color="{StaticResource StrokeColor}" />
+        <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
+        <SolidColorBrush x:Key="Dim" Color="{StaticResource DimColor}" />
+        <SolidColorBrush x:Key="Ice" Color="{StaticResource IceColor}" />
+        <SolidColorBrush x:Key="Blue" Color="{StaticResource BlueColor}" />
+        <SolidColorBrush x:Key="Green" Color="{StaticResource GreenColor}" />
+        <SolidColorBrush x:Key="Amber" Color="{StaticResource AmberColor}" />
+        <SolidColorBrush x:Key="Red" Color="{StaticResource RedColor}" />
+
+        <!-- Section label: small, spaced, dim caps (mirrors .sectionLabel()) -->
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource Dim}" />
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+        </Style>
+
+        <!-- Card panel container (mirrors Card<C>) -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Panel}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <!-- NeonButton: flat tinted button used throughout the cluster -->
+        <Style x:Key="NeonButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="Background" Value="#22FFFFFF" />
+            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ChipText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+        </Style>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+        </Style>
+
+        <Style TargetType="Slider">
+            <Setter Property="Foreground" Value="{StaticResource Ice}" />
+            <Setter Property="MinHeight" Value="22" />
+        </Style>
+    </Application.Resources>
+</Application>
