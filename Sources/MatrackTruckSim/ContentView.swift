@@ -6,7 +6,7 @@ struct ContentView: View {
 
     // The cluster is designed at this size; on smaller windows the whole face scales down to fit
     // (looks identical, never clips). On larger windows it fills via its own flexible internals.
-    private let designSize = CGSize(width: 1500, height: 1340)
+    private let designSize = CGSize(width: 1500, height: 1280)
     @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
 
     var body: some View {
@@ -60,44 +60,44 @@ struct ContentView: View {
         return VStack(spacing: 18) {
             TopRail().panelReveal(live, delay: 0.0)
 
-            // Hero band: speed + drive | nav + map + telemetry | tach + route
             HStack(alignment: .top, spacing: 22) {
+                // LEFT column, full height: speed · drive · scenario · connection (fills to the bottom)
                 VStack(spacing: 16) {
                     SpeedGauge(speed: sim.speedMph, diameter: 300)
                     GearIndicator()
                     DrivePanel()
                     ScenarioPanel()                 // scenarios live with the drive controls
-                    Spacer(minLength: 0)
+                    NetworkPanel().frame(maxHeight: .infinity)   // starts at end of Scenario, continues to the bottom
                 }
                 .frame(width: 384)
                 .panelReveal(live, delay: 0.08)
 
-                VStack(spacing: 16) {
-                    NavStrip()
-                    ClusterMap(sim: sim).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    TelemetryDock()
+                // RIGHT region: dashboards on top, live packet stream across the bottom
+                VStack(spacing: 18) {
+                    HStack(alignment: .top, spacing: 22) {
+                        VStack(spacing: 16) {
+                            NavStrip()
+                            ClusterMap(sim: sim).frame(maxWidth: .infinity, maxHeight: .infinity)
+                            TelemetryDock()
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        VStack(spacing: 16) {
+                            TachGauge(rpm: sim.rpm, diameter: 300)
+                            miniArcs
+                            RoutePanel()
+                            Spacer(minLength: 0)
+                        }
+                        .frame(width: 384)
+                    }
+                    .frame(maxHeight: .infinity)
+
+                    PacketConsole().frame(height: 260)   // live packet stream — bottom, spans center + right
                 }
                 .frame(maxWidth: .infinity)
                 .panelReveal(live, delay: 0.12)
-
-                VStack(spacing: 16) {
-                    TachGauge(rpm: sim.rpm, diameter: 300)
-                    miniArcs
-                    RoutePanel()
-                    Spacer(minLength: 0)
-                }
-                .frame(width: 384)
-                .panelReveal(live, delay: 0.08)
             }
             .frame(maxHeight: .infinity)
-
-            // Bottom band: connection/signal (full-height, left) + live packet stream filling the rest
-            HStack(alignment: .top, spacing: 16) {
-                NetworkPanel().frame(width: 360)
-                PacketConsole()
-            }
-            .frame(height: 248)
-            .panelReveal(live, delay: 0.2)
 
             footer.panelReveal(live, delay: 0.26)
         }
