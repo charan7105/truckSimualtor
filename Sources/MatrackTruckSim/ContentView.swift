@@ -64,6 +64,7 @@ struct ContentView: View {
                 // LEFT column, full height: speed · drive · scenario · connection (fills to the bottom)
                 VStack(spacing: 16) {
                     SpeedGauge(speed: sim.speedMph, diameter: 300)
+                        .padding(.bottom, -40)      // reclaim the empty bottom of the open dial so the gear sits closer
                     GearIndicator()
                     DrivePanel()
                     ScenarioPanel()                 // scenarios live with the drive controls
