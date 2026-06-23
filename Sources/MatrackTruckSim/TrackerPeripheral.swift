@@ -570,6 +570,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - Command responder (mirrors real MT firmware)
     private func handleTrackerCommand(_ raw: String) {
         let c = raw.lowercased()
+        guard !linkDown else { return }   // OUT OF RANGE: total silence — don't answer commands either, so the app times out and disconnects
         if c.hasPrefix("readdata") {
             sendRaw("ACK,DATA")
             sendReliable(MTPacket.version(device)); sendReliable(MTPacket.version(device))   // ≥2 LV so app learns VIN/firmware
