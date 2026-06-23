@@ -576,8 +576,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             startStreaming()
         } else if c.hasPrefix("readvin") { sendReliable(MTPacket.version(device)) }
         else if c.hasPrefix("readstr") {
-            if config.storedDumpCount > 0 { dumpStoredPackets(count: config.storedDumpCount, cadenceSec: config.storedDumpCadenceSec, stopDrive: false) }
-            else { sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0") }
+            // The app sends readstr automatically after every connect. Reply like a tracker with no
+            // backlog — do NOT auto-dump here, or we'd flood the disconnect-inducing 500ms cadence on
+            // every connection. The stored-dump repro is on-demand only, via the DUMP STORED button.
+            sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0")
         }
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
         else if c.hasPrefix("clrdtc") { device.dtcCodes = []; faults = [] }
