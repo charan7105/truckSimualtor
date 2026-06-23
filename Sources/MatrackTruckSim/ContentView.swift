@@ -6,7 +6,7 @@ struct ContentView: View {
 
     // The cluster is designed at this size; on smaller windows the whole face scales down to fit
     // (looks identical, never clips). On larger windows it fills via its own flexible internals.
-    private let designSize = CGSize(width: 1500, height: 1580)
+    private let designSize = CGSize(width: 1500, height: 1340)
     @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
 
     var body: some View {
@@ -67,7 +67,6 @@ struct ContentView: View {
                     GearIndicator()
                     DrivePanel()
                     ScenarioPanel()                 // scenarios live with the drive controls
-                    NetworkPanel().frame(height: 250) // connection/signal right under scenario
                     Spacer(minLength: 0)
                 }
                 .frame(width: 384)
@@ -92,10 +91,13 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
 
-            // Bottom band: live packet stream, full width
-            PacketConsole()
-                .frame(height: 248)
-                .panelReveal(live, delay: 0.2)
+            // Bottom band: connection/signal (full-height, left) + live packet stream filling the rest
+            HStack(alignment: .top, spacing: 16) {
+                NetworkPanel().frame(width: 360)
+                PacketConsole()
+            }
+            .frame(height: 248)
+            .panelReveal(live, delay: 0.2)
 
             footer.panelReveal(live, delay: 0.26)
         }
