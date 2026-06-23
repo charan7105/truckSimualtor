@@ -6,7 +6,7 @@ struct ContentView: View {
 
     // The cluster is designed at this size; on smaller windows the whole face scales down to fit
     // (looks identical, never clips). On larger windows it fills via its own flexible internals.
-    private let designSize = CGSize(width: 1500, height: 1280)
+    private let designSize = CGSize(width: 1500, height: 1360)
     @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
 
     var body: some View {
@@ -93,7 +93,7 @@ struct ContentView: View {
                     }
                     .frame(maxHeight: .infinity)
 
-                    PacketConsole().frame(height: 260)   // live packet stream — bottom, spans center + right
+                    PacketConsole().frame(height: 230)   // live packet stream — bottom, spans center + right
                 }
                 .frame(maxWidth: .infinity)
                 .panelReveal(live, delay: 0.12)
