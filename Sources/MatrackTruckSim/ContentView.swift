@@ -6,7 +6,8 @@ struct ContentView: View {
 
     // The cluster is designed at this size; on smaller windows the whole face scales down to fit
     // (looks identical, never clips). On larger windows it fills via its own flexible internals.
-    private let designSize = CGSize(width: 1500, height: 1010)
+    private let designSize = CGSize(width: 1500, height: 1340)
+    @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
 
     var body: some View {
         GeometryReader { geo in
@@ -65,6 +66,7 @@ struct ContentView: View {
                     SpeedGauge(speed: sim.speedMph, diameter: 300)
                     GearIndicator()
                     DrivePanel()
+                    ScenarioPanel()                 // scenarios live with the drive controls
                     Spacer(minLength: 0)
                 }
                 .frame(width: 384)
@@ -89,11 +91,9 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
 
-            // Bottom band: scenario · diagnostics · network · live packet stream
+            // Bottom band: connection/signal · live packet stream
             HStack(alignment: .top, spacing: 16) {
-                ScenarioPanel().frame(width: 260)
-                DiagnosticsPanel().frame(width: 300)
-                NetworkPanel().frame(width: 344)
+                NetworkPanel().frame(width: 360)
                 PacketConsole()
             }
             .frame(height: 248)
@@ -135,6 +135,17 @@ struct ContentView: View {
             Text("Advertising as ELD-MA · \(sim.streaming ? "streaming" : "waiting for ELD app")")
                 .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
             Spacer()
+            Button { showDTC.toggle() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                    Text(sim.faults.isEmpty ? "DTC" : "DTC (\(sim.faults.count))").font(.system(size: 11, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(sim.faults.isEmpty ? Theme.dim : Theme.amber)
+            }
+            .buttonStyle(.plain).hoverGlow()
+            .popover(isPresented: $showDTC, arrowEdge: .bottom) {
+                DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
+            }
             Button { sim.rearmStartup() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise"); Text("REPLAY IGNITION").font(.system(size: 11, weight: .bold, design: .rounded))
