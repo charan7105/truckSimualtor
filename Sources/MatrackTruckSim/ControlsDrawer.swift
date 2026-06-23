@@ -249,16 +249,27 @@ struct DiagnosticsPanel: View {
 
 struct NetworkPanel: View {
     @EnvironmentObject var sim: SimController
+    @State private var showSignalInfo = false
     var body: some View {
         Card(title: "CONNECTION · SIGNAL", icon: "antenna.radiowaves.left.and.right", tint: Theme.blue) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
 
-                    // F1 — signal / out-of-range: one-tap presets
-                    HStack {
+                    // F1 — signal / out-of-range: one clean row of presets
+                    HStack(spacing: 8) {
                         Image(systemName: sim.linkDown ? "wifi.slash" : "wifi").font(.system(size: 12, weight: .bold)).foregroundStyle(signalTint)
-                        Text("SIGNAL").sectionLabel(); Spacer()
+                        Text("SIGNAL").sectionLabel()
+                        Spacer()
                         Text(signalState).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(signalTint)
+                        Button { showSignalInfo.toggle() } label: {
+                            Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.dim)
+                        }
+                        .buttonStyle(.plain).hoverGlow()
+                        .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
+                            Text("Tap DROP to go out of range — the app times out and auto-reconnects after the Auto-return timer (≥80s = a real disconnect+reconnect; <75s = a stall demo). FULL / WEAK / POOR set how strong the link is (lower = more dropped packets).")
+                                .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
+                                .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
+                        }
                     }
                     HStack(spacing: 6) {
                         signalPreset("FULL", 100)
@@ -271,17 +282,14 @@ struct NetworkPanel: View {
                     }
                     if sim.linkDown {
                         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 Image(systemName: "clock.arrow.circlepath").font(.system(size: 11)).foregroundStyle(Theme.amber)
                                 Text(outageCountdown).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                                 Spacer()
-                                NeonButton(title: "BACK NOW", icon: "wifi", tint: Theme.green) { sim.resumeLink() }.frame(width: 120)
                             }
                         }
                     }
                     cfgSlider("Auto-return", \.rangeOutageSec, 15...180, "s", 0)
-                    Text("Tap DROP to go out of range — it auto-reconnects after the timer (≥80s = a real app reconnect). FULL/WEAK/POOR set signal strength.")
-                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
 
                     Divider().overlay(Theme.stroke)
 
@@ -335,9 +343,10 @@ struct NetworkPanel: View {
     }
 
     private func signalPreset(_ title: String, _ pct: Double) -> some View {
-        let tint: Color = pct >= 80 ? Theme.green : (pct >= 40 ? Theme.amber : Theme.red)
+        // Uniform neutral style so the row reads as one control; only the active level is highlighted.
+        // (The colour meaning lives in the FULL/WEAK/POOR state label above.)
         let active = !sim.linkDown && Int(sim.config.signalPct.rounded()) == Int(pct)
-        return NeonButton(title: title, tint: tint, filled: active) { sim.setSignal(pct) }
+        return NeonButton(title: title, tint: Theme.ice, filled: active) { sim.setSignal(pct) }
     }
 
     private var countSlider: some View {
