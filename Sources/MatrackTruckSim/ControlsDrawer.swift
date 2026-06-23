@@ -266,7 +266,7 @@ struct NetworkPanel: View {
                         }
                         .buttonStyle(.plain).hoverGlow()
                         .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
-                            Text("Tap DROP to go out of range — the app times out and auto-reconnects after the Auto-return timer (≥80s = a real disconnect+reconnect; <75s = a stall demo). FULL / WEAK / POOR set how strong the link is (lower = more dropped packets).")
+                            Text("DROP forces an immediate disconnect — the BLE link is torn down so the app drops right away (a real disconnect), then re-advertises after the Auto-return timer, or press BACK, so the app reconnects. FULL / WEAK / POOR set link strength (lower = more dropped packets, still connected).")
                                 .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
                                 .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
                         }
@@ -277,7 +277,7 @@ struct NetworkPanel: View {
                         signalPreset("POOR", 25)
                         NeonButton(title: sim.linkDown ? "BACK" : "DROP", icon: sim.linkDown ? "wifi" : "wifi.slash",
                                    tint: Theme.red, filled: sim.linkDown) {
-                            if sim.linkDown { sim.resumeLink() } else { sim.dropLink(seconds: sim.config.rangeOutageSec) }
+                            if sim.linkDown { sim.resumeLink() } else { sim.forceDisconnect(seconds: sim.config.rangeOutageSec) }
                         }
                     }
                     if sim.linkDown {

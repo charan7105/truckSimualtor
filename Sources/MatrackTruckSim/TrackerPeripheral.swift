@@ -235,16 +235,46 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
     }
 
-    /// Back in range: resume telemetry. Restores the streaming status only if the app is still connected;
-    /// if the silence already made the app disconnect, the next readdata re-arms streaming normally.
+    /// Immediate FORCED disconnect — exactly what the app sees in the field. macOS has no per-central
+    /// disconnect API, so we tear down the whole peripheral session (stop advertising + remove services +
+    /// drop the manager); the connected central drops within ~1–2s. On return (timer or BACK) we re-advertise
+    /// and the app auto-reconnects via its scan — the real out-of-range → back-in-range cycle.
+    func forceDisconnect(seconds: Double) {
+        preDropSignalPct = config.signalPct >= 1 ? config.signalPct : 100
+        linkDown = true
+        config.signalPct = 0
+        status = "OUT OF RANGE — link dropped"; statusColor = Theme.red
+        info("⛔️ forced disconnect — BLE link torn down (app sees a real disconnect)")
+        dropEndsAt = Date().addingTimeInterval(max(1, seconds))
+        teardownBLE()
+        dropTimer?.invalidate()
+        dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
+    }
+
+    /// Drop the peripheral session so the central is forced to disconnect immediately.
+    private func teardownBLE() {
+        manager?.stopAdvertising()
+        manager?.removeAllServices()
+        manager = nil                                  // releasing the session severs the active connection
+        dataChar = nil; commandChar = nil
+        connected = false; streaming = false; heldPacket = nil; pending.removeAll()
+    }
+
+    /// Back in range: resume. If we forced a disconnect (manager torn down) we re-advertise so the app
+    /// reconnects; otherwise just restore the stream/status.
     func resumeLink() {
         dropTimer?.invalidate(); dropTimer = nil; dropEndsAt = nil
         linkDown = false
         if config.signalPct < 1 { config.signalPct = preDropSignalPct }    // restore the pre-drop weak level (or 100)
         config.packetLossPct = max(0, 100 - config.signalPct)
-        info("📶 back in range — telemetry resumes")
-        if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
-        else if connected { status = "iPhone connected"; statusColor = Theme.green }
+        if manager == nil {                                                // forced-disconnect teardown → bring the radio back
+            info("📶 back in range — re-advertising for reconnect")
+            startBLE()                                                     // recreates the peripheral → re-advertises → app rescans & reconnects
+        } else {
+            info("📶 back in range — telemetry resumes")
+            if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
+            else if connected { status = "iPhone connected"; statusColor = Theme.green }
+        }
     }
 
     // MARK: - Route driving (from → to)
