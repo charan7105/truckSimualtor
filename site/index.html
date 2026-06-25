@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Matrack Truck Simulator — Team Setup</title>
+<meta name="description" content="Get the Matrack truck simulator running on your Mac or PC in a snap." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#070a0e; --bg2:#0c1117; --panel:#10161d; --panel2:#141c25;
+    --stroke:#1f2a36; --stroke2:#2a3947;
+    --ice:#79d2ec; --ice-dim:#3d6878; --green:#3ddc84; --amber:#ffb454; --red:#ff5d5d; --blue:#5b9dff;
+    --text:#e8eef4; --dim:#8a9bab; --dimmer:#56697a;
+    --display:"Chakra Petch",sans-serif; --body:"Hanken Grotesk",sans-serif; --mono:"JetBrains Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--body);
+    line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    background-image:
+      radial-gradient(900px 500px at 80% -10%, rgba(91,157,255,.10), transparent 60%),
+      radial-gradient(800px 600px at 0% 10%, rgba(61,220,132,.06), transparent 55%);
+  }
+  /* faint grid texture */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:linear-gradient(rgba(121,210,236,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(121,210,236,.025) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 80%);
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px;position:relative;z-index:1}
+  .mono{font-family:var(--mono)}
+  .label{font-family:var(--display);font-weight:600;letter-spacing:.22em;text-transform:uppercase;font-size:11px;color:var(--dim)}
+
+  /* ---------- top bar ---------- */
+  .topbar{display:flex;align-items:center;gap:14px;padding:20px 0;border-bottom:1px solid var(--stroke)}
+  .badge-wheel{width:30px;height:30px;border-radius:9px;background:linear-gradient(145deg,#1a2531,#0d141b);border:1px solid var(--stroke2);
+    display:grid;place-items:center;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+  .badge-wheel::before{content:"";width:15px;height:15px;border-radius:50%;border:2px solid var(--ice);
+    background:radial-gradient(circle,var(--ice) 2px,transparent 3px)}
+  .brand{font-family:var(--display);font-weight:700;letter-spacing:.28em;font-size:15px}
+  .pill{margin-left:auto;font-family:var(--display);font-size:10.5px;letter-spacing:.16em;font-weight:600;
+    padding:6px 11px;border-radius:7px;border:1px solid rgba(255,180,84,.4);color:var(--amber);background:rgba(255,180,84,.08)}
+
+  /* ---------- hero ---------- */
+  .hero{padding:74px 0 30px;position:relative}
+  .kicker{display:inline-flex;align-items:center;gap:9px;margin-bottom:22px}
+  .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 11px var(--green)}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(38px,7vw,76px);line-height:.98;letter-spacing:-.01em}
+  h1 .sub{display:block;color:var(--ice);font-weight:600}
+  .lede{margin-top:24px;max-width:560px;font-size:18px;color:var(--dim)}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* warning banner */
+  .warn{margin-top:30px;display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border-radius:13px;
+    border:1px solid rgba(255,93,93,.35);background:linear-gradient(180deg,rgba(255,93,93,.10),rgba(255,93,93,.03))}
+  .warn .ico{font-size:18px;line-height:1.4}
+  .warn b{color:#ffb0b0}
+  .warn span{font-size:14.5px;color:#e6c2c2}
+
+  /* ---------- section ---------- */
+  section{padding:54px 0;border-top:1px solid var(--stroke)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:30px}
+  .sec-head .num{font-family:var(--mono);font-size:13px;color:var(--ice-dim)}
+  .sec-head h2{font-family:var(--display);font-weight:700;font-size:clamp(24px,3.6vw,34px);letter-spacing:-.01em}
+
+  /* platform toggle */
+  .toggle{display:inline-flex;padding:6px;gap:6px;border:1px solid var(--stroke2);border-radius:14px;background:var(--panel);margin-bottom:34px}
+  .toggle button{font-family:var(--display);font-weight:600;letter-spacing:.04em;font-size:15px;color:var(--dim);
+    padding:12px 26px;border:0;border-radius:9px;background:transparent;cursor:pointer;transition:.22s;display:flex;align-items:center;gap:10px}
+  .toggle button .g{font-size:18px;filter:grayscale(1);opacity:.7;transition:.22s}
+  .toggle button[aria-selected="true"]{background:linear-gradient(180deg,var(--panel2),#0e151c);color:var(--text);
+    box-shadow:inset 0 0 0 1px var(--stroke2),0 6px 20px rgba(0,0,0,.4)}
+  .toggle button[aria-selected="true"] .g{filter:none;opacity:1}
+
+  /* steps */
+  .steps{display:grid;gap:14px}
+  .step{display:grid;grid-template-columns:64px 1fr;gap:20px;align-items:start;padding:22px 24px;border-radius:16px;
+    background:linear-gradient(180deg,var(--panel),#0b1117);border:1px solid var(--stroke);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(14px);animation:rise .6s forwards}
+  .step::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--ice),transparent);opacity:.5}
+  .step .n{font-family:var(--display);font-weight:700;font-size:30px;color:var(--ice);
+    width:54px;height:54px;border-radius:13px;display:grid;place-items:center;background:rgba(121,210,236,.07);border:1px solid rgba(121,210,236,.22)}
+  .step h3{font-family:var(--display);font-weight:600;font-size:19px;margin-bottom:6px}
+  .step p{color:var(--dim);font-size:15px}
+  .step p b{color:var(--text);font-weight:600}
+  .step code{font-family:var(--mono);font-size:13px;background:#0a0f15;border:1px solid var(--stroke2);color:var(--ice);
+    padding:2px 7px;border-radius:6px;white-space:nowrap}
+  .step .hint{margin-top:9px;font-size:13px;color:var(--dimmer);display:flex;gap:8px}
+  .step .hint::before{content:"›";color:var(--ice-dim)}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .step:nth-child(1){animation-delay:.04s}.step:nth-child(2){animation-delay:.12s}
+  .step:nth-child(3){animation-delay:.20s}.step:nth-child(4){animation-delay:.28s}
+
+  .dl{margin-top:6px;display:inline-flex;align-items:center;gap:11px;font-family:var(--display);font-weight:600;font-size:15px;
+    color:#04140c;background:linear-gradient(180deg,#4ee996,var(--green));padding:11px 20px;border-radius:11px;text-decoration:none;
+    box-shadow:0 8px 22px rgba(61,220,132,.25);transition:.18s}
+  .dl:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(61,220,132,.35)}
+  .dl.soon{background:#141c25;color:var(--dim);box-shadow:none;border:1px solid var(--stroke2);cursor:default}
+  .dl .sz{font-family:var(--mono);font-weight:400;font-size:12px;opacity:.7}
+
+  /* feature cards */
+  .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .card{padding:22px;border-radius:15px;background:var(--panel);border:1px solid var(--stroke);transition:.2s}
+  .card:hover{border-color:var(--stroke2);transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.4)}
+  .card .ic{font-size:22px;margin-bottom:13px;display:block}
+  .card h4{font-family:var(--display);font-weight:600;font-size:16px;margin-bottom:7px}
+  .card.b1{border-top:2px solid var(--green)}.card.b2{border-top:2px solid var(--ice)}
+  .card.b3{border-top:2px solid var(--red)}.card.b4{border-top:2px solid var(--amber)}
+  .card p{color:var(--dim);font-size:14px}
+
+  /* faq */
+  .faq{display:grid;gap:10px}
+  details{border:1px solid var(--stroke);border-radius:13px;background:var(--panel);overflow:hidden}
+  summary{cursor:pointer;list-style:none;padding:18px 20px;font-family:var(--display);font-weight:600;font-size:16px;
+    display:flex;align-items:center;gap:12px}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"+";color:var(--ice);font-size:20px;width:18px;transition:.2s}
+  details[open] summary::before{transform:rotate(45deg)}
+  details .body{padding:0 20px 20px 50px;color:var(--dim);font-size:15px}
+  details .body code{font-family:var(--mono);font-size:12.5px;background:#0a0f15;border:1px solid var(--stroke2);color:var(--ice);padding:2px 6px;border-radius:5px}
+
+  /* footer */
+  footer{padding:50px 0 70px;border-top:1px solid var(--stroke);text-align:center;color:var(--dimmer);font-size:13px}
+  footer .mini{margin-top:8px;font-family:var(--mono);font-size:11.5px}
+
+  .hide{display:none}
+  @media(max-width:560px){
+    .step{grid-template-columns:1fr;gap:14px}
+    .step .n{width:46px;height:46px;font-size:24px}
+    .topbar .pill{font-size:9px}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- top bar -->
+  <div class="topbar">
+    <div class="badge-wheel"></div>
+    <div class="brand">MATRACK</div>
+    <div class="pill">● SIMULATOR · TEST ONLY</div>
+  </div>
+
+  <!-- hero -->
+  <header class="hero">
+    <div class="kicker"><span class="dot"></span><span class="label">Team setup guide</span></div>
+    <h1>Truck Simulator<span class="sub">running in a snap.</span></h1>
+    <p class="lede">Turn your <b>Mac or PC</b> into a virtual Matrack tracker — the ELD app connects to it over Bluetooth, just like the real device. <b>No hardware.</b> Pick your computer below and follow four steps.</p>
+
+    <div class="warn">
+      <div class="ico">⚠️</div>
+      <span><b>Test account &amp; test server only.</b> Never sign in with a real driver's account or production data, and never trigger a DOT / FMCSA data transfer.</span>
+    </div>
+  </header>
+</div>
+
+<!-- setup -->
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="num">01</span><h2>Set it up</h2></div>
+
+    <div class="toggle" role="tablist">
+      <button role="tab" aria-selected="true" data-os="mac"><span class="g">🍎</span> Mac</button>
+      <button role="tab" aria-selected="false" data-os="win"><span class="g">🪟</span> Windows</button>
+    </div>
+
+    <!-- MAC -->
+    <div class="steps" id="mac">
+      <div class="step">
+        <div class="n">1</div>
+        <div>
+          <h3>Download &amp; unzip</h3>
+          <p>Grab the app and double-click the zip to unzip it → <b>MatrackTruckSim.app</b>.</p>
+          <div style="margin-top:14px"><a class="dl" href="downloads/MatrackTruckSim-mac.zip" download>⬇ Download for Mac <span class="sz">· 0.9 MB · universal</span></a></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div>
+          <h3>Open it (first time only)</h3>
+          <p><b>Right-click the app → Open → Open.</b> macOS asks once because it's an in-house app — this is safe.</p>
+          <div class="hint">If it's still blocked: System Settings → Privacy &amp; Security → <b>“Open Anyway.”</b></div>
+          <div class="hint">When asked, <b>allow Bluetooth.</b></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div>
+          <h3>Name your Mac <code>ELD-MA</code></h3>
+          <p>System Settings → General → <b>About → Name</b> → set it to e.g. <code>ELD-MA-You</code>. Then toggle Bluetooth off and on.</p>
+          <div class="hint">The app finds the tracker by this name — it must start with <b>ELD-MA</b>.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">4</div>
+        <div>
+          <h3>Connect your phone</h3>
+          <p>Open the app — it shows <b>“Advertising as ELD-MA.”</b> On the phone (test account): ELD app → Bluetooth → pick <code>ELD-MA</code> → connect. 🎉</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- WINDOWS -->
+    <div class="steps hide" id="win">
+      <div class="step">
+        <div class="n">1</div>
+        <div>
+          <h3>Get the app</h3>
+          <p>The Windows build is being finished. For now, build it from the project in <b>Visual Studio 2022</b> (see the handoff doc), then publish a single <code>MatrackSim.exe</code>.</p>
+          <div style="margin-top:14px"><span class="dl soon">🔧 Windows download — coming soon</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div>
+          <h3>Name your PC <code>ELD-MA</code></h3>
+          <p>Settings → System → About → <b>Rename this PC</b> → e.g. <code>ELD-MA-You</code>, then <b>reboot</b>.</p>
+          <div class="hint">Bluetooth must support “peripheral role” — a one-line PowerShell check confirms it.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div>
+          <h3>Run it</h3>
+          <p>Double-click <code>MatrackSim.exe</code> → it shows <b>“Advertising as ELD-MA.”</b></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">4</div>
+        <div>
+          <h3>Connect your phone</h3>
+          <p>On the phone (test account): ELD app → Bluetooth → pick <code>ELD-MA</code> → connect. 🎉</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- using it -->
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="num">02</span><h2>What you can do</h2></div>
+    <div class="feat">
+      <div class="card b1"><span class="ic">🚚</span><h4>Drive</h4><p>Engine on, set a speed, or auto-cruise a route on the live map.</p></div>
+      <div class="card b2"><span class="ic">🎬</span><h4>Scenarios</h4><p>21 canned situations — idle, power cycles, GPS loss, stored backlog — one click each.</p></div>
+      <div class="card b3"><span class="ic">📡</span><h4>Signal &amp; Drop</h4><p>Weaken the signal, or <b>DROP</b> to force a real out-of-range disconnect, then reconnect.</p></div>
+      <div class="card b4"><span class="ic">📦</span><h4>Stored Dump</h4><p>Replay stored packets fast (≈500 ms) to reproduce the disconnect bug; 1 s is safe.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- faq -->
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="num">03</span><h2>Stuck?</h2></div>
+    <div class="faq">
+      <details>
+        <summary>macOS won't open the app</summary>
+        <div class="body">It's an in-house app (unsigned), so macOS warns once. <b>Right-click → Open → Open</b>, or System Settings → Privacy &amp; Security → <b>Open Anyway</b>. It's safe.</div>
+      </details>
+      <details>
+        <summary>My phone doesn't see “ELD-MA”</summary>
+        <div class="body">Make sure the computer is <b>named ELD-MA…</b> and Bluetooth is on. Toggle the computer's Bluetooth off/on. On iPhone, you can also Settings → Bluetooth → <b>Forget</b> the old device, then reconnect.</div>
+      </details>
+      <details>
+        <summary>Only one phone connects at a time</summary>
+        <div class="body">One computer = one truck. For several people driving <b>at the same time</b>, each driver needs their own computer running the app (each named <code>ELD-MA…</code>).</div>
+      </details>
+      <details>
+        <summary>The connection drops on its own</summary>
+        <div class="body">That's expected if you pressed <b>DROP</b> (out-of-range) or ran a stored-dump at ≈500 ms. Press <b>BACK</b> to reconnect, or use 1 s cadence to avoid the disconnect.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Matrack Truck Simulator · internal QA tool · test environment only
+    <div class="mini">Questions? Ping Sharan.</div>
+  </div>
+</footer>
+
+<script>
+  const btns = document.querySelectorAll('.toggle button');
+  const panels = { mac: document.getElementById('mac'), win: document.getElementById('win') };
+  btns.forEach(b => b.addEventListener('click', () => {
+    btns.forEach(x => x.setAttribute('aria-selected', x === b));
+    const os = b.dataset.os;
+    for (const k in panels) panels[k].classList.toggle('hide', k !== os);
+    // re-trigger the staggered reveal
+    panels[os].querySelectorAll('.step').forEach(s => { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; });
+  }));
+</script>
+</body>
+</html>
