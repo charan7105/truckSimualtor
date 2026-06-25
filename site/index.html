@@ -150,6 +150,10 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 .s2 h4{font-weight:700;font-size:17px;margin-bottom:6px;letter-spacing:-.012em}
 .s2 p{color:var(--ink-2);font-size:15px}.s2 p b{color:var(--ink);font-weight:600}
 .s2 .mini{margin-top:8px;font-size:13.5px;color:var(--ink-3)}.s2 .mini b{color:var(--ink-2);font-weight:600}
+.cmd{position:relative;background:#0f1320;border-radius:12px;margin:13px 0 2px;box-shadow:var(--sh);max-width:640px}
+.cmd pre{margin:0;padding:14px 64px 14px 16px;overflow-x:auto;font-family:var(--m);font-size:12.5px;color:#dfe6f5;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.cmd .cp{position:absolute;top:9px;right:9px;background:#1e2535;border:1px solid #2c3650;color:#aeb9c9;border-radius:7px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--f);transition:.15s}
+.cmd .cp:hover{background:#28324a;color:#fff}.cmd .cp.done{color:var(--d-green);border-color:rgba(61,220,132,.45)}
 .hideb{display:none!important}
 .faq{max-width:760px;display:grid;gap:11px}
 .faq details{background:var(--surf);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);overflow:hidden}
@@ -218,8 +222,9 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     </div></div>
     <div class="s2"><div class="n">2</div><div>
       <h4>Open it — first time only</h4>
-      <p><b>Right-click</b> the app → <b>Open</b>, then click <b>Open</b> in the dialog. (macOS blocks new in-house apps the first time — this one is safe.)</p>
-      <div class="mini">When it asks, choose <b>Allow Bluetooth</b>.</div>
+      <p><b>Right-click</b> the app → <b>Open</b>, then click <b>Open</b> in the dialog. (macOS blocks new in-house apps the first time — this one is safe.) When it asks, choose <b>Allow Bluetooth</b>.</p>
+      <div class="mini">Still blocked on newer macOS? In <b>Terminal</b>, run this once, then open it normally:</div>
+      <div class="cmd"><button class="cp">Copy</button><pre>xattr -dr com.apple.quarantine ~/Downloads/MatrackTruckSim.app</pre></div>
     </div></div>
     <div class="s2"><div class="n">3</div><div>
       <h4>Name your Mac <kbd>ELD-MA</kbd></h4>
@@ -240,7 +245,8 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     </div></div>
     <div class="s2"><div class="n">2</div><div>
       <h4>Check Bluetooth supports “peripheral”</h4>
-      <p>In <b>Windows PowerShell</b>, run the one-line check — it must print <kbd>True</kbd>.</p>
+      <p>Open <b>Windows PowerShell</b> (not Command Prompt), paste this one line, and press Enter — it must print <kbd>True</kbd>:</p>
+      <div class="cmd"><button class="cp">Copy</button><pre>Add-Type -AssemblyName System.Runtime.WindowsRuntime; $m=([System.WindowsRuntimeSystemExtensions].GetMethods()|?{$_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -like 'IAsyncOperation*'})[0]; [Windows.Devices.Bluetooth.BluetoothAdapter,Windows.Devices.Bluetooth,ContentType=WindowsRuntime]|Out-Null; $op=[Windows.Devices.Bluetooth.BluetoothAdapter]::GetDefaultAsync(); $t=$m.MakeGenericMethod([Windows.Devices.Bluetooth.BluetoothAdapter]).Invoke($null,@($op)); $t.Wait(-1)|Out-Null; "PERIPHERAL role supported : "+$t.Result.IsPeripheralRoleSupported</pre></div>
       <div class="mini">If it prints <b>False</b>, add a ~$10 USB BLE dongle that supports peripheral mode.</div>
     </div></div>
     <div class="s2"><div class="n">3</div><div>
@@ -488,5 +494,10 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
   const secIds=['overview','setup','guide','help'],nlinks=document.querySelectorAll('.nlinks a');
   const spy=()=>{let cur=secIds[0];for(const id of secIds){const el=document.getElementById(id);if(el&&el.getBoundingClientRect().top<130)cur=id;}nlinks.forEach(a=>a.classList.toggle('cur',a.getAttribute('href')==='#'+cur));};
   window.addEventListener('scroll',spy,{passive:true});spy();
+  // copy-command buttons
+  document.querySelectorAll('.cmd .cp').forEach(b=>b.addEventListener('click',()=>{
+    const t=b.parentElement.querySelector('pre').innerText;
+    navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied ✓';b.classList.add('done');setTimeout(()=>{b.textContent='Copy';b.classList.remove('done');},1600);});
+  }));
 </script>
 </body></html>
