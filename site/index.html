@@ -71,6 +71,7 @@ kbd{font-family:var(--m);font-size:.84em;background:#eef1f6;border:1px solid var
 
 /* small dark visual */
 .vis{background:linear-gradient(180deg,#0e141d,#0a0e15);border:1px solid #222d3b;border-radius:18px;padding:22px;margin:0 0 26px;max-width:660px;box-shadow:var(--sh-m)}
+.partimg{display:block;width:100%;max-width:600px;border-radius:14px;border:1px solid #1f2937;box-shadow:var(--sh-m);margin:0 0 26px}
 .gauge{position:relative;width:140px;height:140px;margin:0 auto}.gauge svg{width:100%;height:100%}
 .gn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .gn .n{font-weight:700;font-size:34px;color:#eaf3f8;letter-spacing:-.02em}.gn .u{font-size:9px;letter-spacing:.2em;color:var(--d-dim);margin-top:3px}
@@ -274,7 +275,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc on" data-id="speed" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M12 3.5v3"/></svg></div><h2>Speed &amp; gear</h2></div>
       <p class="lead">The big dial on the left. It shows the truck's <b>current speed</b>, and the gear below shows its state.</p>
-      <div class="vis"><div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="g1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle class="gv-anim" cx="70" cy="70" r="54" fill="none" stroke="url(#g1)" stroke-width="10" stroke-linecap="round" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n">84</div><div class="u">KM/H</div></div></div><div class="gear"><span>P</span><span>R</span><span>N</span><span class="on">D</span></div></div>
+      <img class="partimg" src="assets/parts/speed.png" alt="The speed gauge showing 80 km/h with the P R N D gear selector below"/>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">Speed</span><div>Live speed in <b>km/h</b> (the tracker reports km/h; the ELD app converts to mph).</div></li>
@@ -285,6 +286,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="rpm" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 12l5-3"/></svg></div><h2>RPM (tachometer)</h2></div>
       <p class="lead">The dial on the right — the engine's <b>revs per minute</b>. It rises and falls with the speed.</p>
+      <img class="partimg" src="assets/parts/rpm.png" alt="The RPM tachometer at 2,050 with a red redline band near the top"/>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">RPM</span><div>Engine speed, modelled from the truck's speed (idle ≈ 750, higher as it drives).</div></li>
@@ -295,7 +297,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="fuel" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h14M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg></div><h2>Fuel (two tanks)</h2></div>
       <p class="lead">The tracker reports <b>two fuel levels</b> — many trucks have two tanks. You'll see both as cylinders.</p>
-      <div class="vis"><div class="cyl"><div><div class="c g"><i style="height:76%"></i></div><div class="lab">FUEL 1 · 76%</div></div><div><div class="c b"><i style="height:60%"></i></div><div class="lab">FUEL 2 · 60%</div></div></div></div>
+      <img class="partimg" src="assets/parts/fuel.png" alt="Two fuel-tank gauges — Fuel 1 at 78% (green) and Fuel 2 at 60% (blue) — with sliders"/>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">Fuel 1 / 2</span><div>Both tank levels, sent in every live packet.</div></li>
@@ -306,7 +308,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="tele" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h4M7 13h7M7 17h10"/></svg></div><h2>Telemetry row</h2></div>
       <p class="lead">The strip of numbers under the map — the facts the tracker reports about the vehicle.</p>
-      <div class="vis"><div class="tele"><div class="t"><div class="k">Odometer</div><div class="v">25,098 mi</div></div><div class="t"><div class="k">Engine hrs</div><div class="v">4,354 h</div></div><div class="t"><div class="k">Heading</div><div class="v">245° SW</div></div><div class="t"><div class="k">Trip</div><div class="v">113 mi</div></div><div class="t"><div class="k">Sats</div><div class="v">11</div></div><div class="t"><div class="k">ECM</div><div class="v">ON</div></div></div></div>
+      <img class="partimg" src="assets/parts/telemetry.png" alt="The telemetry row: odometer, trip, engine hours, heading, satellites, and ECM"/>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">Odo / Trip</span><div>Total miles and this-trip miles, climbing as you drive.</div></li>
@@ -318,6 +320,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="map" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></div><h2>Map &amp; route line</h2></div>
       <p class="lead">The live map in the middle. The <b>truck moves along the route</b> in real time as it drives.</p>
+      <img class="partimg" style="max-width:560px" src="assets/parts/map.png" alt="The live map showing the truck position and its route line through Phoenix"/>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">Truck pin</span><div>The current GPS position — exactly what the app receives.</div></li>
@@ -330,6 +333,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="drive" data-grp="Driving">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M3.5 12h3M12 3.5v3"/></svg></div><h2>Drive controls</h2></div>
       <p class="lead">The panel that makes the truck go. Start the engine, set a speed, or let it cruise.</p>
+      <img class="partimg" src="assets/parts/drive.png" alt="The DRIVE panel: ENGINE and AUTO toggles, km/h presets, a speed slider, and SIM SPEED 1x–30x"/>
       <h3>What each control does</h3>
       <ul class="wl">
         <li><span class="tg">ENGINE</span><div>Turns the engine on/off (ignition).</div></li>
@@ -342,6 +346,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="route" data-grp="Driving">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8 18c6-1 4-11 8-12"/></svg></div><h2>Route &amp; Drive My Day</h2></div>
       <p class="lead">Pick where the truck drives — a real route on the map, or a whole day in one click.</p>
+      <img class="partimg" src="assets/parts/route.png" alt="The ROUTE panel: from/to cities, PLAN and RANDOM, DRIVE ROUTE, and DRIVE MY DAY"/>
       <h3>What each control does</h3>
       <ul class="wl">
         <li><span class="tg">From → To</span><div>Type two cities and press <b>PLAN</b> (or <b>RANDOM</b>) to load a route.</div></li>
@@ -355,7 +360,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="scn" data-grp="Testing">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h2>Scenarios</h2></div>
       <p class="lead"><b>21 ready-made situations</b> you can replay with one click — no manual setup.</p>
-      <div class="vis"><div class="scn"><span class="r">Driving highway</span><span>Engine power cycle</span><span>GPS signal loss</span><span>Idle &amp; shutdown</span><span>Stored backlog</span><span>Unassigned driving</span></div></div>
+      <img class="partimg" src="assets/parts/scenario.png" alt="The SCENARIO panel: a scenario picker, a RUN button, and WHAT &amp; HOW"/>
       <h3>How to use it</h3>
       <ul class="wl">
         <li><span class="tg">Pick · RUN</span><div>Choose a scenario and press RUN — it replays the exact packet sequence.</div></li>
@@ -366,7 +371,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="signal" data-grp="Testing">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.4"/></svg></div><h2>Connection &amp; signal</h2></div>
       <p class="lead">Control the Bluetooth link — weaken it, or drop it entirely to test how the app reacts.</p>
-      <div class="vis"><div class="sigr"><b class="a">FULL</b><b>WEAK</b><b>POOR</b><b class="x">DROP</b></div></div>
+      <img class="partimg" src="assets/parts/signal.png" alt="The CONNECTION · SIGNAL panel: FULL/WEAK/POOR/DROP buttons, Auto-return, and the stored dump controls"/>
       <h3>What each does</h3>
       <ul class="wl">
         <li><span class="tg">FULL / WEAK / POOR</span><div>Signal strength. WEAK and POOR drop some packets but <b>stay connected</b> (like a fringe area).</div></li>
@@ -378,20 +383,21 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc" data-id="dump" data-grp="Testing">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M12 3v11m0 0l4-4m-4 4l-4-4"/></svg></div><h2>Stored dump</h2></div>
       <p class="lead">A real tracker saves packets while offline, then unloads them on reconnect. This replays that.</p>
+      <img class="partimg" src="assets/parts/dump.png" alt="The STORED DUMP controls: Count, Cadence (0.50s), and the DUMP STORED button"/>
       <h3>How to use it</h3>
       <ul class="wl">
         <li><span class="tg">Count</span><div>How many stored packets to send.</div></li>
         <li><span class="tg">Cadence</span><div>How fast. <b>≈500 ms reproduces the disconnect bug</b>; 1 s is safe.</div></li>
         <li><span class="tg">DUMP STORED</span><div>Fires the dump on demand.</div></li>
       </ul>
-      <div class="tip warn-tip"><svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div>This is the exact bug Harshith found — a fast dump (≈500 ms) makes the tracker disconnect. Use it to confirm the 1 s fix.</div></div>
+      <div class="tip warn-tip"><svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div>This reproduces the real disconnect bug: a fast dump (≈500 ms) makes the tracker disconnect, while 1 s is safe — use it to confirm the fix.</div></div>
     </article>
 
     <!-- THE DATA -->
     <article class="doc" data-id="stream" data-grp="The data">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div><h2>Live packet stream</h2></div>
       <p class="lead">The running log at the bottom — <b>every message</b> going in and out. The ground truth of the connection.</p>
-      <div class="vis"><div class="pk"><div><span class="t">22:06:14</span> <span class="o">→ LP,1,2204,90,403913,…</span></div><div><span class="t">22:06:15</span> <span class="i">← readvin</span></div><div><span class="t">22:06:15</span> <span class="o">→ LV,Dafulai,MAMT32,…</span></div><div><span class="t">22:06:16</span> <span class="i">← $wdg,4327</span></div></div></div>
+      <img class="partimg" src="assets/parts/stream.png" alt="The LIVE PACKET STREAM log showing outgoing and incoming messages with timestamps"/>
       <h3>How to read it</h3>
       <ul class="wl">
         <li><span class="tg">→ outgoing</span><div>Packets the simulator <b>sends to the app</b> (telemetry, replies).</div></li>
