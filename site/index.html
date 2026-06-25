@@ -120,6 +120,18 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 @keyframes gfill{to{stroke-dasharray:150 340!important}}
 .rv{opacity:0;transform:translateY(22px);transition:opacity .7s var(--e),transform .7s var(--e)}.rv.in{opacity:1;transform:none}
 .nlinks a.cur{color:var(--brand-deep);background:var(--tint)}
+.hero2{max-width:1120px;margin:0 auto;padding:62px 26px 20px;text-align:center}
+.hero2 .ey{font-size:12.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--brand);margin-bottom:15px}
+.hero2 h1{font-weight:800;font-size:clamp(38px,5.6vw,66px);letter-spacing:-.035em;line-height:1.0}
+.hero2 h1 .g{background:linear-gradient(115deg,#1546c4,#5b8bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero2 .ld{margin:20px auto 0;max-width:600px;font-size:18.5px;color:var(--ink-2)}.hero2 .ld b{color:var(--ink);font-weight:600}
+.hero2 .acts{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.shotwrap{position:relative;max-width:1080px;margin:54px auto 0;padding:0 26px}
+.glow2{position:absolute;inset:8% 12% -6%;border-radius:50%;background:radial-gradient(closest-side,rgba(43,102,246,.34),transparent 70%);filter:blur(48px);z-index:0;animation:pulseGlow 6s ease-in-out infinite}
+.shot{position:relative;z-index:1;border-radius:15px;overflow:hidden;border:1px solid #1b2430;box-shadow:0 50px 110px -34px rgba(15,30,70,.55),0 18px 50px -22px rgba(0,0,0,.32)}
+.shot .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;background:#0b0f16;border-bottom:1px solid #1b2430}
+.shot .bar .d{width:11px;height:11px;border-radius:50%;background:#28323f}.shot .bar .nm{margin-left:9px;font-family:var(--m);font-size:11.5px;color:var(--d-dim)}.shot .bar .lv{margin-left:auto;font-size:11px;color:var(--d-green);font-weight:600;display:flex;align-items:center;gap:6px}.shot .bar .lv i{width:6px;height:6px;border-radius:50%;background:var(--d-green)}
+.shot img{display:block;width:100%}
 @media(max-width:880px){.hfchip{display:none}.hglow{display:none}}
 @media(prefers-reduced-motion:reduce){.hglow,.hfchip,.gv-anim{animation:none!important}.gv-anim{stroke-dasharray:150 340!important}}
 .sec{max-width:1200px;margin:0 auto;padding:62px 26px;border-top:1px solid var(--line)}
@@ -171,26 +183,21 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 
 <a id="top"></a>
 <!-- OVERVIEW -->
-<section id="overview" class="hero">
-  <div>
+<section id="overview" class="hero2">
+  <div class="rv">
     <div class="ey">Internal QA tool · for the team</div>
-    <h1>The truck<br><span class="g">simulator.</span></h1>
-    <p class="ld">Your Mac or PC pretends to be a Matrack tracker, so the ELD app connects over Bluetooth — <b>no hardware</b>. Use it to drive, test disconnects, and reproduce bugs.</p>
+    <h1>The truck simulator,<br><span class="g">right on your screen.</span></h1>
+    <p class="ld">Your Mac or PC pretends to be a Matrack tracker, so the ELD app connects over Bluetooth — <b>no hardware</b>. Drive it, break the connection, reproduce bugs.</p>
     <div class="acts">
       <a class="bigdl" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app</a>
       <a class="ghost" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>How to set it up</a>
     </div>
   </div>
-  <div class="hstage">
-    <div class="hglow"></div>
-    <div class="hfchip a"><span class="i"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Phone connected</div>
-    <div class="hfchip b"><span class="i"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/></svg></span>Streaming</div>
-    <div class="hdev">
-      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="nm">MatrackTruckSim — ELD-MA</span><span class="lv"><i></i>LIVE</span></div>
-      <div class="bd">
-        <div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="hg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle class="gv-anim" cx="70" cy="70" r="54" fill="none" stroke="url(#hg)" stroke-width="10" stroke-linecap="round" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n" id="hnum">0</div><div class="u">KM/H</div></div></div>
-        <div class="tele"><div class="t"><div class="k">Speed</div><div class="v">84 km/h</div></div><div class="t"><div class="k">Fuel</div><div class="v">76% · 60%</div></div><div class="t"><div class="k">Sats</div><div class="v">11</div></div></div>
-      </div>
+  <div class="shotwrap rv">
+    <div class="glow2"></div>
+    <div class="shot">
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="nm">MatrackTruckSim — Advertising as ELD-MA</span><span class="lv"><i></i>LIVE</span></div>
+      <img src="assets/dashboard.jpg" alt="The Matrack truck simulator dashboard — speed and RPM gauges, live map, drive and connection controls, and the packet stream" loading="eager"/>
     </div>
   </div>
 </section>
