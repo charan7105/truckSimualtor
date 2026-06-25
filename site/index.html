@@ -23,6 +23,7 @@ a{text-decoration:none;color:inherit}
 .nav-in{max-width:1200px;margin:0 auto;padding:14px 26px;display:flex;align-items:center;gap:14px}
 .logo{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:-.02em;font-size:17px}
 .mk{width:30px;height:30px;border-radius:9px;background:linear-gradient(150deg,var(--brand),var(--brand-deep));display:grid;place-items:center}
+img.mk{object-fit:cover}
 .mk svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2}
 .nav .sub{font-size:12.5px;color:var(--ink-3);font-weight:500;border-left:1px solid var(--line-2);padding-left:14px}
 .ncta{margin-left:auto;display:flex;align-items:center;gap:13px}
@@ -193,7 +194,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 </head><body>
 
 <header class="nav"><div class="nav-in">
-  <a class="logo" href="#top"><span class="mk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="#fff" stroke="none"/><path d="M12 5v3M12 16v3M5 12h3M16 12h3"/></svg></span>Matrack Sim</a>
+  <a class="logo" href="#top"><img class="mk" src="assets/logo.png" alt="Matrack"/>Matrack Sim</a>
   <nav class="nlinks"><a href="#overview">Overview</a><a href="#setup">Setup</a><a href="#guide">Field guide</a><a href="#help">Help</a></nav>
   <div class="ncta"><span class="chip"><i></i>Test only</span>
     <a class="dl" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app</a>
@@ -225,7 +226,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 <section id="setup" class="sec">
   <div class="shd"><div class="ey">Setup</div><h2>How to set it up</h2><p>A few simple steps — get the app, name the computer <kbd>ELD-MA</kbd>, and connect your phone. Pick your platform:</p></div>
   <div class="seg" role="tablist">
-    <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5zM20 17.5c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.2C-.4 18-1 13.5.9 11c1-1.4 2.5-2.2 4-2.2 1.6 0 2.6 1 3.9 1 1.3 0 2-1 3.9-1 1.3 0 2.7.7 3.7 2-3.2 1.8-2.7 6.4.6 7.7z"/></svg>Mac</button>
+    <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg>Mac</button>
     <button role="tab" aria-selected="false" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
   </div>
   <div class="steps2" id="smac">
