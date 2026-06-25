@@ -1,332 +1,180 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Matrack Truck Simulator — Team Setup</title>
-<meta name="description" content="Turn your Mac or PC into a virtual Matrack tracker. Set up in four steps." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet" />
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Matrack Truck Simulator — set up in a snap</title>
+<meta name="description" content="Turn your Mac or PC into a virtual Matrack tracker. Three steps, no hardware."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css"/>
 <style>
-  :root{
-    --bg:#fbfaf7; --surface:#ffffff; --ink:#16181d; --ink-2:#565e6b; --ink-3:#949ba6;
-    --line:#ecebe6; --line-2:#e3e2dc;
-    --brand:#2b66f6; --brand-deep:#1d4ed8; --brand-tint:#e9f0ff;
-    --blue:#3b82f6; --blue-tint:#e9f1fe; --violet:#7c6cf0; --violet-tint:#eeebfe;
-    --amber:#f59e0b; --amber-tint:#fef3e2; --rose:#f43f5e; --rose-tint:#fee9ec;
-    --disp:"Geist",sans-serif; --body:"Geist",sans-serif; --mono:"Geist Mono",monospace;
-    --shadow-s:0 1px 2px rgba(20,22,28,.04),0 1px 1px rgba(20,22,28,.03);
-    --shadow-m:0 4px 14px rgba(20,22,28,.05),0 2px 6px rgba(20,22,28,.04);
-    --shadow-l:0 24px 60px -16px rgba(20,30,26,.18),0 8px 24px -8px rgba(20,22,28,.08);
-    --ease:cubic-bezier(.22,.7,.2,1);
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{font-family:var(--body);background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;
-    background-image:radial-gradient(820px 480px at 88% -6%,rgba(43,102,246,.12),transparent 60%),radial-gradient(680px 500px at 2% 2%,rgba(124,108,240,.07),transparent 58%);}
-  .wrap{max-width:1140px;margin:0 auto;padding:0 28px}
-  a{text-decoration:none;color:inherit}
-  .mono{font-family:var(--mono)}
-
-  /* nav */
-  nav{position:sticky;top:0;z-index:50;backdrop-filter:saturate(1.4) blur(12px);background:rgba(251,250,247,.78);border-bottom:1px solid var(--line)}
-  .nav-in{max-width:1140px;margin:0 auto;padding:15px 28px;display:flex;align-items:center;gap:14px}
-  .logo{display:flex;align-items:center;gap:11px;font-family:var(--disp);font-weight:700;letter-spacing:-.01em;font-size:18px}
-  .mk{width:32px;height:32px;border-radius:10px;background:linear-gradient(150deg,var(--brand),var(--brand-deep));display:grid;place-items:center;box-shadow:var(--shadow-s)}
-  .mk svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2}
-  .nav-links{display:flex;gap:28px;margin-left:32px}
-  .nav-links a{font-size:14.5px;font-weight:500;color:var(--ink-2);transition:color .15s}
-  .nav-links a:hover{color:var(--ink)}
-  .nav-cta{margin-left:auto;display:flex;align-items:center;gap:14px}
-  .tag{font-size:12px;font-weight:600;color:var(--amber);background:var(--amber-tint);padding:6px 11px;border-radius:8px;display:flex;align-items:center;gap:7px}
-  .tag i{width:6px;height:6px;border-radius:50%;background:var(--amber)}
-  .btn{font-family:var(--body);font-weight:600;font-size:14.5px;border:0;cursor:pointer;border-radius:999px;display:inline-flex;align-items:center;gap:9px;transition:transform .16s var(--ease),box-shadow .16s,background .16s}
-  .btn svg{width:16px;height:16px}
-  .btn-pri{background:var(--ink);color:#fff;padding:11px 20px;box-shadow:var(--shadow-m)}
-  .btn-pri:hover{transform:translateY(-1px);background:#000}
-  .btn-brand{background:linear-gradient(180deg,#4d83ff,var(--brand));color:#fff;padding:14px 24px;font-size:15.5px;box-shadow:0 10px 24px -6px rgba(43,102,246,.5)}
-  .btn-brand:hover{transform:translateY(-2px);box-shadow:0 16px 32px -8px rgba(43,102,246,.62)}
-  .btn-soft{background:var(--surface);color:var(--ink);padding:14px 22px;font-size:15.5px;border:1px solid var(--line-2);box-shadow:var(--shadow-s)}
-  .btn-soft:hover{transform:translateY(-2px);border-color:#d6d5ce}
-
-  /* hero */
-  .hero{display:grid;grid-template-columns:1.02fr .98fr;gap:46px;align-items:center;padding:74px 0 56px}
-  .pill{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--brand-deep);background:var(--brand-tint);padding:7px 13px;border-radius:999px;margin-bottom:24px}
-  .pill .d{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px rgba(43,102,246,.15)}
-  h1{font-family:var(--disp);font-weight:700;font-size:clamp(40px,5.6vw,62px);line-height:1.03;letter-spacing:-.025em}
-  h1 .hl{position:relative;white-space:nowrap;background:linear-gradient(110deg,#1d4ed8,#4d9bff);
-    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-  .sub{margin-top:22px;max-width:486px;font-size:18px;color:var(--ink-2)}
-  .sub b{color:var(--ink);font-weight:600}
-  .actions{margin-top:32px;display:flex;flex-wrap:wrap;gap:13px;align-items:center}
-  .os-note{margin-top:18px;display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink-3)}
-  .os-note svg{width:15px;height:15px}
-
-  /* product mock */
-  .mock-stage{position:relative}
-  .blob{position:absolute;inset:-8% -6% -6% -2%;border-radius:40px;background:conic-gradient(from 210deg at 62% 38%,rgba(43,102,246,.20),rgba(124,108,240,.14),rgba(59,176,246,.12),rgba(43,102,246,.20));filter:blur(36px);z-index:0}
-  .mock{position:relative;z-index:1;background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow-l);overflow:hidden}
-  .mock-bar{display:flex;align-items:center;gap:7px;padding:14px 16px;border-bottom:1px solid var(--line)}
-  .mock-bar .dt{width:10px;height:10px;border-radius:50%;background:#e6e5df}
-  .mock-bar .ttl{margin-left:8px;font-size:12px;color:var(--ink-3);font-weight:500}
-  .mock-bar .live{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--brand-deep);background:var(--brand-tint);padding:4px 9px;border-radius:7px;display:flex;align-items:center;gap:6px}
-  .mock-bar .live i{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:pulse 1.8s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  .mock-body{padding:26px 24px 28px;display:flex;flex-direction:column;align-items:center;gap:20px}
-  .gauge{position:relative;width:208px;height:208px}
-  .gauge svg{width:100%;height:100%}
-  .g-track{fill:none;stroke:#eef0f1;stroke-width:13;stroke-linecap:round}
-  .g-val{fill:none;stroke:url(#gg);stroke-width:13;stroke-linecap:round;stroke-dasharray:0 999;animation:fill 1.7s var(--ease) .35s forwards}
-  @keyframes fill{to{stroke-dasharray:159 999}}
-  .g-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .g-num{font-family:var(--disp);font-weight:700;font-size:52px;line-height:.9;letter-spacing:-.02em}
-  .g-unit{font-size:11px;font-weight:600;letter-spacing:.18em;color:var(--ink-3);margin-top:4px}
-  .stats{display:flex;gap:10px;width:100%}
-  .stat{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:11px 12px;text-align:left}
-  .stat .k{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase}
-  .stat .v{font-family:var(--mono);font-size:15px;margin-top:3px;color:var(--ink)}
-
-  /* floating chips */
-  .float{position:absolute;z-index:2;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-m);padding:11px 14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
-  .float .ico{width:28px;height:28px;border-radius:9px;display:grid;place-items:center}
-  .float .ico svg{width:15px;height:15px}
-  .f1{top:7%;left:-5%}
-  .f2{bottom:10%;right:-4%}
-
-  /* warning */
-  .warn{display:flex;gap:14px;align-items:flex-start;background:var(--rose-tint);border:1px solid #fbd0d7;border-radius:16px;padding:17px 20px;margin-bottom:8px}
-  .warn svg{width:20px;height:20px;flex:none;stroke:var(--rose);margin-top:1px;fill:none;stroke-width:2}
-  .warn p{font-size:14.5px;color:#9f3a48}.warn b{color:#c01f37}
-
-  /* sections */
-  section{padding:84px 0}
-  .head{text-align:center;max-width:620px;margin:0 auto 48px}
-  .head .ey{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brand);margin-bottom:14px}
-  .head h2{font-family:var(--disp);font-weight:700;font-size:clamp(30px,4vw,44px);line-height:1.08;letter-spacing:-.02em}
-  .head p{margin-top:14px;font-size:17px;color:var(--ink-2)}
-
-  /* segmented toggle */
-  .seg{display:inline-flex;padding:5px;gap:4px;background:#f1f0ea;border:1px solid var(--line);border-radius:14px}
-  .seg-row{display:flex;justify-content:center;margin-bottom:40px}
-  .seg button{font-family:var(--body);font-weight:600;font-size:14.5px;color:var(--ink-2);padding:10px 24px;border:0;border-radius:10px;background:transparent;cursor:pointer;transition:.2s var(--ease);display:flex;align-items:center;gap:9px}
-  .seg button svg{width:16px;height:16px}
-  .seg button[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-s)}
-
-  /* steps timeline */
-  .steps{max-width:720px;margin:0 auto;position:relative}
-  .steps::before{content:"";position:absolute;left:27px;top:26px;bottom:26px;width:2px;background:linear-gradient(var(--brand),var(--line) 70%)}
-  .step{display:grid;grid-template-columns:56px 1fr;gap:22px;padding:14px 0;opacity:0;transform:translateY(12px);animation:rise .55s var(--ease) forwards}
-  .step .n{width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid var(--brand);color:var(--brand-deep);
-    font-family:var(--disp);font-weight:700;font-size:21px;display:grid;place-items:center;box-shadow:var(--shadow-m);position:relative;z-index:1}
-  .step .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px 22px;box-shadow:var(--shadow-s)}
-  .step h3{font-family:var(--disp);font-weight:600;font-size:19px;margin-bottom:6px}
-  .step p{color:var(--ink-2);font-size:15px}.step p b{color:var(--ink);font-weight:600}
-  .step .hint{margin-top:9px;font-size:13px;color:var(--ink-3);display:flex;gap:8px}
-  .step .hint::before{content:"→";color:var(--brand)}
-  kbd,code{font-family:var(--mono);font-size:12.5px;background:#f4f3ee;border:1px solid var(--line-2);color:var(--brand-deep);padding:2px 7px;border-radius:6px;white-space:nowrap}
-  @keyframes rise{to{opacity:1;transform:none}}
-  .step:nth-child(1){animation-delay:.04s}.step:nth-child(2){animation-delay:.12s}.step:nth-child(3){animation-delay:.2s}.step:nth-child(4){animation-delay:.28s}
-  .dl-in{margin-top:15px;display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:14.5px;color:#fff;background:linear-gradient(180deg,#4d83ff,var(--brand));padding:10px 18px;border-radius:11px;box-shadow:0 8px 20px -6px rgba(43,102,246,.5);transition:transform .16s}
-  .dl-in:hover{transform:translateY(-2px)}.dl-in svg{width:15px;height:15px}.dl-in .sz{font-family:var(--mono);font-weight:400;font-size:11px;opacity:.7}
-  .soon{margin-top:15px;display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:14px;color:var(--ink-2);background:#f4f3ee;border:1px solid var(--line-2);padding:10px 17px;border-radius:11px}
-  .soon svg{width:15px;height:15px;stroke:var(--amber);fill:none;stroke-width:2}
-
-  /* features */
-  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(244px,1fr));gap:18px}
-  .feat{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:var(--shadow-s);transition:.22s var(--ease)}
-  .feat:hover{transform:translateY(-4px);box-shadow:var(--shadow-m)}
-  .feat .ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;margin-bottom:17px;
-    background:linear-gradient(180deg,#f3f7ff,#e9f1ff);border:1px solid #dde7fb;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
-  .feat .ic svg{width:22px;height:22px;fill:none;stroke:var(--brand-deep);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-  .feat h4{font-family:var(--disp);font-weight:600;font-size:17.5px;margin-bottom:7px}
-  .feat p{color:var(--ink-2);font-size:14.5px}
-
-  /* faq */
-  .faq{max-width:760px;margin:0 auto;display:grid;gap:12px}
-  details{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-s);overflow:hidden;transition:box-shadow .2s}
-  details[open]{box-shadow:var(--shadow-m)}
-  summary{cursor:pointer;list-style:none;padding:20px 22px;font-family:var(--disp);font-weight:600;font-size:16.5px;display:flex;align-items:center;gap:14px}
-  summary::-webkit-details-marker{display:none}
-  summary .pl{width:20px;height:20px;flex:none;border-radius:7px;background:var(--brand-tint);position:relative}
-  summary .pl::before,summary .pl::after{content:"";position:absolute;background:var(--brand-deep);border-radius:2px;left:50%;top:50%;transform:translate(-50%,-50%)}
-  summary .pl::before{width:10px;height:2px}summary .pl::after{width:2px;height:10px;transition:.25s var(--ease)}
-  details[open] summary .pl::after{transform:translate(-50%,-50%) scaleY(0)}
-  details .ans{padding:0 22px 22px 56px;color:var(--ink-2);font-size:15px}
-
-  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}
-  footer .mono{margin-top:7px;font-size:11.5px;color:var(--brand-deep)}
-
-  .hide{display:none}
-  @media(max-width:900px){.hero{grid-template-columns:1fr;gap:50px}.mock-stage{max-width:440px;margin:0 auto}.nav-links{display:none}}
-  @media(max-width:520px){.step{grid-template-columns:44px 1fr;gap:16px}.step .n{width:44px;height:44px;font-size:17px}.steps::before{left:21px}.float{display:none}.tag{display:none}}
-  @media(prefers-reduced-motion:reduce){*{animation:none!important}.g-val{stroke-dasharray:159 999}}
+  /* page-specific: ambient life + scroll reveals + a few simple blocks */
+  body{background:
+    radial-gradient(820px 460px at 86% -8%,rgba(43,102,246,.13),transparent 60%),
+    radial-gradient(700px 520px at 0% 4%,rgba(124,108,240,.08),transparent 58%),var(--bg);}
+  .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .hide{display:none!important}   /* beat .three{display:grid} for the OS toggle */
+  /* punchy stat strip */
+  .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin:6px 0 0;padding:26px 0}
+  .stat-x .big{font-family:var(--disp);font-weight:700;font-size:clamp(28px,4vw,40px);letter-spacing:-.02em;
+    background:linear-gradient(120deg,#1d4ed8,#5fa0ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .stat-x .lab{font-size:13.5px;color:var(--ink-2);margin-top:2px}
+  @media(max-width:680px){.stats-strip{grid-template-columns:repeat(2,1fr);gap:24px 18px}}
+  /* 3 simple steps */
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .stp{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad-l);padding:26px;box-shadow:var(--sh-s);transition:.22s var(--ease)}
+  .stp:hover{transform:translateY(-4px);box-shadow:var(--sh-m)}
+  .stp .num{width:40px;height:40px;border-radius:12px;background:linear-gradient(180deg,var(--brand-soft),var(--brand));color:#fff;
+    font-family:var(--disp);font-weight:700;font-size:18px;display:grid;place-items:center;margin-bottom:16px;box-shadow:0 8px 18px -6px rgba(43,102,246,.5)}
+  .stp h3{font-family:var(--disp);font-weight:600;font-size:18px;margin-bottom:7px}
+  .stp p{color:var(--ink-2);font-size:14.5px}
+  @media(max-width:760px){.three{grid-template-columns:1fr}}
+  /* compact capability chips */
+  .caps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .cap{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;text-align:center;box-shadow:var(--sh-s);transition:.22s var(--ease)}
+  .cap:hover{transform:translateY(-4px);box-shadow:var(--sh-m);border-color:#dde3ea}
+  .cap .ic{width:44px;height:44px;border-radius:13px;margin:0 auto 13px;display:grid;place-items:center;background:linear-gradient(180deg,#f3f7ff,#e9f1ff);border:1px solid #dde7fb}
+  .cap .ic svg{width:21px;height:21px;fill:none;stroke:var(--brand-deep);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .cap h4{font-family:var(--disp);font-weight:600;font-size:15.5px;margin-bottom:4px}
+  .cap p{color:var(--ink-3);font-size:13px}
+  @media(max-width:680px){.caps{grid-template-columns:repeat(2,1fr)}}
+  /* final CTA band */
+  .cta-band{margin:30px 0 0;border-radius:26px;padding:54px 40px;text-align:center;position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#1d4ed8,#2b66f6 55%,#4d83ff);box-shadow:0 30px 60px -24px rgba(43,102,246,.6)}
+  .cta-band::after{content:"";position:absolute;inset:0;background:radial-gradient(500px 240px at 80% 0%,rgba(255,255,255,.18),transparent 60%);pointer-events:none}
+  .cta-band h2{font-family:var(--disp);font-weight:700;font-size:clamp(26px,3.4vw,38px);color:#fff;letter-spacing:-.02em;position:relative}
+  .cta-band p{color:rgba(255,255,255,.82);margin:12px auto 26px;max-width:440px;font-size:16px;position:relative}
+  .cta-white{background:#fff;color:var(--brand-deep);font-weight:700;padding:15px 26px;font-size:16px;border-radius:999px;display:inline-flex;align-items:center;gap:10px;box-shadow:0 12px 28px -8px rgba(0,0,0,.3);transition:transform .16s}
+  .cta-white:hover{transform:translateY(-2px)}.cta-white svg{width:17px;height:17px}
+  .cta-sub{margin-top:14px;font-size:13.5px;color:rgba(255,255,255,.7);position:relative}
+  .seg-row{margin:0 0 26px}
 </style>
-</head>
-<body>
-<nav>
-  <div class="nav-in">
-    <a class="logo"><span class="mk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="#fff" stroke="none"/><path d="M12 5v3M12 16v3M5 12h3M16 12h3"/></svg></span>Matrack</a>
-    <div class="nav-links"><a href="#setup">Setup</a><a href="#features">Features</a><a href="#faq">Help</a></div>
-    <div class="nav-cta">
-      <span class="tag"><i></i>Test only</span>
-      <a class="btn btn-pri" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download</a>
-    </div>
+</head><body>
+
+<header class="nav"><div class="nav-in">
+  <a class="logo" href="index.html"><span class="mk"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.6" fill="#fff" stroke="none"/><path d="M12 5v3M12 16v3M5 12h3M16 12h3"/></svg></span>Matrack</a>
+  <div class="nav-cta">
+    <span class="tag"><i></i>Test only</span>
+    <a class="btn btn-pri" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download</a>
   </div>
-</nav>
+</div></header>
 
 <div class="wrap">
   <!-- HERO -->
   <header class="hero">
     <div>
-      <span class="pill"><span class="d"></span>Team setup · no hardware</span>
-      <h1>Turn your computer into a <span class="hl">truck tracker.</span></h1>
-      <p class="sub">The Matrack ELD app connects to your <b>Mac or PC</b> over Bluetooth — exactly like the real device. Pick your computer, follow four steps, and you're driving.</p>
+      <span class="pill"><span class="d"></span>No hardware needed</span>
+      <h1>Your computer,<br><span class="hl">as a truck tracker.</span></h1>
+      <p class="sub">Run the simulator on your <b>Mac or PC</b> and the Matrack ELD app connects over Bluetooth — just like a real tracker. <b>Three steps</b> and you're driving.</p>
       <div class="actions">
         <a class="btn btn-brand" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac</a>
-        <a class="btn btn-soft" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>See the steps</a>
+        <a class="btn btn-soft" href="#start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-6-6l6 6 6-6"/></svg>How it works</a>
       </div>
-      <div class="os-note"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5z"/></svg> Works on macOS &amp; Windows · ~1&nbsp;MB</div>
+      <div class="os-note"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5z"/></svg> macOS &amp; Windows · ~1&nbsp;MB · ready in 30 seconds</div>
     </div>
-
     <div class="mock-stage">
       <div class="blob"></div>
       <div class="float f1"><span class="ico" style="background:var(--brand-tint)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-deep)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Connected</div>
-      <div class="float f2"><span class="ico" style="background:var(--blue-tint)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.2"/></svg></span>Streaming</div>
+      <div class="float f2"><span class="ico" style="background:var(--brand-tint-2)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.2"/></svg></span>Streaming</div>
       <div class="mock">
         <div class="mock-bar"><span class="dt"></span><span class="dt"></span><span class="dt"></span><span class="ttl">Matrack Truck Sim</span><span class="live"><i></i>ELD-MA</span></div>
         <div class="mock-body">
-          <div class="gauge">
-            <svg viewBox="0 0 208 208">
-              <defs><linearGradient id="gg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#5fa0ff"/></linearGradient></defs>
-              <circle class="g-track" cx="104" cy="104" r="76" stroke-dasharray="358 478" transform="rotate(135 104 104)"/>
-              <circle class="g-val"   cx="104" cy="104" r="76" transform="rotate(135 104 104)"/>
-            </svg>
-            <div class="g-mid"><div class="g-num" id="spd">0</div><div class="g-unit">KM / H</div></div>
-          </div>
-          <div class="stats">
-            <div class="stat"><div class="k">RPM</div><div class="v">2204</div></div>
-            <div class="stat"><div class="k">Fuel</div><div class="v">76%</div></div>
-            <div class="stat"><div class="k">Sats</div><div class="v">11</div></div>
-          </div>
+          <div class="gauge"><svg viewBox="0 0 208 208"><defs><linearGradient id="gg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#5fa0ff"/></linearGradient></defs>
+            <circle class="g-track" cx="104" cy="104" r="76" stroke-dasharray="358 478" transform="rotate(135 104 104)"/>
+            <circle class="g-val" cx="104" cy="104" r="76" transform="rotate(135 104 104)"/></svg>
+            <div class="g-mid"><div class="g-num" id="spd">0</div><div class="g-unit">KM / H</div></div></div>
+          <div class="stats"><div class="stat"><div class="k">RPM</div><div class="v">2204</div></div><div class="stat"><div class="k">Fuel</div><div class="v">76%</div></div><div class="stat"><div class="k">Sats</div><div class="v">11</div></div></div>
         </div>
       </div>
     </div>
   </header>
 
-  <div class="warn">
+  <!-- punchy numbers -->
+  <div class="stats-strip reveal">
+    <div class="stat-x"><div class="big">30s</div><div class="lab">to connect</div></div>
+    <div class="stat-x"><div class="big">0</div><div class="lab">hardware</div></div>
+    <div class="stat-x"><div class="big">21</div><div class="lab">test scenarios</div></div>
+    <div class="stat-x"><div class="big">2</div><div class="lab">platforms · Mac + PC</div></div>
+  </div>
+
+  <div class="hero-warn reveal">
     <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-    <p><b>Test account &amp; test server only.</b> Never sign in with a real driver's account or production data, and never trigger a DOT / FMCSA data transfer.</p>
+    <p><b>Test account &amp; test server only.</b> Never use a real driver's account or production data.</p>
   </div>
 </div>
 
-<!-- SETUP -->
-<section id="setup">
+<!-- 3 STEPS -->
+<section id="start">
   <div class="wrap">
-    <div class="head"><div class="ey">Get started</div><h2>Set it up in four steps</h2><p>Same simple flow on both — name the computer <kbd>ELD-MA</kbd>, run the app, connect your phone.</p></div>
+    <div class="head reveal"><div class="ey">Get started</div><h2>Three steps, that's it</h2></div>
+    <div class="seg-row reveal"><div class="seg" role="tablist">
+      <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5zM20 17.5c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.2-2.8-4.3-3.4-8.8-1.5-11.3 1-1.4 2.5-2.2 4-2.2 1.6 0 2.6 1 3.9 1 1.3 0 2-1 3.9-1 1.3 0 2.7.7 3.7 2-3.2 1.8-2.7 6.4.6 7.7z"/></svg>Mac</button>
+      <button role="tab" aria-selected="false" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
+    </div></div>
 
-    <div class="seg-row">
-      <div class="seg" role="tablist">
-        <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5zM20 17.5c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.2-2.8-4.3-3.4-8.8-1.5-11.3 1-1.4 2.5-2.2 4-2.2 1.6 0 2.6 1 3.9 1 1.3 0 2-1 3.9-1 1.3 0 2.7.7 3.7 2-3.2 1.8-2.7 6.4.6 7.7z"/></svg>Mac</button>
-        <button role="tab" aria-selected="false" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
-      </div>
+    <div class="three reveal" id="mac">
+      <div class="stp"><div class="num">1</div><h3>Download &amp; open</h3><p>Unzip and open the app. First time on Mac: right-click → Open. Allow Bluetooth.</p></div>
+      <div class="stp"><div class="num">2</div><h3>Name it <kbd>ELD-MA</kbd></h3><p>System Settings → About → Name → <kbd>ELD-MA-You</kbd>. That's how the app finds it.</p></div>
+      <div class="stp"><div class="num">3</div><h3>Connect your phone</h3><p>In the ELD app (test account) → Bluetooth → pick <kbd>ELD-MA</kbd>. You're driving. 🚚</p></div>
     </div>
-
-    <!-- MAC -->
-    <div class="steps" id="mac">
-      <div class="step"><div class="n">1</div><div class="card">
-        <h3>Download &amp; unzip</h3><p>Get the app and double-click the zip → <b>MatrackTruckSim.app</b>.</p>
-        <a class="dl-in" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac <span class="sz">· 0.9 MB · universal</span></a>
-      </div></div>
-      <div class="step"><div class="n">2</div><div class="card">
-        <h3>Open it — first time only</h3><p><b>Right-click the app → Open → Open.</b> macOS asks once because it's an in-house app — it's safe.</p>
-        <div class="hint">Still blocked? System Settings → Privacy &amp; Security → <b>Open Anyway</b>.</div>
-        <div class="hint">When prompted, <b>allow Bluetooth</b>.</div>
-      </div></div>
-      <div class="step"><div class="n">3</div><div class="card">
-        <h3>Name your Mac <kbd>ELD-MA</kbd></h3><p>System Settings → General → <b>About → Name</b> → e.g. <kbd>ELD-MA-You</kbd>, then toggle Bluetooth off/on.</p>
-        <div class="hint">The app is found by this name — it must start with <b>ELD-MA</b>.</div>
-      </div></div>
-      <div class="step"><div class="n">4</div><div class="card">
-        <h3>Connect your phone</h3><p>Open the app → it reads <b>“Advertising as ELD-MA.”</b> On the phone (test account): ELD app → Bluetooth → pick <kbd>ELD-MA</kbd> → connect.</p>
-      </div></div>
-    </div>
-
-    <!-- WINDOWS -->
-    <div class="steps hide" id="win">
-      <div class="step"><div class="n">1</div><div class="card">
-        <h3>Get the app</h3><p>The Windows build is being finished — build it from the project in <b>Visual Studio 2022</b> and publish a single <kbd>MatrackSim.exe</kbd>.</p>
-        <span class="soon"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Windows download — coming soon</span>
-      </div></div>
-      <div class="step"><div class="n">2</div><div class="card">
-        <h3>Name your PC <kbd>ELD-MA</kbd></h3><p>Settings → System → About → <b>Rename this PC</b> → e.g. <kbd>ELD-MA-You</kbd>, then <b>reboot</b>.</p>
-        <div class="hint">Bluetooth must support “peripheral role” — a one-line check confirms it.</div>
-      </div></div>
-      <div class="step"><div class="n">3</div><div class="card">
-        <h3>Run it</h3><p>Double-click <kbd>MatrackSim.exe</kbd> → it reads <b>“Advertising as ELD-MA.”</b></p>
-      </div></div>
-      <div class="step"><div class="n">4</div><div class="card">
-        <h3>Connect your phone</h3><p>On the phone (test account): ELD app → Bluetooth → pick <kbd>ELD-MA</kbd> → connect.</p>
-      </div></div>
+    <div class="three reveal hide" id="win">
+      <div class="stp"><div class="num">1</div><h3>Run the app</h3><p>Open <kbd>MatrackSim.exe</kbd> (built from the project — coming soon as a download).</p></div>
+      <div class="stp"><div class="num">2</div><h3>Name it <kbd>ELD-MA</kbd></h3><p>Settings → System → About → Rename this PC → <kbd>ELD-MA-You</kbd>, then reboot.</p></div>
+      <div class="stp"><div class="num">3</div><h3>Connect your phone</h3><p>In the ELD app (test account) → Bluetooth → pick <kbd>ELD-MA</kbd>. You're driving. 🚚</p></div>
     </div>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section id="features">
+<!-- WHAT IT DOES -->
+<section style="padding-top:20px">
   <div class="wrap">
-    <div class="head"><div class="ey">In the app</div><h2>Everything a tracker does</h2></div>
-    <div class="feats">
-      <div class="feat">
-        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M3.5 12h3M17.5 12h3M12 3.5v3"/></svg></div>
-        <h4>Drive</h4><p>Engine on, set a speed, or auto-cruise a real route on the live map.</p>
-      </div>
-      <div class="feat">
-        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div>
-        <h4>Scenarios</h4><p>21 canned situations — idle, power cycles, GPS loss, stored backlog — one click each.</p>
-      </div>
-      <div class="feat">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.4"/></svg></div>
-        <h4>Signal &amp; Drop</h4><p>Weaken the signal, or <b>DROP</b> to force a real out-of-range disconnect, then reconnect.</p>
-      </div>
-      <div class="feat">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M12 3v11m0 0l4-4m-4 4l-4-4"/></svg></div>
-        <h4>Stored Dump</h4><p>Replay stored packets fast (≈500 ms) to reproduce the disconnect bug; 1 s is safe.</p>
-      </div>
+    <div class="head reveal"><div class="ey">Once you're in</div><h2>Put it through anything</h2></div>
+    <div class="caps reveal">
+      <div class="cap"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M12 3.5v3"/></svg></div><h4>Drive a route</h4><p>Auto-cruise a real map</p></div>
+      <div class="cap"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h4>21 scenarios</h4><p>One-click situations</p></div>
+      <div class="cap"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.4"/></svg></div><h4>Drop the signal</h4><p>Force a real disconnect</p></div>
+      <div class="cap"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M12 3v11m0 0l4-4m-4 4l-4-4"/></svg></div><h4>Stored dump</h4><p>Reproduce the bug</p></div>
     </div>
   </div>
 </section>
 
 <!-- FAQ -->
-<section id="faq">
+<section id="help" style="padding-top:20px">
   <div class="wrap">
-    <div class="head"><div class="ey">Help</div><h2>Common questions</h2></div>
-    <div class="faq">
-      <details><summary><span class="pl"></span>macOS won't open the app</summary><div class="ans">It's an in-house app (unsigned), so macOS warns once. <b>Right-click → Open → Open</b>, or System Settings → Privacy &amp; Security → <b>Open Anyway</b>. It's safe.</div></details>
-      <details><summary><span class="pl"></span>My phone doesn't see “ELD-MA”</summary><div class="ans">Make sure the computer is <b>named ELD-MA…</b> and Bluetooth is on. Toggle the computer's Bluetooth off/on. On iPhone you can also Settings → Bluetooth → <b>Forget</b> the old device, then reconnect.</div></details>
-      <details><summary><span class="pl"></span>Only one phone connects at a time</summary><div class="ans">One computer = one truck. For several people driving <b>at the same time</b>, each driver needs their own computer running the app (each named <kbd>ELD-MA…</kbd>).</div></details>
-      <details><summary><span class="pl"></span>The connection drops on its own</summary><div class="ans">Expected if you pressed <b>DROP</b> (out-of-range) or ran a stored-dump at ≈500 ms. Press <b>BACK</b> to reconnect, or use 1 s cadence to avoid the disconnect.</div></details>
+    <div class="head reveal"><div class="ey">Need a hand?</div><h2>Quick answers</h2></div>
+    <div class="faq reveal">
+      <details><summary><span class="pl"></span>The Mac won't open the app</summary><div class="ans">It's an in-house app, so macOS asks once. <b>Right-click → Open → Open</b> (or System Settings → Privacy &amp; Security → <b>Open Anyway</b>). It's safe.</div></details>
+      <details><summary><span class="pl"></span>My phone doesn't see “ELD-MA”</summary><div class="ans">Make sure the computer is <b>named ELD-MA…</b> and Bluetooth is on. Toggle Bluetooth off/on. On iPhone you can also <b>Forget</b> the old device, then reconnect.</div></details>
+      <details><summary><span class="pl"></span>Only one phone connects at a time</summary><div class="ans">One computer = one truck. For several people driving at once, each needs their own computer running the app (each named <kbd>ELD-MA…</kbd>).</div></details>
+      <details><summary><span class="pl"></span>It disconnected on its own</summary><div class="ans">Expected if you pressed <b>DROP</b> (out-of-range) or ran a fast stored-dump. Press <b>BACK</b> to reconnect.</div></details>
     </div>
   </div>
 </section>
 
-<footer>Matrack Truck Simulator · internal QA tool · test environment only<div class="mono">// questions → ping Sharan</div></footer>
+<!-- FINAL CTA -->
+<div class="wrap">
+  <div class="cta-band reveal">
+    <h2>Ready in 30 seconds.</h2>
+    <p>Download it, name your Mac <b style="color:#fff">ELD-MA</b>, connect your phone.</p>
+    <a class="cta-white" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac</a>
+    <div class="cta-sub">Windows version coming soon · need help? <a href="#help" style="color:#fff;text-decoration:underline">Quick answers</a></div>
+  </div>
+</div>
+
+<footer class="foot"><div class="wrap">
+  <div class="foot-bar" style="border:0;margin:0;padding:0"><span>Matrack Truck Simulator · internal QA tool · test environment only</span><span class="mono">// ping Sharan</span></div>
+</div></footer>
 
 <script>
-  const btns=document.querySelectorAll('.seg button');
-  const pane={mac:document.getElementById('mac'),win:document.getElementById('win')};
-  btns.forEach(b=>b.addEventListener('click',()=>{
-    btns.forEach(x=>x.setAttribute('aria-selected',x===b));
-    const os=b.dataset.os;
-    for(const k in pane) pane[k].classList.toggle('hide',k!==os);
-    pane[os].querySelectorAll('.step').forEach(s=>{s.style.animation='none';void s.offsetWidth;s.style.animation='';});
-  }));
+  // os toggle
+  const btns=document.querySelectorAll('.seg button'),pane={mac:document.getElementById('mac'),win:document.getElementById('win')};
+  btns.forEach(b=>b.addEventListener('click',()=>{btns.forEach(x=>x.setAttribute('aria-selected',x===b));const os=b.dataset.os;for(const k in pane)pane[k].classList.toggle('hide',k!==os);}));
+  // scroll reveals
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+  // gauge count-up
   const el=document.getElementById('spd');
-  if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
-    let t0=null,dur=1700,delay=350,target=90;
-    requestAnimationFrame(function tick(ts){if(!t0)t0=ts;const e=Math.max(0,ts-t0-delay),p=Math.min(1,e/dur);
-      el.textContent=Math.round((1-Math.pow(1-p,3))*target);if(p<1)requestAnimationFrame(tick);});
-  } else el.textContent='90';
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches){let t0=null,d=1700,dl=350,tg=90;
+    requestAnimationFrame(function tick(ts){if(!t0)t0=ts;const e=Math.max(0,ts-t0-dl),p=Math.min(1,e/d);el.textContent=Math.round((1-Math.pow(1-p,3))*tg);if(p<1)requestAnimationFrame(tick);});}
+  else el.textContent='90';
 </script>
-</body>
-</html>
+</body></html>
