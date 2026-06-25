@@ -13,7 +13,8 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{font-family:var(--f);background:var(--bg);color:var(--ink);line-height:1.62;-webkit-font-smoothing:antialiased}
+body{font-family:var(--f);background:var(--bg);color:var(--ink);line-height:1.62;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 520px at 90% -8%,rgba(43,102,246,.10),transparent 60%),radial-gradient(680px 520px at -6% 3%,rgba(124,108,240,.05),transparent 55%)}
 a{text-decoration:none;color:inherit}
 .mono{font-family:var(--m)}
 
@@ -106,6 +107,21 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 .hdev .bar .d{width:9px;height:9px;border-radius:50%;background:#28323f}.hdev .bar .nm{margin-left:8px;font-family:var(--m);font-size:11px;color:var(--d-dim)}.hdev .bar .lv{margin-left:auto;font-size:10.5px;font-weight:600;color:var(--d-green);background:rgba(61,220,132,.1);border:1px solid rgba(61,220,132,.25);padding:3px 8px;border-radius:6px;display:flex;align-items:center;gap:6px}.hdev .bar .lv i{width:6px;height:6px;border-radius:50%;background:var(--d-green)}
 .hdev .bd{padding:30px 26px;display:flex;flex-direction:column;align-items:center;gap:16px}
 .hdev .tele{width:100%}
+/* hero device enhancements */
+.hstage{position:relative}
+.hglow{position:absolute;inset:-12% -7% -16% -7%;border-radius:50%;background:radial-gradient(closest-side,rgba(43,102,246,.30),transparent 72%);filter:blur(28px);z-index:0;animation:pulseGlow 6s ease-in-out infinite}
+@keyframes pulseGlow{0%,100%{opacity:.85}50%{opacity:1}}
+.hstage .hdev{position:relative;z-index:1}
+.hfchip{position:absolute;z-index:2;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-m);padding:9px 13px;display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600}
+.hfchip .i{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--tint)}.hfchip .i svg{width:13px;height:13px;stroke:var(--brand-deep);fill:none;stroke-width:2.4}
+.hfchip.a{top:-4%;left:-7%;animation:floaty 5s ease-in-out infinite}.hfchip.b{bottom:1%;right:-5%;animation:floaty 5.6s ease-in-out infinite .7s}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.gv-anim{stroke-dasharray:0 999!important;animation:gfill 1.7s var(--e) .4s forwards}
+@keyframes gfill{to{stroke-dasharray:150 340!important}}
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s var(--e),transform .7s var(--e)}.rv.in{opacity:1;transform:none}
+.nlinks a.cur{color:var(--brand-deep);background:var(--tint)}
+@media(max-width:880px){.hfchip{display:none}.hglow{display:none}}
+@media(prefers-reduced-motion:reduce){.hglow,.hfchip,.gv-anim{animation:none!important}.gv-anim{stroke-dasharray:150 340!important}}
 .sec{max-width:1200px;margin:0 auto;padding:62px 26px;border-top:1px solid var(--line)}
 .sec .shd{margin-bottom:32px}.sec .shd .ey{font-size:12.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--brand);margin-bottom:12px}
 .sec .shd h2{font-weight:800;font-size:clamp(26px,3.4vw,38px);letter-spacing:-.025em}.sec .shd p{margin-top:12px;font-size:16.5px;color:var(--ink-2);max-width:580px}
@@ -165,11 +181,16 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
       <a class="ghost" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>How to set it up</a>
     </div>
   </div>
-  <div class="hdev">
-    <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="nm">MatrackTruckSim — ELD-MA</span><span class="lv"><i></i>LIVE</span></div>
-    <div class="bd">
-      <div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="hg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle cx="70" cy="70" r="54" fill="none" stroke="url(#hg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="150 340" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n">84</div><div class="u">KM/H</div></div></div>
-      <div class="tele"><div class="t"><div class="k">Speed</div><div class="v">84 km/h</div></div><div class="t"><div class="k">Fuel</div><div class="v">76% · 60%</div></div><div class="t"><div class="k">Sats</div><div class="v">11</div></div></div>
+  <div class="hstage">
+    <div class="hglow"></div>
+    <div class="hfchip a"><span class="i"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Phone connected</div>
+    <div class="hfchip b"><span class="i"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/></svg></span>Streaming</div>
+    <div class="hdev">
+      <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="nm">MatrackTruckSim — ELD-MA</span><span class="lv"><i></i>LIVE</span></div>
+      <div class="bd">
+        <div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="hg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle class="gv-anim" cx="70" cy="70" r="54" fill="none" stroke="url(#hg)" stroke-width="10" stroke-linecap="round" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n" id="hnum">0</div><div class="u">KM/H</div></div></div>
+        <div class="tele"><div class="t"><div class="k">Speed</div><div class="v">84 km/h</div></div><div class="t"><div class="k">Fuel</div><div class="v">76% · 60%</div></div><div class="t"><div class="k">Sats</div><div class="v">11</div></div></div>
+      </div>
     </div>
   </div>
 </section>
@@ -246,7 +267,7 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
     <article class="doc on" data-id="speed" data-grp="The dashboard">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M12 3.5v3"/></svg></div><h2>Speed &amp; gear</h2></div>
       <p class="lead">The big dial on the left. It shows the truck's <b>current speed</b>, and the gear below shows its state.</p>
-      <div class="vis"><div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="g1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle cx="70" cy="70" r="54" fill="none" stroke="url(#g1)" stroke-width="10" stroke-linecap="round" stroke-dasharray="150 340" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n">84</div><div class="u">KM/H</div></div></div><div class="gear"><span>P</span><span>R</span><span>N</span><span class="on">D</span></div></div>
+      <div class="vis"><div class="gauge"><svg viewBox="0 0 140 140"><defs><linearGradient id="g1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f6f84"/><stop offset="1" stop-color="#7fe0f2"/></linearGradient></defs><circle cx="70" cy="70" r="54" fill="none" stroke="#1a2330" stroke-width="10" stroke-dasharray="254 340" transform="rotate(135 70 70)"/><circle class="gv-anim" cx="70" cy="70" r="54" fill="none" stroke="url(#g1)" stroke-width="10" stroke-linecap="round" transform="rotate(135 70 70)"/></svg><div class="gn"><div class="n">84</div><div class="u">KM/H</div></div></div><div class="gear"><span>P</span><span>R</span><span>N</span><span class="on">D</span></div></div>
       <h3>What it shows</h3>
       <ul class="wl">
         <li><span class="tg">Speed</span><div>Live speed in <b>km/h</b> (the tracker reports km/h; the ELD app converts to mph).</div></li>
@@ -444,5 +465,15 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
   // setup os toggle
   const sb=document.querySelectorAll('.seg button'),sm=document.getElementById('smac'),sw=document.getElementById('swin');
   sb.forEach(b=>b.addEventListener('click',()=>{sb.forEach(x=>x.setAttribute('aria-selected',x===b));const w=b.dataset.os==='win';sm.classList.toggle('hideb',w);sw.classList.toggle('hideb',!w);}));
+  // --- enhancements: scroll reveals, hero count-up, scroll-spy ---
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  document.querySelectorAll('#overview .hero>div, #setup .shd, #guide, #help .shd, #help .faq').forEach(el=>el.classList.add('rv'));
+  const rio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');rio.unobserve(e.target);}}),{threshold:.1});
+  document.querySelectorAll('.rv').forEach(el=>rio.observe(el));
+  const hnum=document.getElementById('hnum');
+  if(hnum){if(reduce){hnum.textContent='84';}else{let t0=null;requestAnimationFrame(function k(ts){if(!t0)t0=ts;const p=Math.min(1,Math.max(0,(ts-t0-400)/1700));hnum.textContent=Math.round((1-Math.pow(1-p,3))*84);if(p<1)requestAnimationFrame(k);});}}
+  const secIds=['overview','setup','guide','help'],nlinks=document.querySelectorAll('.nlinks a');
+  const spy=()=>{let cur=secIds[0];for(const id of secIds){const el=document.getElementById(id);if(el&&el.getBoundingClientRect().top<130)cur=id;}nlinks.forEach(a=>a.classList.toggle('cur',a.getAttribute('href')==='#'+cur));};
+  window.addEventListener('scroll',spy,{passive:true});spy();
 </script>
 </body></html>
