@@ -96,6 +96,11 @@ h1 .g{background:linear-gradient(115deg,#1546c4,#5b8bff);-webkit-background-clip
 .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:34px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .strip .big{font-weight:800;font-size:clamp(30px,4vw,42px);letter-spacing:-.03em;background:linear-gradient(120deg,#1546c4,#5b8bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .strip .lab{font-size:13.5px;color:var(--ink-2);margin-top:2px}
+.whatis{max-width:780px;margin:0 auto;text-align:center;padding:40px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.whatis p{font-size:18.5px;color:var(--ink-2)}.whatis p b{color:var(--ink);font-weight:600}
+.facts{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:22px}
+.facts span{font-size:13px;font-weight:500;color:var(--ink-2);background:var(--surf);border:1px solid var(--line);border-radius:999px;padding:8px 15px;box-shadow:var(--sh);display:flex;align-items:center;gap:8px}
+.facts span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand)}
 
 /* sections */
 section{padding:96px 0}
@@ -183,6 +188,9 @@ details .a{padding:0 23px 22px 57px;color:var(--ink-2);font-size:15.5px}details 
 .cwhite:hover{transform:translateY(-2px)}.cwhite svg{width:18px;height:18px}
 .final .sub{position:relative;margin-top:16px;font-size:13.5px;color:rgba(255,255,255,.72)}
 
+.closing{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;background:var(--surf);border:1px solid var(--line);border-radius:22px;padding:30px 34px;box-shadow:var(--sh-m)}
+.closing h3{font-weight:700;font-size:21px;letter-spacing:-.01em}
+.closing p{color:var(--ink-2);font-size:15px;margin-top:5px;max-width:540px}.closing p b{color:var(--ink)}
 footer{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}footer .mono{color:var(--brand-deep);font-size:11.5px;margin-top:6px}
 
 @media(max-width:920px){
@@ -207,14 +215,14 @@ footer{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}foot
   <!-- HERO -->
   <section class="hero" style="padding-top:64px">
     <div>
-      <span class="eyebrow"><span class="d"></span>No hardware · Mac &amp; PC</span>
-      <h1>Your laptop is<br>now a <span class="g">truck.</span></h1>
-      <p class="lede">Run the simulator and the Matrack ELD app connects to your <b>Mac or PC</b> over Bluetooth — exactly like a real tracker. Drive, break things, reproduce bugs. <b>Ready in 30 seconds.</b></p>
+      <span class="eyebrow"><span class="d"></span>Internal QA tool · for the team</span>
+      <h1>The truck<br><span class="g">simulator.</span></h1>
+      <p class="lede">Your <b>Mac or PC</b> pretends to be a Matrack tracker, so the ELD app connects over Bluetooth — <b>no hardware</b>. This guide walks the team through setting it up and what each part does.</p>
       <div class="cta">
-        <a class="btn btn-brand" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac</a>
-        <a class="btn btn-ghost" href="#features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>See what it does</a>
+        <a class="btn btn-brand" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app</a>
+        <a class="btn btn-ghost" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>How to set it up</a>
       </div>
-      <div class="fine"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5z"/></svg> Universal build · ~1&nbsp;MB · works on Intel &amp; Apple Silicon</div>
+      <div class="fine"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5z"/></svg> Universal build · ~1&nbsp;MB · Intel &amp; Apple Silicon</div>
     </div>
 
     <div class="stage">
@@ -241,19 +249,17 @@ footer{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}foot
     </div>
   </section>
 
-  <!-- STAT STRIP -->
-  <div class="strip reveal">
-    <div><div class="big">30s</div><div class="lab">to first connect</div></div>
-    <div><div class="big">21</div><div class="lab">test scenarios</div></div>
-    <div><div class="big">0</div><div class="lab">hardware needed</div></div>
-    <div><div class="big">2</div><div class="lab">platforms · Mac + PC</div></div>
+  <!-- WHAT IT IS -->
+  <div class="whatis reveal">
+    <p>In plain terms: the app on your computer <b>acts like a Matrack tracker</b> over Bluetooth, so the unmodified ELD app connects and gets real engine &amp; GPS data — letting the team test driving, disconnects, and bugs <b>without any hardware</b>.</p>
+    <div class="facts"><span>Software only</span><span>Mac &amp; Windows</span><span>21 test scenarios</span><span>Test environment only</span></div>
   </div>
 </div>
 
 <!-- SETUP -->
 <section id="setup">
   <div class="wrap">
-    <div class="shead reveal"><div class="ey">Get started</div><h2>Three steps. Then you're driving.</h2><p>The same simple flow on Mac or Windows — name the computer, run it, connect your phone.</p></div>
+    <div class="shead reveal"><div class="ey">Setup</div><h2>How to set it up</h2><p>The same three steps on Mac or Windows — name the computer, run the app, connect your phone.</p></div>
     <div class="seg-row reveal"><div class="seg" role="tablist">
       <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1c.1 1.1-.4 2.2-1.1 3-.7.8-2 1.4-3 1.4-.1-1 .5-2.2 1.1-2.9.8-.8 2.1-1.4 3-1.5zM20 17.5c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.2C-.4 18-1 13.5.9 11c1-1.4 2.5-2.2 4-2.2 1.6 0 2.6 1 3.9 1 1.3 0 2-1 3.9-1 1.3 0 2.7.7 3.7 2-3.2 1.8-2.7 6.4.6 7.7z"/></svg>Mac</button>
       <button role="tab" aria-selected="false" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
@@ -274,7 +280,7 @@ footer{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}foot
 <!-- FEATURES SHOWCASE -->
 <section id="features" style="background:linear-gradient(180deg,transparent,rgba(43,102,246,.035),transparent)">
   <div class="wrap">
-    <div class="shead reveal"><div class="ey">What it does</div><h2>A whole tracker, faked.</h2><p>Click a feature to see it. Everything the real device does — on demand, for testing.</p></div>
+    <div class="shead reveal"><div class="ey">Features</div><h2>What each part does</h2><p>Pick a feature to see what it's for and how the team would use it.</p></div>
     <div class="show reveal">
       <div class="flist">
         <button class="fitem on" data-s="drive"><span class="fi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M12 3.5v3"/></svg></span><div><h4>Drive a route</h4><div class="fp"><p>Engine, speed, and auto-cruise a real map — or "Drive My Day" a full state-crossing trip at 30×.</p></div></div></button>
@@ -324,13 +330,14 @@ footer{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13.5px}foot
   </div>
 </section>
 
-<!-- FINAL CTA -->
-<div class="wrap"><div class="final reveal">
-  <h2>Be driving in 30 seconds.</h2>
-  <p>Download, name your Mac <b style="color:#fff">ELD-MA</b>, connect your phone. That's the whole thing.</p>
-  <a class="cwhite" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac</a>
-  <div class="sub">Windows version coming soon · ⚠️ test account &amp; test server only</div>
-</div></div>
+<!-- CLOSING -->
+<section style="padding-top:0"><div class="wrap"><div class="closing reveal">
+  <div>
+    <h3>Get the app</h3>
+    <p>Download it, follow the three setup steps, and connect your phone. <b>Test account &amp; test server only.</b> Questions? Ping Sharan.</p>
+  </div>
+  <a class="btn btn-brand" href="downloads/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac</a>
+</div></div></section>
 
 <footer><div class="wrap">Matrack Truck Simulator · internal QA tool · test environment only<div class="mono">// crafted for the team — ping Sharan</div></div></footer>
 
