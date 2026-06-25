@@ -57,7 +57,7 @@ namespace MatrackSim.Core
         public double FuelBurnPctPerMile = 0.02;
 
         /// <summary>GPS-derived speed on the wire (km/h). Tracks vehicle speed.</summary>
-        public int GpsSpeedKmh => (int)System.Math.Round(SpeedMph * 1.60934);
+        public int GpsSpeedKmh => (int)System.Math.Round(SpeedMph * 1.60934, System.MidpointRounding.AwayFromZero);
 
         /// <summary>
         /// Advance by `dt` seconds. Integrates distance + engine hours and models RPM + fuel burn.

@@ -10,8 +10,14 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>MatrackSim.App</RootNamespace>
     <AssemblyName>MatrackSim</AssemblyName>
+    <!-- Truck-wheel app icon (matches the macOS HaulLogo) — used for the exe, taskbar and window title bar. -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MatrackSim.Core/MatrackSim.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded OpenStreetMap (Leaflet) navigation map — the Windows stand-in for MapKit. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
   </ItemGroup>
 </Project>

@@ -1,75 +1,135 @@
 <Application x:Class="MatrackSim.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:MatrackSim.App.Controls"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <!-- Dark operator-panel theme. Colours mirror Theme.* from the Swift cluster. -->
-        <Color x:Key="BgColor">#FF0B0E13</Color>
-        <Color x:Key="Bg1Color">#FF121620</Color>
-        <Color x:Key="PanelColor">#FF161B26</Color>
-        <Color x:Key="StrokeColor">#33FFFFFF</Color>
-        <Color x:Key="TextColor">#FFE8EDF4</Color>
-        <Color x:Key="DimColor">#FF8A93A6</Color>
-        <Color x:Key="IceColor">#FF5AC8FA</Color>
-        <Color x:Key="BlueColor">#FF4A8BFF</Color>
-        <Color x:Key="GreenColor">#FF34C759</Color>
-        <Color x:Key="AmberColor">#FFFFB020</Color>
-        <Color x:Key="RedColor">#FFFF3B30</Color>
+        <!-- ===== Theme palette (exact mirror of Theme.swift) ===== -->
+        <Color x:Key="Bg0Color">#FF08090B</Color>
+        <Color x:Key="Bg1Color">#FF101217</Color>
+        <Color x:Key="Bg2Color">#FF0C0E13</Color>
+        <Color x:Key="PanelColor">#FF16181E</Color>
+        <Color x:Key="StrokeColor">#FF2A2E37</Color>
+        <Color x:Key="RedColor">#FFE2122B</Color>
+        <Color x:Key="IceColor">#FF6FD3FF</Color>
+        <Color x:Key="BlueColor">#FF3E7BFA</Color>
+        <Color x:Key="GreenColor">#FF32D74B</Color>
+        <Color x:Key="AmberColor">#FFF5A623</Color>
+        <Color x:Key="TextColor">#FFF4F6FA</Color>
+        <Color x:Key="DimColor">#FF868E9C</Color>
+        <Color x:Key="IceDimColor">#FF2E5A6E</Color>
+        <Color x:Key="DimmerColor">#FF4A515E</Color>
 
-        <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
+        <SolidColorBrush x:Key="Bg0" Color="{StaticResource Bg0Color}" />
         <SolidColorBrush x:Key="Bg1" Color="{StaticResource Bg1Color}" />
+        <SolidColorBrush x:Key="Bg2" Color="{StaticResource Bg2Color}" />
         <SolidColorBrush x:Key="Panel" Color="{StaticResource PanelColor}" />
+        <SolidColorBrush x:Key="PanelGlass" Color="#D916181E" />
         <SolidColorBrush x:Key="Stroke" Color="{StaticResource StrokeColor}" />
-        <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
-        <SolidColorBrush x:Key="Dim" Color="{StaticResource DimColor}" />
+        <SolidColorBrush x:Key="Red" Color="{StaticResource RedColor}" />
         <SolidColorBrush x:Key="Ice" Color="{StaticResource IceColor}" />
         <SolidColorBrush x:Key="Blue" Color="{StaticResource BlueColor}" />
         <SolidColorBrush x:Key="Green" Color="{StaticResource GreenColor}" />
         <SolidColorBrush x:Key="Amber" Color="{StaticResource AmberColor}" />
-        <SolidColorBrush x:Key="Red" Color="{StaticResource RedColor}" />
+        <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
+        <SolidColorBrush x:Key="Dim" Color="{StaticResource DimColor}" />
+        <SolidColorBrush x:Key="IceDim" Color="{StaticResource IceDimColor}" />
+        <SolidColorBrush x:Key="Dimmer" Color="{StaticResource DimmerColor}" />
+
+        <FontFamily x:Key="Rounded">Segoe UI Variable Display, Segoe UI, Arial</FontFamily>
+        <FontFamily x:Key="Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
+        <!-- Native Win11 icon font — crisp monochrome glyphs that tint properly (the SF-Symbols stand-in) -->
+        <FontFamily x:Key="Fluent">Segoe Fluent Icons</FontFamily>
 
         <!-- Section label: small, spaced, dim caps (mirrors .sectionLabel()) -->
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10" />
-            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource Dim}" />
             <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         </Style>
 
-        <!-- Card panel container (mirrors Card<C>) -->
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource Panel}" />
+        <!-- Glass panel container (mirrors glassPanel() / Card) -->
+        <Style x:Key="GlassPanel" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelGlass}" />
             <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Padding" Value="14" />
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="18" ShadowDepth="10" Direction="270" />
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <!-- NeonButton: flat tinted button used throughout the cluster -->
+        <!-- Only the font here. The default text COLOUR comes from Window.Foreground (inherited), so a closer
+             TextElement.Foreground (e.g. on a button's content) can override it. An implicit Foreground setter
+             would beat inheritance and force button text white — which is the bug this avoids. -->
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+        </Style>
+
+        <!-- NeonButton: flat tinted button. Tint is supplied per-instance via Tag (a brush). -->
         <Style x:Key="NeonButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource Text}" />
-            <Setter Property="Background" Value="#22FFFFFF" />
-            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
+            <Setter Property="Foreground" Value="{StaticResource Ice}" />
+            <!-- Transparent here; the template paints a tint wash (Foreground @ 0.12) behind the content so the
+                 fill matches the button's colour like the Mac. Filled buttons set a solid Background instead. -->
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{Binding Foreground, RelativeSource={RelativeSource Self}}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Padding" Value="10,7" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="9">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              Margin="{TemplateBinding Padding}" />
-                        </Border>
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform x:Name="sc" ScaleX="1" ScaleY="1" />
+                            </Grid.RenderTransform>
+                            <Border x:Name="wash" CornerRadius="11" Background="{TemplateBinding Foreground}" Opacity="0.12" />
+                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="11">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                            <!-- soft tint border — Mac strokes at tint.opacity(0.55), not full strength -->
+                            <Border x:Name="line" CornerRadius="11" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" Opacity="0.55" IsHitTestVisible="False" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#33FFFFFF" />
+                                <Setter TargetName="line" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#6FD3FF" BlurRadius="12" ShadowDepth="0" Opacity="0.28" />
+                                    </Setter.Value>
+                                </Setter>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="0:0:0.18" />
+                                            <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="0:0:0.18" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.18" />
+                                            <DoubleAnimation Storyboard.TargetName="sc" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.18" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <!-- Filled CTAs set Foreground to the dark cockpit colour — suppress the tint wash for them. -->
+                            <Trigger Property="Foreground" Value="#FF08090B">
+                                <Setter TargetName="wash" Property="Opacity" Value="0" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4" />
@@ -80,19 +140,269 @@
             </Setter>
         </Style>
 
-        <Style x:Key="ChipText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
+        <!-- NeonToggle: a NeonButton that fills with its tint (Tag) when active/checked -->
+        <Style x:Key="NeonToggle" TargetType="ToggleButton">
+            <!-- Text follows the tint (Tag) when off; the IsChecked trigger flips it dark when active. Driving
+                 this from the STYLE (not a local Foreground) lets the trigger win — a local Foreground would
+                 outrank the trigger and leave the active label tint-on-tint (invisible). -->
+            <Setter Property="Foreground" Value="{Binding Tag, RelativeSource={RelativeSource Self}}" />
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Grid>
+                            <!-- inactive = faint tint wash (Mac filled:false uses tint.opacity(0.12)); active = solid tint -->
+                            <Border x:Name="wash" CornerRadius="11"
+                                    Background="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Opacity="0.12" />
+                            <Border x:Name="bd" CornerRadius="11" Padding="10,9" Background="Transparent">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                            <!-- soft tint border (tint.opacity(0.55) like the Mac), drawn over the fill -->
+                            <Border x:Name="line" CornerRadius="11" BorderThickness="1" Opacity="0.55" IsHitTestVisible="False"
+                                    BorderBrush="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="wash" Property="Opacity" Value="0" />
+                                <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                                <Setter Property="Foreground" Value="#FF08090B" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="line" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#6FD3FF" BlurRadius="12" ShadowDepth="0" Opacity="0.5" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Text}" />
+        <!-- Slim slider with an ice track + round thumb -->
+        <!-- Card: glass panel + tinted accent bar + icon header (mirrors ControlsDrawer.swift Card) -->
+        <Style TargetType="{x:Type ctl:Card}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ctl:Card}">
+                        <Border CornerRadius="18" Background="{StaticResource PanelGlass}"
+                                BorderBrush="{StaticResource Stroke}" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="18" ShadowDepth="10" Direction="270" />
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <!-- accent bar -->
+                                <Border Grid.Row="0" Height="2" Margin="14,0,14,0" CornerRadius="1">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="{Binding Tint.Color, RelativeSource={RelativeSource TemplatedParent}}" Offset="0" />
+                                            <GradientStop Color="#00000000" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <!-- header -->
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="16,14,16,12">
+                                    <TextBlock Text="{TemplateBinding Glyph}" Foreground="{TemplateBinding Tint}" FontFamily="{StaticResource Fluent}"
+                                               FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <!-- content -->
+                                <ContentPresenter Grid.Row="2" Content="{TemplateBinding InnerContent}" Margin="16,0,16,16" />
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="Slider">
+            <Setter Property="MinHeight" Value="24" />
             <Setter Property="Foreground" Value="{StaticResource Ice}" />
-            <Setter Property="MinHeight" Value="22" />
+            <!-- Click (or drag) anywhere on the track jumps the value straight to that point. -->
+            <Setter Property="IsMoveToPointEnabled" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <!-- Transparent full-height grid = a tall, easy hit target for the whole row. -->
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Grid Background="Transparent">
+                                                    <Border Height="5" CornerRadius="2.5" Background="{StaticResource Ice}" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Grid Background="Transparent">
+                                                    <Border Height="5" CornerRadius="2.5" Background="#22FFFFFF" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="16" Height="16" Cursor="Hand">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <!-- transparent padding around the dot enlarges the grab area -->
+                                                <Grid Background="Transparent" Margin="-3">
+                                                    <Ellipse x:Name="dot" Fill="{StaticResource Text}" Width="16" Height="16" Margin="3">
+                                                        <Ellipse.Effect>
+                                                            <DropShadowEffect Color="#6FD3FF" BlurRadius="7" ShadowDepth="0" Opacity="0.85" />
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="dot" Property="Fill" Value="{StaticResource Ice}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Dark themed ComboBox (scenario picker) — replaces the default light WPF combo ===== -->
+        <ControlTemplate x:Key="ComboToggleTemplate" TargetType="ToggleButton">
+            <Border x:Name="bd" CornerRadius="10" BorderThickness="1"
+                    Background="#73080A0E" BorderBrush="{StaticResource Stroke}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="26" />
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Data="M0,0 L4,4 L8,0 Z" Fill="{StaticResource Dim}" Stretch="None" />
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="bd" Property="BorderBrush" Value="#996FD3FF" />
+                </Trigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="bd" Property="BorderBrush" Value="#996FD3FF" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Template="{StaticResource ComboToggleTemplate}" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <ContentPresenter Margin="12,0,30,0" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                <Border Background="{StaticResource Bg1}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                        CornerRadius="10" Margin="0,4,0,0" MaxHeight="320" Padding="2"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" Opacity="0.6" BlurRadius="16" ShadowDepth="6" Direction="270" />
+                                    </Border.Effect>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter Property="Height" Value="34" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource Text}" />
+            <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="7" Margin="3,1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#246FD3FF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#3A6FD3FF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== Thin minimal scrollbar (Mac-like overlay), replaces the chunky default ===== -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent" Width="8">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border CornerRadius="3" Margin="2,0" Background="#552A2E37" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>

@@ -142,6 +142,10 @@ namespace MatrackSim.Core
             Transport = transport ?? MatrackSim.Core.Transport.Clean();
             AppSteps = appSteps ?? new List<string>();
         }
+
+        // Shown directly in the WPF scenario ComboBox (which displays each item via ToString()).
+        // Matches the macOS Menu label format exactly: "5. Driving highway".
+        public override string ToString() => string.IsNullOrEmpty(Name) ? base.ToString() : $"{Id}. {Name}";
     }
 
     /// <summary>

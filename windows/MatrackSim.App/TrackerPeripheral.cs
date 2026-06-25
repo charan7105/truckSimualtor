@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
 using MatrackSim.Core;
@@ -46,9 +47,62 @@ namespace MatrackSim.App
             Text = text;
             LineKind = kind;
         }
+
+        // Presentation helpers for the packet-stream DataTemplate (mirrors the symbol/colour the
+        // Swift console drew per line). Brushes are frozen so they're safe to read from any thread.
+        public string Symbol
+        {
+            get
+            {
+                switch (LineKind)
+                {
+                    case Kind.Out: return "→";
+                    case Kind.Inbound: return "←";
+                    case Kind.Drop: return "⨯";
+                    default: return "•";
+                }
+            }
+        }
+
+        /// <summary>Row text colour — info lines are dimmed like the Mac (kind==.info ? dim : text).</summary>
+        public System.Windows.Media.Brush TextBrush =>
+            LineKind == Kind.Info ? ThemeBrushes.Dim : ThemeBrushes.Text;
+
+        public System.Windows.Media.Brush Color
+        {
+            get
+            {
+                switch (LineKind)
+                {
+                    case Kind.Out: return ThemeBrushes.Green;
+                    case Kind.Inbound: return ThemeBrushes.Ice;
+                    case Kind.Drop: return ThemeBrushes.Red;
+                    default: return ThemeBrushes.Dim;
+                }
+            }
+        }
     }
 
-    public sealed class SimController : INotifyPropertyChanged
+    /// <summary>Frozen theme brushes (hex mirrors App.xaml) — safe to share across threads.</summary>
+    internal static class ThemeBrushes
+    {
+        private static System.Windows.Media.SolidColorBrush Make(string hex)
+        {
+            var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
+            var b = new System.Windows.Media.SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+        public static readonly System.Windows.Media.Brush Text  = Make("#FFE8EDF4");
+        public static readonly System.Windows.Media.Brush Dim   = Make("#FF8A93A6");
+        public static readonly System.Windows.Media.Brush Ice   = Make("#FF5AC8FA");
+        public static readonly System.Windows.Media.Brush Blue  = Make("#FF4A8BFF");
+        public static readonly System.Windows.Media.Brush Green = Make("#FF34C759");
+        public static readonly System.Windows.Media.Brush Amber = Make("#FFFFB020");
+        public static readonly System.Windows.Media.Brush Red   = Make("#FFFF3B30");
+    }
+
+    public sealed partial class TrackerPeripheral : INotifyPropertyChanged
     {
         // Swift used a shared static RNG via Double.random/Int.random; mirror with one shared Random.
         private static readonly Random Rng = new Random();
@@ -206,11 +260,13 @@ namespace MatrackSim.App
         // BLE bookkeeping: WinRT reports connected centrals via SubscribedClients, not a single bool.
         private int subscriberCount;
 
-        public SimController()
+        public TrackerPeripheral()
         {
             ApplyConfigToEngine();
             Vin = device.Vin;
             Firmware = $"{device.McuFW} · BLE {device.BleFW}";
+            InitPresentation();      // wire derived UI bindings + start the refresh timer (see partial)
+            StartBLE();              // begin advertising the tracker service on launch (like the macOS app)
         }
 
         public void StartBLE()
@@ -423,6 +479,13 @@ namespace MatrackSim.App
                 serviceProvider?.StopAdvertising();
             }
             catch { /* provider may already be torn down */ }
+            // Detach handlers BEFORE releasing. The central doesn't disconnect instantly (it waits out its BLE
+            // supervision timeout), so the about-to-die dataChar would otherwise fire a stale
+            // SubscribedClientsChanged(count==0) a few seconds later — which resets LinkDown=false and strands us
+            // un-advertised, so a later FULL/BACK never calls ResumeLink(). (macOS nils its manager, so it can't
+            // fire stale callbacks — this keeps Windows parity.)
+            if (dataChar != null) dataChar.SubscribedClientsChanged -= OnSubscribedClientsChanged;
+            if (commandChar != null) commandChar.WriteRequested -= OnWriteRequested;
             // Releasing the GattServiceProvider severs the active connection (CB removeAllServices + nil manager).
             serviceProvider = null;
             dataChar = null; commandChar = null;
@@ -459,11 +522,10 @@ namespace MatrackSim.App
             RouteBusy = true;
             try
             {
-                // NOTE: Core's Directions is a MapKit-only stub that throws NotImplementedOnThisPlatform.
-                // The structure is preserved exactly; on Windows a route must be supplied another way
-                // (an external routing provider feeding RouteEngine.SetRoute). The catch below mirrors
-                // Swift's error path and surfaces it in the log only, keeping any prior route shown.
-                var pts = await Task.Run(() => Directions.Route(from, to));
+                // Windows routing: OpenStreetMap (Nominatim geocode + OSRM road route, no API key), with a
+                // built-in city table + synthetic-line fallback when offline. Replaces the Mac's MapKit
+                // Directions (Core's stub throws NotImplementedOnThisPlatform). See WindowsRouting.
+                var pts = await WindowsRouting.RouteAsync(from, to);
                 Route.SetRoute(pts);
                 RouteCoords = pts;
                 DrivingRoute = false;            // freshly planned route returns to overview; press DRIVE to go
@@ -666,8 +728,15 @@ namespace MatrackSim.App
         private void Info(string s) => Push(new LogLine(Stamp(), s, LogLine.Kind.Info));
         private void Push(LogLine l)
         {
-            Log.Add(l);
-            while (Log.Count > 250) Log.RemoveAt(0);
+            // Log is bound to the WPF ListBox; mutating it off the UI thread throws. The sim ticks on a
+            // background Timer, so marshal collection changes onto the dispatcher (see PostToUi in the
+            // presentation partial). The console echo below can run on any thread.
+            PostToUi(() =>
+            {
+                Log.Add(l);
+                while (Log.Count > 250) Log.RemoveAt(0);
+                Raise(nameof(LogCountText));
+            });
             string sym = l.LineKind == LogLine.Kind.Out ? "→" :
                          (l.LineKind == LogLine.Kind.Inbound ? "←" :
                          (l.LineKind == LogLine.Kind.Drop ? "⨯" : "•"));

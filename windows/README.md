@@ -13,13 +13,28 @@ unmodified Matrack ELD app connects to it. Ported from `../Sources/MatrackTruckS
 
 ## What is verified vs. not
 
-- ✅ **Core packet fidelity is PROVEN.** `MatrackSim.SelfTest` was built and run on macOS and passes
+- ✅ **Core packet fidelity is PROVEN.** `MatrackSim.SelfTest` builds and runs on **Windows** (.NET 8) and passes
   **10/10 cycles with the exact same packet counts as the Swift original** (1841/480/10/1 @ 1.0s, etc.) —
   i.e. the C# wire output is byte-for-byte identical to the tracker protocol the Swift sim was verified against.
-- ⚠️ **MatrackSim.App has NOT been compiled** (it needs the Windows SDK / WinRT, which isn't available on the
-  Mac it was written on). Expect to do minor build fix-ups the first time you open it in Visual Studio. The
-  BLE logic mirrors the verified Swift `TrackerPeripheral` 1:1.
+- ✅ **MatrackSim.App now COMPILES AND LAUNCHES on Windows** (`dotnet build` clean, 0 errors; window renders).
+  The build-fix-ups the original notes warned about were completed — see "Windows port completion" below.
+- ⚠️ **BLE advertising needs Bluetooth turned ON** and an adapter that supports the **peripheral role**. If the
+  app logs `failed to create GATT service: RadioNotAvailable`, Bluetooth is off — enable it in
+  Settings ▸ Devices ▸ Bluetooth, then relaunch.
 - ⚠️ **On-device test pending** — connecting the real ELD app to the PC is your step.
+
+## Windows port completion (what was finished to make App build/run)
+
+The macOS-authored App project referenced a WPF view-model (`TrackerPeripheral`) whose presentation surface
+wasn't written yet. Completed on Windows:
+- `TrackerPeripheral.cs` — the BLE/sim controller class was renamed `SimController` → **`TrackerPeripheral`**
+  (now `partial`), wired to **start BLE + the UI on launch**, and its packet log is now marshalled onto the
+  WPF dispatcher (an `ObservableCollection` can't be mutated from the sim's background timer thread).
+- **`TrackerPeripheral.Presentation.cs`** (new) — the view-model adapter the XAML binds to: formatted text
+  (km/h, %, ms), theme brushes (`StatusBrush`/`SignalColor`), the scenario picker, and two-way slider props.
+- `LogLine` gained `Symbol` + `Color` for the packet-stream template; `Scenario.ToString()` drives the picker.
+- ENGINE/AUTO toggles now invoke `SetEngine`/`SetAutoDrive` via click handlers (were bound to inert properties).
+- `MatrackSim.SelfTest` retargeted `net10.0` → **`net8.0`** so one SDK (.NET 8) builds the whole solution.
 
 ## Build & run (on Windows)
 
