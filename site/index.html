@@ -209,7 +209,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <h1>The truck simulator,<br><span class="g">right on your screen.</span></h1>
     <p class="ld">Your Mac or PC pretends to be a Matrack tracker, so the ELD app connects over Bluetooth — <b>no hardware</b>. Drive it, break the connection, reproduce bugs.</p>
     <div class="acts">
-      <a class="bigdl" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app</a>
+      <a class="bigdl" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackSim-win-x64.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app · Windows</a>
       <a class="ghost" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>How to set it up</a>
     </div>
   </div>
@@ -226,10 +226,10 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 <section id="setup" class="sec">
   <div class="shd"><div class="ey">Setup</div><h2>How to set it up</h2><p>A few simple steps — get the app, name the computer <kbd>ELD-MA</kbd>, and connect your phone. Pick your platform:</p></div>
   <div class="seg" role="tablist">
-    <button role="tab" aria-selected="true" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg>Mac</button>
-    <button role="tab" aria-selected="false" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
+    <button role="tab" aria-selected="true" data-os="win"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3zM3 12.5h7.5v7.1L3 18.5zM11.5 4.3L21 3v8.5h-9.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Windows</button>
+    <button role="tab" aria-selected="false" data-os="mac"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg>Mac</button>
   </div>
-  <div class="steps2" id="smac">
+  <div class="steps2 hideb" id="smac">
     <div class="s2"><div class="n">1</div><div>
       <h4>Download &amp; unzip</h4>
       <p>Download the app, then double-click the <kbd>.zip</kbd> to unzip it.</p>
@@ -252,7 +252,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <div class="mini">It connects and starts streaming — you're driving. 🚚</div>
     </div></div>
   </div>
-  <div class="steps2 hideb" id="swin">
+  <div class="steps2" id="swin">
     <div class="s2"><div class="n">1</div><div>
       <h4>Download the app</h4>
       <p>Grab the Windows build, unzip it, and run <kbd>MatrackSim.exe</kbd> — it's <b>self-contained</b>, so no .NET install is needed.</p>
@@ -500,7 +500,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
   // setup os toggle
   const sb=document.querySelectorAll('.seg button'),sm=document.getElementById('smac'),sw=document.getElementById('swin');
   sb.forEach(b=>b.addEventListener('click',()=>{sb.forEach(x=>x.setAttribute('aria-selected',x===b));const w=b.dataset.os==='win';sm.classList.toggle('hideb',w);sw.classList.toggle('hideb',!w);}));
-  if(/Win(dows|32|64|NT)/i.test((navigator.userAgent||'')+(navigator.platform||''))){const wb=[...sb].find(b=>b.dataset.os==='win');if(wb)wb.click();}
+  if(/Mac|iPhone|iPad|iPod/i.test((navigator.userAgent||'')+(navigator.platform||''))){const mb=[...sb].find(b=>b.dataset.os==='mac');if(mb)mb.click();}
   // --- enhancements: scroll reveals, hero count-up, scroll-spy ---
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
   document.querySelectorAll('#overview .hero>div, #setup .shd, #guide, #help .shd, #help .faq').forEach(el=>el.classList.add('rv'));
