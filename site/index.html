@@ -103,11 +103,34 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 .hero h1 .g{background:linear-gradient(115deg,#1546c4,#5b8bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hero .ld{margin-top:18px;max-width:480px;font-size:18px;color:var(--ink-2)}.hero .ld b{color:var(--ink);font-weight:600}
 .hero .acts{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}
-.bigdl{font-weight:600;font-size:15.5px;background:linear-gradient(180deg,#5b8bff,var(--brand));color:#fff;padding:14px 24px;border-radius:999px;display:inline-flex;align-items:center;gap:9px;box-shadow:0 12px 28px -10px rgba(43,102,246,.6);transition:transform .16s}
+.bigdl{position:relative;isolation:isolate;font-weight:600;font-size:15.5px;background:linear-gradient(180deg,#5b8bff,var(--brand));color:#fff;padding:14px 24px;border-radius:999px;display:inline-flex;align-items:center;gap:9px;box-shadow:0 12px 28px -10px rgba(43,102,246,.6);transition:transform .16s}
+@property --mba{syntax:"<angle>";inherits:false;initial-value:0deg}
+.bigdl::before{content:"";position:absolute;inset:-1.5px;border-radius:inherit;z-index:-1;padding:1.5px;background:conic-gradient(from var(--mba),transparent 0deg,transparent 290deg,#bcd3ff 330deg,#fff 348deg,#bcd3ff 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:mbspin 3.4s linear infinite}
+@keyframes mbspin{to{--mba:360deg}}
+@media(prefers-reduced-motion:reduce){.bigdl::before{animation:none;opacity:.5}}
 .bigdl:hover{transform:translateY(-2px)}.bigdl svg{width:16px;height:16px}
 .reqtag{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--brand-deep);background:var(--tint);border:1px solid #d7e3fd;padding:2px 7px;border-radius:999px;margin-left:8px;vertical-align:middle}
 .s2 h4 .reqtag{margin-left:8px}
 .keynote{margin-top:11px;font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--brand);padding-left:12px;line-height:1.55}.keynote b{color:var(--brand-deep);font-weight:600}
+/* capabilities bento */
+.caps{max-width:1160px;margin:0 auto;padding:40px 26px 8px}
+.caps-head{text-align:center;max-width:700px;margin:0 auto 30px}
+.caps-head .ey{font-size:12.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--brand);margin-bottom:12px}
+.caps-head h2{font-weight:800;font-size:clamp(26px,3.4vw,38px);letter-spacing:-.03em;line-height:1.08}
+.caps-head p{margin-top:13px;color:var(--ink-2);font-size:16.5px}
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.bcard{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:22px;transition:transform .2s var(--e),box-shadow .25s,border-color .25s;overflow:hidden}
+.bcard:hover{transform:translateY(-3px);border-color:#cdddfb;box-shadow:0 22px 44px -22px rgba(43,102,246,.3)}
+.bcard .bi{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(180deg,#f0f5ff,#e6efff);border:1px solid #d9e5fb;margin-bottom:14px}
+.bcard .bi svg{width:21px;height:21px;fill:none;stroke:var(--brand-deep);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.bcard h3{font-weight:700;font-size:16.5px;letter-spacing:-.02em;margin-bottom:7px}.bcard h3 .tg{font-family:var(--m);font-size:11px;font-weight:600;color:var(--brand-deep);background:var(--tint);border:1px solid #d7e3fd;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle}
+.bcard p{color:var(--ink-2);font-size:14px;line-height:1.55}.bcard p b{color:var(--ink);font-weight:600}
+.bcard.feat{grid-column:span 2;grid-row:span 2;display:flex;flex-direction:column}
+.bcard.feat h3{font-size:22px}.bcard.feat>p{font-size:15px;max-width:430px}
+.bcard.feat .shotmini{margin-top:20px;border-radius:12px;border:1px solid #1f2937;overflow:hidden;box-shadow:var(--sh-m);align-self:stretch}
+.bcard.feat .shotmini img{display:block;width:100%}
+@media(max-width:820px){.bento{grid-template-columns:repeat(2,1fr)}.bcard.feat{grid-row:auto}}
+@media(max-width:560px){.bento{grid-template-columns:1fr}.bcard.feat{grid-column:span 1}}
 .ghost{font-weight:600;font-size:15.5px;background:var(--surf);color:var(--ink);padding:14px 22px;border-radius:999px;border:1px solid var(--line-2);box-shadow:var(--sh);transition:.16s;display:inline-flex;align-items:center;gap:9px}.ghost:hover{transform:translateY(-2px)}.ghost svg{width:16px;height:16px}
 .hdev{background:linear-gradient(180deg,#0e141d,#0a0e15);border:1px solid #222d3b;border-radius:20px;box-shadow:var(--sh-m);overflow:hidden}
 .hdev .bar{display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid var(--d-line)}
@@ -130,7 +153,10 @@ footer{border-top:1px solid var(--line);padding:30px 0;text-align:center;color:v
 .hero2{max-width:1120px;margin:0 auto;padding:62px 26px 20px;text-align:center}
 .hero2 .ey{font-size:12.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--brand);margin-bottom:15px}
 .hero2 h1{font-weight:800;font-size:clamp(38px,5.6vw,66px);letter-spacing:-.035em;line-height:1.0}
-.hero2 h1 .g{background:linear-gradient(115deg,#1546c4,#5b8bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero2 h1 .g{position:relative;display:inline-block;background:linear-gradient(110deg,#1546c4,#5b8bff,#2b66f6,#7fb0ff,#1546c4);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:gflow 7s ease-in-out infinite}
+.hero2 h1 .g .ctext{position:absolute;left:0;top:0;pointer-events:none}
+@keyframes gflow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@media(prefers-reduced-motion:reduce){.hero2 h1 .g{animation:none}}
 .hero2 .ld{margin:20px auto 0;max-width:600px;font-size:18.5px;color:var(--ink-2)}.hero2 .ld b{color:var(--ink);font-weight:600}
 .hero2 .acts{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .shotwrap{position:relative;max-width:1080px;margin:54px auto 0;padding:0 26px}
@@ -226,6 +252,48 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <div class="shot">
       <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="nm">MatrackTruckSim — Advertising as ELD-MA</span><span class="lv"><i></i>LIVE</span></div>
       <img src="assets/dashboard.jpg" alt="The Matrack truck simulator dashboard — speed and RPM gauges, live map, drive and connection controls, and the packet stream" loading="eager"/>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT YOU CAN TEST -->
+<section id="capabilities" class="caps">
+  <div class="caps-head rv">
+    <div class="ey">What you can test</div>
+    <h2>A full test rig, not just a viewer.</h2>
+    <p>Everything the real Matrack tracker does — plus the failures you need to reproduce.</p>
+  </div>
+  <div class="bento rv">
+    <div class="bcard feat">
+      <div class="bi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2M12 3.5v3"/></svg></div>
+      <h3>Drive the truck</h3>
+      <p>Start the engine, set a speed or let it <b>auto-cruise</b>, and watch it drive a real route on the live map — at <b>1× to 30×</b>. Speed, RPM, fuel, odometer and GPS all stream to the ELD app exactly like the hardware.</p>
+      <div class="shotmini"><img src="assets/parts/drive.png" alt="The drive controls"/></div>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><path d="M5 13a9 9 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.4"/></svg></div>
+      <h3>Break the connection</h3>
+      <p>Weaken the signal or <b>DROP</b> the Bluetooth link to test out-of-range and auto-reconnect — just like the field.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div>
+      <h3>21 ready scenarios <span class="tg">1-click</span></h3>
+      <p>Replay real situations — signal loss, idle &amp; shutdown, stored backlog, unassigned driving — in one click.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M12 3v11m0 0l4-4m-4 4l-4-4"/></svg></div>
+      <h3>Reproduce the dump bug</h3>
+      <p>Fire a fast stored-dump (<b>≈500 ms</b>) to reproduce the disconnect bug — and confirm the 1 s fix.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8 18c6-1 4-11 8-12"/></svg></div>
+      <h3>DRIVE MY DAY</h3>
+      <p>One click → a full <b>state-crossing day</b> at 30× with built-in speeding &amp; idle events, for IFTA mileage.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+      <h3>Live packet stream</h3>
+      <p>Watch every packet in and out in real time, and <b>export the log</b> for a bug report.</p>
     </div>
   </div>
 </section>
@@ -563,5 +631,45 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       el.addEventListener('mouseleave',()=>{el.style.transform='';});
     });
   }
+  // canvas-text: flowing blue curved lines clipped inside the headline letters
+  (function(){
+    const span=document.querySelector('.hero2 h1 .g');
+    if(!span || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+    const text=span.textContent.trim();
+    const cv=document.createElement('canvas'); cv.className='ctext'; span.appendChild(cv);
+    const ctx=cv.getContext('2d');
+    const cols=Array.from({length:10},(_,k)=>`rgba(0,153,255,${(1-k*0.09).toFixed(2)})`);
+    let W=0,H=0,font='';
+    function size(){
+      const r=span.getBoundingClientRect(), dpr=Math.min(devicePixelRatio||1,2);
+      W=Math.ceil(r.width); H=Math.ceil(r.height);
+      cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      const cs=getComputedStyle(span);
+      font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    }
+    function frame(ts){
+      const t=ts/1000;
+      ctx.clearRect(0,0,W,H);
+      ctx.lineWidth=2; ctx.lineCap='round';
+      const gap=5, n=Math.ceil(H/gap)+4;
+      for(let i=0;i<n;i++){
+        const base=i*gap-gap*2; ctx.beginPath(); ctx.strokeStyle=cols[i%cols.length];
+        for(let x=0;x<=W;x+=6){
+          const y=base + Math.sin((x/Math.max(W,1))*Math.PI*2.4 + t*0.6 + i*.4)*11 + Math.sin(t*.35+i*.6)*5;
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation='destination-in';
+      ctx.font=font; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle='#000'; ctx.fillText(text,0,H/2);
+      ctx.globalCompositeOperation='source-over';
+      requestAnimationFrame(frame);
+    }
+    size(); requestAnimationFrame(frame);
+    addEventListener('resize',size);
+    if(document.fonts&&document.fonts.ready) document.fonts.ready.then(size);
+  })();
 </script>
 </body></html>
