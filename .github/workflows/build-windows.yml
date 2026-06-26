@@ -1,0 +1,51 @@
+name: Build Windows app
+
+on:
+  workflow_dispatch:        # lets you run it manually from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/build-windows.yml'
+
+permissions:
+  contents: write           # needed to attach the build to the Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Self-test the core (must pass)
+        run: dotnet run --project windows/MatrackSim.SelfTest/MatrackSim.SelfTest.csproj -c Release
+
+      - name: Publish the Windows app (self-contained, single exe)
+        run: >
+          dotnet publish windows/MatrackSim.App/MatrackSim.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish
+
+      - name: Zip the build
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath MatrackSim-win-x64.zip -Force
+
+      - name: Upload as a build artifact (downloadable from this run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MatrackSim-win-x64
+          path: MatrackSim-win-x64.zip
+
+      - name: Attach to the v1.0.0 Release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload v1.0.0 MatrackSim-win-x64.zip --clobber --repo ${{ github.repository }}
