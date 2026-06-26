@@ -2,6 +2,8 @@
 
 A macOS **control-panel app** that turns your Mac into a legacy Matrack **MT** Bluetooth tracker, so the **unmodified** Matrack ELD app (on a real iPhone) connects to it and receives realistic engine data — for testing FMCSA/HOS calculations and diagnostics without the physical truck simulator.
 
+**🔗 Team site (downloads + setup + field guide):** https://truck-simualtor.vercel.app
+
 See `PLAN.md` (roadmap) and `ARCHITECTURE.md` (design).
 
 ## What it does
