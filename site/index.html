@@ -209,7 +209,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <h1>The truck simulator,<br><span class="g">right on your screen.</span></h1>
     <p class="ld">Your Mac or PC pretends to be a Matrack tracker, so the ELD app connects over Bluetooth — <b>no hardware</b>. Drive it, break the connection, reproduce bugs.</p>
     <div class="acts">
-      <a class="bigdl" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackSim-win-x64.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app · Windows</a>
+      <a class="bigdl" id="getapp" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackSim-win-x64.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg><span class="lbl">Get the app · Windows</span></a>
       <a class="ghost" href="#setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>How to set it up</a>
     </div>
   </div>
@@ -500,7 +500,19 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
   // setup os toggle
   const sb=document.querySelectorAll('.seg button'),sm=document.getElementById('smac'),sw=document.getElementById('swin');
   sb.forEach(b=>b.addEventListener('click',()=>{sb.forEach(x=>x.setAttribute('aria-selected',x===b));const w=b.dataset.os==='win';sm.classList.toggle('hideb',w);sw.classList.toggle('hideb',!w);}));
-  if(/Mac|iPhone|iPad|iPod/i.test((navigator.userAgent||'')+(navigator.platform||''))){const mb=[...sb].find(b=>b.dataset.os==='mac');if(mb)mb.click();}
+  // OS-aware: preselect the download + setup guide for the visitor's machine
+  (function(){
+    const ua=(navigator.userAgent||'')+' '+(navigator.platform||'');
+    const isMac=/Mac|iPhone|iPad|iPod/i.test(ua) && !/Windows|Win32|Win64/i.test(ua);
+    const os=isMac?'mac':'win';                       // default Windows (the majority)
+    const tab=[...sb].find(b=>b.dataset.os===os); if(tab) tab.click();
+    const ga=document.getElementById('getapp'), lbl=ga&&ga.querySelector('.lbl');
+    if(ga){
+      const base='https://github.com/charan7105/truckSimualtor/releases/latest/download/';
+      ga.href=base+(isMac?'MatrackTruckSim-mac.zip':'MatrackSim-win-x64.zip');
+      if(lbl) lbl.textContent=isMac?'Get the app · Mac':'Get the app · Windows';
+    }
+  })();
   // --- enhancements: scroll reveals, hero count-up, scroll-spy ---
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
   document.querySelectorAll('#overview .hero>div, #setup .shd, #guide, #help .shd, #help .faq').forEach(el=>el.classList.add('rv'));
