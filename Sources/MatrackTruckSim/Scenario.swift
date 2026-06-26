@@ -167,6 +167,48 @@ enum ScenarioRunner {
         out.append(Emitted(wire: "SAVED PACKET COUNT:\(count)", kind: .raw))
         return out
     }
+
+    /// Backdated stored 'S' packets for a stored-replay / unassigned-driving scenario — the drive that
+    /// happened while the phone was disconnected, or a pre-existing backlog. NO footer here: the readstr
+    /// handler appends LAST_STORED_PACKET + the count AFTER the app reconnects, because that post-reconnect
+    /// readstr is the only state in which both apps run stored replay (and UDP/unassigned classification).
+    /// Timestamps are backdated so they fall outside the logged-in driver's duty windows → flagged UDP.
+    static func storedReplay(for s: Scenario, config: SimConfig) -> [Emitted] {
+        let e = EngineState()
+        e.odometerMiles = config.startOdometerMiles
+        e.engineHours = config.startEngineHours
+        e.fuelLevelPct = config.startFuelPct
+        e.idleRpmConfig = config.idleRpm
+        e.rpmPerMphConfig = config.rpmPerMph
+        e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
+        let dt = config.packetIntervalSec
+        var out: [Emitted] = []
+        // pre-existing backlog (scenarios 11/12): N backdated stored positions
+        if case .storedBacklog(let count) = s.transport {
+            e.ignitionOn = true
+            for i in 0..<max(0, count) {
+                e.advance(dt: dt)
+                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(i, count, dt))), kind: .stored))
+            }
+            return out
+        }
+        // drive scenarios (8/9/10/21): replay the phases as backdated stored packets (speed preserved →
+        // 60-mph phase yields driving stored packets → driving UDP for scenario 21)
+        var total = 0
+        for p in s.phases { total += max(1, Int((p.seconds / dt).rounded())) }
+        var idx = 0
+        for phase in s.phases {
+            let ticks = max(1, Int((phase.seconds / dt).rounded()))
+            for _ in 0..<ticks {
+                e.ignitionOn = phase.ignition
+                rampSpeed(e, toward: phase.targetSpeedMph, config: config)
+                e.advance(dt: dt)
+                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(idx, total, dt))), kind: .stored))
+                idx += 1
+            }
+        }
+        return out
+    }
 }
 
 // MARK: - The 20 required scenarios
@@ -198,8 +240,8 @@ enum Scenarios {
                  appSteps: ["Tap RUN", "Speed rises and falls; app stays in Driving throughout"]),
         Scenario(id: 7, name: "Stop after drive", expect: "Driving → stop → on-duty",
                  phases: [Phase(seconds: 30, targetSpeedMph: 60, ignition: true),
-                          Phase(seconds: 30, targetSpeedMph: 0, ignition: true)],
-                 appSteps: ["Tap RUN", "Drive then stop → after ~5 min the app moves Driving → On-Duty"]),
+                          Phase(seconds: 370, targetSpeedMph: 0, ignition: true)],   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible) before it auto-moves Driving→On-Duty
+                 appSteps: ["Tap RUN", "Drive, then stay stopped (engine on) ~6 min → app moves Driving → On-Duty"]),
         Scenario(id: 8, name: "BLE disconnect during drive", expect: "Buffer then stored replay",
                  phases: [Phase(seconds: 60, targetSpeedMph: 60, ignition: true)],
                  transport: .disconnect(afterSec: 15, gapSec: 20),

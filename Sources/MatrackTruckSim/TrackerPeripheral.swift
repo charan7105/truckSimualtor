@@ -393,17 +393,45 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - Live scenario playback (plays a scenario's exact packet sequence over BLE)
     private var scenarioTimer: Timer?
     private var scenarioQueue: [Emitted] = []
+    private var pendingStored: [Emitted] = []     // backdated stored packets, dumped on the app's next readstr (post-reconnect)
+    private var pendingStoredCadence: Double = 1.0
     @Published var runningScenario: String?
 
     func runScenario(_ s: Scenario) {
         autoDrive = false; drivingRoute = false; dayDriving = false   // step() pauses normal emission while a scenario runs
-        scenarioQueue = ScenarioRunner.run(s, config: config)
         runningScenario = s.name
+        // Stored-replay / Unassigned-Driving scenarios must arrive as a real flash dump on RECONNECT:
+        // both apps run stored replay (and UDP classification) ONLY right after the readstr they send on
+        // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
+        if Self.isStoredReplay(s) {
+            let stored = ScenarioRunner.storedReplay(for: s, config: config)
+            info("▶ scenario '\(s.name)' — \(stored.count) stored packets queued; dropping the link so the app reconnects & re-requests them")
+            replayStored(stored, cadenceSec: max(0.05, config.packetIntervalSec))
+            return
+        }
+        scenarioQueue = ScenarioRunner.run(s, config: config)
         info("▶ scenario '\(s.name)' — \(scenarioQueue.count) packets (effects baked in)")
         scenarioTimer?.invalidate()
         scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, config.packetIntervalSec), repeats: true) { [weak self] _ in
             self?.popScenario()
         }
+    }
+
+    /// Scenarios whose `expect:` depends on the app processing STORED packets (replay or Unassigned Driving):
+    /// they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
+    static func isStoredReplay(_ s: Scenario) -> Bool {
+        if s.id == 21 { return true }                                   // Unassigned Driving
+        switch s.transport { case .disconnect, .storedBacklog: return true; default: return false }
+    }
+
+    /// Stash backdated stored packets and force a REAL BLE disconnect. When the app reconnects and sends
+    /// readstr, the handler dumps them + LAST_STORED_PACKET + the true count — the only sequence that makes
+    /// both apps run stored replay / UDP classification.
+    func replayStored(_ stored: [Emitted], cadenceSec: Double, outageSec: Double = 8) {
+        guard !stored.isEmpty else { return }
+        pendingStored = stored
+        pendingStoredCadence = cadenceSec
+        forceDisconnect(seconds: outageSec)
     }
 
     func stopScenario() {
@@ -607,10 +635,24 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             startStreaming()
         } else if c.hasPrefix("readvin") { sendReliable(MTPacket.version(device)) }
         else if c.hasPrefix("readstr") {
-            // The app sends readstr automatically after every connect. Reply like a tracker with no
-            // backlog — do NOT auto-dump here, or we'd flood the disconnect-inducing 500ms cadence on
-            // every connection. The stored-dump repro is on-demand only, via the DUMP STORED button.
-            sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0")
+            // The app sends readstr automatically after every connect, and resets its
+            // storedEventsProcessed flag to false right before it — so THIS is the moment to deliver a
+            // backlog. If a stored-replay/UDP scenario armed one (via replayStored → forceDisconnect),
+            // dump it now so the app actually runs replay/UDP classification. Otherwise reply empty.
+            if !pendingStored.isEmpty {
+                let n = pendingStored.count
+                var q = pendingStored
+                q.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
+                q.append(Emitted(wire: "SAVED PACKET COUNT:\(n)", kind: .raw))
+                pendingStored = []
+                scenarioQueue = q
+                runningScenario = "Stored replay (\(n))"
+                scenarioTimer?.invalidate()
+                scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, pendingStoredCadence), repeats: true) { [weak self] _ in self?.popScenario() }
+                info("▶ app reconnected & sent readstr → dumping \(n) stored packets (replay/UDP fires now)")
+            } else {
+                sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0")
+            }
         }
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
         else if c.hasPrefix("clrdtc") { device.dtcCodes = []; faults = [] }

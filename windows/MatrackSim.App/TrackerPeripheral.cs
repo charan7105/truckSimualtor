@@ -657,6 +657,8 @@ namespace MatrackSim.App
         private Timer scenarioTimer;
         private List<Emitted> scenarioQueue = new List<Emitted>();
         private readonly object scenarioGate = new object();
+        private List<Emitted> pendingStored = new List<Emitted>();   // backdated stored packets, dumped on the app's next readstr (post-reconnect)
+        private double pendingStoredCadence = 1.0;
 
         private string _runningScenario;
         public string RunningScenario { get => _runningScenario; set => Set(ref _runningScenario, value); }
@@ -665,12 +667,42 @@ namespace MatrackSim.App
         public void RunScenario(Scenario s)
         {
             AutoDrive = false; DrivingRoute = false; DayDriving = false;   // step() pauses normal emission while a scenario runs
-            scenarioQueue = ScenarioRunner.Run(s, Config);
             runningScenario = s.Name;
+            // Stored-replay / Unassigned-Driving scenarios must arrive as a real flash dump on RECONNECT:
+            // both apps run stored replay (and UDP classification) ONLY right after the readstr they send on
+            // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
+            if (IsStoredReplay(s))
+            {
+                var stored = ScenarioRunner.StoredReplay(s, Config);
+                Info($"▶ scenario '{s.Name}' — {stored.Count} stored packets queued; dropping the link so the app reconnects & re-requests them");
+                ReplayStored(stored, Math.Max(0.05, Config.PacketIntervalSec));
+                return;
+            }
+            scenarioQueue = ScenarioRunner.Run(s, Config);
             Info($"▶ scenario '{s.Name}' — {scenarioQueue.Count} packets (effects baked in)");
             scenarioTimer?.Dispose();
             long period = (long)(Math.Max(0.05, Config.PacketIntervalSec) * 1000);
             scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+        }
+
+        // Scenarios whose expect depends on the app processing STORED packets (replay or Unassigned Driving):
+        // they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
+        public static bool IsStoredReplay(Scenario s)
+        {
+            if (s.Id == 21) return true;                                  // Unassigned Driving
+            return s.Transport.TKind == Transport.TransportKind.Disconnect
+                || s.Transport.TKind == Transport.TransportKind.StoredBacklog;
+        }
+
+        // Stash backdated stored packets and force a REAL BLE disconnect. When the app reconnects and sends
+        // readstr, the handler dumps them + LAST_STORED_PACKET + the true count — the only sequence that makes
+        // both apps run stored replay / UDP classification.
+        public void ReplayStored(List<Emitted> stored, double cadenceSec, double outageSec = 8)
+        {
+            if (stored == null || stored.Count == 0) return;
+            pendingStored = stored;
+            pendingStoredCadence = cadenceSec;
+            ForceDisconnect(outageSec);
         }
 
         public void StopScenario()
@@ -964,10 +996,28 @@ namespace MatrackSim.App
             else if (c.StartsWith("readvin")) { SendReliable(MTPacket.Version(device)); }
             else if (c.StartsWith("readstr"))
             {
-                // The app sends readstr automatically after every connect. Reply like a tracker with no
-                // backlog — do NOT auto-dump here, or we'd flood the disconnect-inducing 500ms cadence on
-                // every connection. The stored-dump repro is on-demand only, via the DUMP STORED button.
-                SendRaw("LAST_STORED_PACKET"); SendRaw("SAVED PACKET COUNT:0");
+                // The app sends readstr automatically after every connect, resetting its
+                // storedEventsProcessed flag to false right before it — so THIS is the moment to deliver a
+                // backlog. If a stored-replay/UDP scenario armed one (ReplayStored → ForceDisconnect), dump
+                // it now so the app actually runs replay/UDP classification. Otherwise reply empty.
+                if (pendingStored.Count > 0)
+                {
+                    int n = pendingStored.Count;
+                    var q = new List<Emitted>(pendingStored);
+                    q.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
+                    q.Add(new Emitted("SAVED PACKET COUNT:" + n.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
+                    pendingStored = new List<Emitted>();
+                    scenarioQueue = q;
+                    runningScenario = $"Stored replay ({n})";
+                    scenarioTimer?.Dispose();
+                    long period = (long)(Math.Max(0.05, pendingStoredCadence) * 1000);
+                    scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+                    Info($"▶ app reconnected & sent readstr → dumping {n} stored packets (replay/UDP fires now)");
+                }
+                else
+                {
+                    SendRaw("LAST_STORED_PACKET"); SendRaw("SAVED PACKET COUNT:0");
+                }
             }
             else if (c.StartsWith("readdtc")) { SendReliable(MTPacket.Dtc(device.DtcCodes, engine.IgnitionOn ? 1 : 0, engine.Rpm)); }
             else if (c.StartsWith("clrdtc")) { device.DtcCodes = new List<string>(); Faults = new List<string>(); }

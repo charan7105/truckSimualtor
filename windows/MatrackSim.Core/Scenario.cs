@@ -313,6 +313,49 @@ namespace MatrackSim.Core
             output.Add(new Emitted("SAVED PACKET COUNT:" + count.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
             return output;
         }
+
+        // Backdated stored 'S' packets for a stored-replay / unassigned-driving scenario. NO footer here:
+        // the readstr handler appends LAST_STORED_PACKET + the count AFTER the app reconnects, because that
+        // post-reconnect readstr is the only state in which both apps run stored replay (and UDP) classification.
+        public static List<Emitted> StoredReplay(Scenario s, SimConfig config)
+        {
+            var e = new EngineState();
+            e.OdometerMiles = config.StartOdometerMiles;
+            e.EngineHours = config.StartEngineHours;
+            e.FuelLevelPct = config.StartFuelPct;
+            e.IdleRpmConfig = config.IdleRpm;
+            e.RpmPerMphConfig = config.RpmPerMph;
+            e.FuelBurnPctPerMile = config.FuelBurnPctPerMile;
+            double dt = config.PacketIntervalSec;
+            var output = new List<Emitted>();
+            if (s.Transport.TKind == Transport.TransportKind.StoredBacklog)
+            {
+                e.IgnitionOn = true;
+                int count = Math.Max(0, s.Transport.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    e.Advance(dt);
+                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, Backdated(i, count, dt))), Emitted.Kind.Stored));
+                }
+                return output;
+            }
+            int total = 0;
+            foreach (var p in s.Phases) total += Math.Max(1, (int)Math.Round(p.Seconds / dt, MidpointRounding.AwayFromZero));
+            int idx = 0;
+            foreach (var phase in s.Phases)
+            {
+                int ticks = Math.Max(1, (int)Math.Round(phase.Seconds / dt, MidpointRounding.AwayFromZero));
+                for (int t = 0; t < ticks; t++)
+                {
+                    e.IgnitionOn = phase.Ignition;
+                    RampSpeed(e, phase.TargetSpeedMph, config);
+                    e.Advance(dt);
+                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, Backdated(idx, total, dt))), Emitted.Kind.Stored));
+                    idx++;
+                }
+            }
+            return output;
+        }
     }
 
     // MARK: - The 20 required scenarios
@@ -343,8 +386,8 @@ namespace MatrackSim.Core
                     new List<Phase> { new Phase(15, 65, true), new Phase(15, 30, true), new Phase(15, 55, true) },
                     appSteps: new List<string> { "Tap RUN", "Speed rises and falls; app stays in Driving throughout" }),
                 new Scenario(7, "Stop after drive", "Driving → stop → on-duty",
-                    new List<Phase> { new Phase(30, 60, true), new Phase(30, 0, true) },
-                    appSteps: new List<string> { "Tap RUN", "Drive then stop → after ~5 min the app moves Driving → On-Duty" }),
+                    new List<Phase> { new Phase(30, 60, true), new Phase(370, 0, true) },   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible) before Driving→On-Duty
+                    appSteps: new List<string> { "Tap RUN", "Drive, then stay stopped (engine on) ~6 min → app moves Driving → On-Duty" }),
                 new Scenario(8, "BLE disconnect during drive", "Buffer then stored replay",
                     new List<Phase> { new Phase(60, 60, true) },
                     transport: Transport.Disconnect(15, 20),
