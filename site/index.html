@@ -72,7 +72,8 @@ kbd{font-family:var(--m);font-size:.84em;background:#eef1f6;border:1px solid var
 
 /* small dark visual */
 .vis{background:linear-gradient(180deg,#0e141d,#0a0e15);border:1px solid #222d3b;border-radius:18px;padding:22px;margin:0 0 26px;max-width:660px;box-shadow:var(--sh-m)}
-.partimg{display:block;width:100%;max-width:600px;border-radius:14px;border:1px solid #1f2937;box-shadow:var(--sh-m);margin:0 0 26px}
+.partimg{display:block;width:100%;max-width:600px;border-radius:14px;border:1px solid #1f2937;box-shadow:var(--sh-m);margin:0 0 26px;transition:transform .14s ease-out,box-shadow .35s,border-color .35s;will-change:transform}
+.partimg:hover{box-shadow:0 30px 64px -22px rgba(43,102,246,.5),0 0 0 1px rgba(43,102,246,.42);border-color:rgba(43,102,246,.45)}
 .gauge{position:relative;width:140px;height:140px;margin:0 auto}.gauge svg{width:100%;height:100%}
 .gn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .gn .n{font-weight:700;font-size:34px;color:#eaf3f8;letter-spacing:-.02em}.gn .u{font-size:9px;letter-spacing:.2em;color:var(--d-dim);margin-top:3px}
@@ -145,6 +146,10 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 .shot{transform:rotateX(8deg) scale(.97);transform-origin:50% 0;transition:transform 1.15s var(--e),box-shadow .6s}
 .shotwrap.in .shot{transform:none}
 .shot::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(116deg,transparent 33%,rgba(255,255,255,.16) 47%,transparent 61%);transform:translateX(-115%);animation:sheen 7s cubic-bezier(.5,0,.2,1) 1.7s infinite}
+/* screen glass: soft top-left gloss + inner bezel highlight */
+.shot::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.11),transparent 36%);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 0 0 1px rgba(255,255,255,.04),inset 0 -60px 90px -50px rgba(0,0,0,.5)}
+/* crisp bezel ring + depth so it reads as a real display */
+.shotwrap .shot{box-shadow:0 0 0 1px #232c38,0 50px 110px -34px rgba(15,30,70,.6),0 18px 50px -22px rgba(0,0,0,.4)}
 @keyframes sheen{0%{transform:translateX(-115%)}15%,100%{transform:translateX(135%)}}
 .shotwrap .hfchip{z-index:4}.shotwrap .hfchip.a{top:9%;left:0}.shotwrap .hfchip.b{bottom:15%;right:0}
 @media(max-width:760px){.shotwrap .hfchip{display:none}.shot{transform:none!important}}
@@ -529,5 +534,16 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     const t=b.parentElement.querySelector('pre').innerText;
     navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied ✓';b.classList.add('done');setTimeout(()=>{b.textContent='Copy';b.classList.remove('done');},1600);});
   }));
+  // 3D tilt on the field-guide screenshots — follows the cursor (skipped if reduced-motion)
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
+    document.querySelectorAll('.partimg').forEach(el=>{
+      el.addEventListener('mousemove',e=>{
+        const r=el.getBoundingClientRect();
+        const px=(e.clientX-r.left)/r.width-.5, py=(e.clientY-r.top)/r.height-.5;
+        el.style.transform=`perspective(900px) rotateY(${px*8}deg) rotateX(${-py*8}deg) scale(1.025)`;
+      });
+      el.addEventListener('mouseleave',()=>{el.style.transform='';});
+    });
+  }
 </script>
 </body></html>
