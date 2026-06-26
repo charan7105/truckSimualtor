@@ -65,6 +65,27 @@ namespace MatrackSim.SelfTest
                 if (failures.Count != 0) { foreach (var f in failures.Take(8)) Console.WriteLine("      • " + f); }
             }
 
+            // Stored-replay path: the live RunScenario routes the stored/UDP scenarios (8,9,10,11,12,21)
+            // through ScenarioRunner.StoredReplay (dumped on the app's reconnect readstr), NOT inline Run().
+            Console.WriteLine("Stored-replay path (RunScenario for stored/UDP scenarios):");
+            foreach (var s in Scenarios.All)
+            {
+                bool isStored = s.Transport.TKind == Transport.TransportKind.Disconnect
+                             || s.Transport.TKind == Transport.TransportKind.StoredBacklog
+                             || s.Id == 21;
+                if (!isStored) continue;
+                var sr = ScenarioRunner.StoredReplay(s, SimConfig.Default);
+                int n = sr.Count;
+                bool allStored = n > 0 && sr.TrueForAll(em => em.ItemKind == Emitted.Kind.Stored);
+                bool valid = true;
+                foreach (var em in sr) { if (Validate(em) != null) { valid = false; break; } }
+                bool ok = allStored && valid && n > 0;
+                if (s.Id == 11 && n != 30) ok = false;
+                if (s.Id == 12 && n != 300) ok = false;
+                if (!ok) allPass = false;
+                Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + " " + s.Name + ": " + n + " backdated stored packets");
+            }
+
             Console.WriteLine("────────────────────────────────────────────────────────────");
             Console.WriteLine(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗");
             return allPass ? 0 : 1;

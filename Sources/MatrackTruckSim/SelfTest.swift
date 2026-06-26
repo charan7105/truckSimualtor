@@ -48,6 +48,26 @@ enum SelfTest {
             if !failures.isEmpty { for f in failures.prefix(8) { print("      • \(f)") } }
         }
 
+        // Stored-replay path: the live RunScenario routes the stored/UDP scenarios (8,9,10,11,12,21)
+        // through ScenarioRunner.storedReplay (dumped on the app's reconnect readstr), NOT inline run().
+        // Validate that path produces well-formed, all-stored, backdated packets (no footer — readstr adds it).
+        print("Stored-replay path (RunScenario for stored/UDP scenarios):")
+        for s in Scenarios.all {
+            let isStored: Bool
+            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 21) }
+            if !isStored { continue }
+            let sr = ScenarioRunner.storedReplay(for: s, config: .default)
+            let n = sr.count
+            let allStored = !sr.isEmpty && sr.allSatisfy { $0.kind == .stored }
+            var valid = true
+            for em in sr where validate(em) != nil { valid = false; break }
+            var ok = allStored && valid && n > 0
+            if s.id == 11 && n != 30 { ok = false }
+            if s.id == 12 && n != 300 { ok = false }
+            if !ok { allPass = false }
+            print("  [\(ok ? "OK" : "FAIL")] S\(s.id) \(s.name): \(n) backdated stored packets")
+        }
+
         print("────────────────────────────────────────────────────────────")
         print(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗")
         return allPass ? 0 : 1
