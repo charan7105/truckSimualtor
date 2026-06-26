@@ -287,7 +287,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <div class="s2"><div class="n">4</div><div>
       <h4>Connect your phone</h4>
       <p>On the phone, open the Matrack <b>ELD app</b> and sign into a <b>test account</b>. Go to the Bluetooth / ELD-device screen and pick <kbd>ELD-MA</kbd>.</p>
-      <div class="mini">It connects and starts streaming — you're driving. 🚚</div>
+      <div class="mini">It connects and starts streaming — you're driving. 🚚 <b>One phone at a time</b> per simulator.</div>
     </div></div>
   </div>
   <div class="steps2" id="swin">
@@ -311,6 +311,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <div class="s2"><div class="n">4</div><div>
       <h4>Run it &amp; connect your phone</h4>
       <p>Open <kbd>MatrackSim.exe</kbd> — it shows <b>“Advertising as ELD-MA.”</b> On the phone, ELD app (test account) → Bluetooth → pick <kbd>ELD-MA</kbd>.</p>
+      <div class="mini"><b>One phone at a time</b> per simulator.</div>
     </div></div>
   </div>
 </section>
@@ -542,6 +543,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
   <div class="faq">
     <details><summary><span class="pl"></span>The Mac won't open the app</summary><div class="a">It's an in-house app, so macOS asks once. <b>Right-click → Open → Open</b> (or System Settings → Privacy &amp; Security → <b>Open Anyway</b>). Completely safe.</div></details>
     <details><summary><span class="pl"></span>My phone doesn't see “ELD-MA”</summary><div class="a">Make sure the computer is <b>named ELD-MA…</b> with Bluetooth on. Toggle Bluetooth off/on. On iPhone you can also <b>Forget</b> the old device, then reconnect.</div></details>
+    <details><summary><span class="pl"></span>Can more than one phone connect at once?</summary><div class="a">It's built for <b>one phone at a time</b>. A second phone <i>can</i> connect, but both then see the <b>same</b> truck and the same packets, and if one disconnects it disrupts the other. For two test devices, run a second copy of the app on another computer.</div></details>
     <details><summary><span class="pl"></span>Can two people use one computer?</summary><div class="a">One computer = one truck. For several people driving at once, each needs their own computer running the app (each named <kbd>ELD-MA…</kbd>) on their own test account.</div></details>
     <details><summary><span class="pl"></span>It disconnected by itself</summary><div class="a">Expected if you pressed <b>DROP</b> (out-of-range) or ran a fast stored-dump — that's the point. Press <b>BACK</b> to reconnect.</div></details>
   </div>
