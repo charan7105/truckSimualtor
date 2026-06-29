@@ -63,6 +63,19 @@
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
+        <!-- Cinematic power-on reveal: the cockpit fades + rises in on launch (mirrors the Mac panelReveal). -->
+        <Grid.Triggers>
+            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Stage" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.5" />
+                        <DoubleAnimation Storyboard.TargetName="StageT" Storyboard.TargetProperty="Y" From="22" To="0" Duration="0:0:0.6">
+                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Grid.Triggers>
         <!-- ===== Background (fills the window) ===== -->
         <Grid>
             <Grid.Background>
@@ -79,19 +92,13 @@
                     </RadialGradientBrush>
                 </Ellipse.Fill>
             </Ellipse>
-            <!-- second radial: red glow anchored at the bottom (mirrors DashboardBackground) -->
-            <Ellipse Opacity="0.06" HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="1120" Height="1120" Margin="0,0,0,-560">
-                <Ellipse.Fill>
-                    <RadialGradientBrush>
-                        <GradientStop Color="#E2122B" Offset="0" />
-                        <GradientStop Color="#00E2122B" Offset="1" />
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-            </Ellipse>
         </Grid>
 
         <!-- ===== Cluster face, laid out at the Mac design size (16:10-ish laptop aspect) and scaled to fit ===== -->
-        <Viewbox Stretch="Uniform">
+        <Viewbox x:Name="Stage" Stretch="Uniform" Opacity="0">
+            <Viewbox.RenderTransform>
+                <TranslateTransform x:Name="StageT" Y="22" />
+            </Viewbox.RenderTransform>
             <Grid Width="1560" Height="1120" Margin="20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

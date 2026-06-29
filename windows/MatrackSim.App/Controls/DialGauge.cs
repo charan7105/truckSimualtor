@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace MatrackSim.App.Controls
 {
@@ -19,10 +20,28 @@ namespace MatrackSim.App.Controls
         private const double SweepDeg = 270.0;
 
         // ---- Dependency properties ---------------------------------------------------------------
+        // Fraction is the TARGET; the dial eases toward it via RenderFraction so the arc/needle glides
+        // smoothly instead of snapping (mirrors the Swift .animation(.easeOut) on the value arc).
         public static readonly DependencyProperty FractionProperty = DependencyProperty.Register(
             nameof(Fraction), typeof(double), typeof(DialGauge),
-            new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(0.0, OnFractionChanged));
         public double Fraction { get => (double)GetValue(FractionProperty); set => SetValue(FractionProperty, value); }
+
+        public static readonly DependencyProperty RenderFractionProperty = DependencyProperty.Register(
+            nameof(RenderFraction), typeof(double), typeof(DialGauge),
+            new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        public double RenderFraction { get => (double)GetValue(RenderFractionProperty); set => SetValue(RenderFractionProperty, value); }
+
+        private static void OnFractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var g = (DialGauge)d;
+            double to = Math.Max(0, Math.Min(1, (double)e.NewValue));
+            var anim = new DoubleAnimation(to, TimeSpan.FromMilliseconds(450))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            g.BeginAnimation(RenderFractionProperty, anim);
+        }
 
         public static readonly DependencyProperty ModeProperty = DependencyProperty.Register(
             nameof(Mode), typeof(DialMode), typeof(DialGauge),
@@ -74,7 +93,7 @@ namespace MatrackSim.App.Controls
             double diameter = Math.Min(ActualWidth, ActualHeight);
             if (diameter <= 0) diameter = 300;
             double cx = ActualWidth / 2, cy = ActualHeight / 2;
-            double f = Math.Max(0, Math.Min(1, Fraction));
+            double f = Math.Max(0, Math.Min(1, RenderFraction));
 
             double lw = diameter * 0.060;
             double arcInset = diameter * 0.090;
