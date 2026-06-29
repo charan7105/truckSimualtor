@@ -411,10 +411,10 @@ namespace MatrackSim.Core
                     new List<Phase> { new Phase(5, 0, true), new Phase(300, 60, true) },
                     appSteps: new List<string>
                     {
-                        "Log OUT of the ELD app (no driver assigned)",
-                        "Tap RUN — the truck drives with nobody logged in",
-                        "Log back IN → app shows pending Unassigned Driving",
-                        "Claim or reject the driving block",
+                        "On the phone, log OUT of the ELD app (keep Bluetooth on) so this drive belongs to no driver.",
+                        "Tap Run it — the simulator records a drive with nobody logged in, then drops the Bluetooth link.",
+                        "Recorded. Now log BACK IN on the phone and let it reconnect to ELD-MA.",
+                        "Reconnected — the drive is sent automatically. Open Unidentified / Unassigned Driving and claim or reject the period.",
                     }),
             };
             return list;

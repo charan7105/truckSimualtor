@@ -145,8 +145,9 @@ struct RoutePanel: View {
 
 struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
-    @State private var selectedScenarioId = 5
+    @State private var selectedScenarioId = 4   // Driving highway — a good default demo
     @State private var showSteps = false
+    @State private var guidedStep: Int? = nil   // non-nil = guided walkthrough is open at this step
     var body: some View {
         let sel = Scenarios.all.first { $0.id == selectedScenarioId }
         return Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
@@ -163,7 +164,17 @@ struct ScenarioPanel: View {
                 NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopScenario() }
             } else {
                 NeonButton(title: "RUN", icon: "play.fill", tint: Theme.red, filled: true) {
-                    if let s = sel { sim.runScenario(s) }
+                    if sel != nil { guidedStep = 0 }   // start the step-by-step guided walkthrough
+                }
+                .sheet(isPresented: Binding(get: { guidedStep != nil }, set: { if !$0 { guidedStep = nil } })) {
+                    if let step = guidedStep, let s = sel {
+                        GuidedStepView(scenario: s, step: step,
+                            onAdvance: {
+                                if s.appSteps[step].uppercased().contains("RUN") { sim.runScenario(s) }   // the "Tap RUN" step fires the real sim action
+                                if step + 1 < s.appSteps.count { guidedStep = step + 1 } else { guidedStep = nil }
+                            },
+                            onCancel: { guidedStep = nil })
+                    }
                 }
             }
             if let steps = sel?.appSteps, !steps.isEmpty {
@@ -216,6 +227,56 @@ struct ScenarioPanel: View {
                 }
             }
         }
+    }
+}
+
+/// Step-by-step guided walkthrough for a scenario: shows one instruction at a time and, on the
+/// "Tap RUN" step, fires the real sim action (which for the disconnect/UDP scenarios drops the link,
+/// records the drive, and dumps it on the app's reconnect — so the tester knows exactly what to do
+/// in the app at each moment).
+struct GuidedStepView: View {
+    let scenario: Scenario
+    let step: Int
+    let onAdvance: () -> Void
+    let onCancel: () -> Void
+    var body: some View {
+        let steps = scenario.appSteps
+        let isLast = step + 1 >= steps.count
+        let isRun = steps[step].uppercased().contains("RUN")
+        return VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Label("GUIDED RUN", systemImage: "list.number")
+                    .font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1.2).foregroundStyle(Theme.amber)
+                Spacer()
+                Text("Step \(step + 1) of \(steps.count)")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.dim)
+            }
+            Text("\(scenario.id). \(scenario.name)")
+                .font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
+            Text(steps[step])
+                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 7) {
+                ForEach(0..<steps.count, id: \.self) { i in
+                    Capsule().fill(i <= step ? Theme.amber : Theme.stroke)
+                        .frame(width: i == step ? 22 : 9, height: 6)
+                }
+            }
+            HStack {
+                Button(action: onCancel) {
+                    Text("Cancel").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+                }.buttonStyle(.plain)
+                Spacer()
+                NeonButton(title: isLast ? "Done" : (isRun ? "Run it" : "Next"),
+                           icon: isLast ? "checkmark" : (isRun ? "play.fill" : "arrow.right"),
+                           tint: isRun ? Theme.red : Theme.ice, filled: true) { onAdvance() }
+                    .frame(width: 170)
+            }
+        }
+        .padding(26).frame(width: 440)
+        .background(Theme.bg1)
     }
 }
 
