@@ -18,6 +18,8 @@ enum Theme {
     static let bg2 = Color(hex: 0x0C0E13)          // drawer / dock mid layer
     static let panel = Color(hex: 0x16181E)
     static let stroke = Color(hex: 0x2A2E37)
+    static let glassTop = Color(hex: 0x171A20)     // top-lit glass panel gradient
+    static let glassBot = Color(hex: 0x0E1014)
 
     static let red = Color(hex: 0xE2122B)          // signature accent / redline / fault / STOP
     static let ice = Color(hex: 0x6FD3FF)          // the single cool accent
@@ -36,8 +38,11 @@ enum Theme {
     static let cyan = ice
     static let magenta = red
 
-    static let speedArc = [Color(hex: 0x6FD3FF), Color(hex: 0x9FE6FF), Color(hex: 0xE2122B)]
-    static let tachArc  = [Color(hex: 0x6FD3FF), Color(hex: 0xF5A623), Color(hex: 0xE2122B)]
+    // Matched instrument pair: both dials sweep the same cool ice→blue gradient; danger is carried
+    // only by the redline band/ticks, so the two gauges read as one engineered cluster.
+    static let speedArc = [Color(hex: 0x6FD3FF), Color(hex: 0x3E7BFA)]
+    static let tachArc  = [Color(hex: 0x6FD3FF), Color(hex: 0x3E7BFA)]
+    static let dialFace = [Color(hex: 0x15181E), Color(hex: 0x0A0B0E)]   // inset gauge face (radial)
 }
 
 // MARK: - Clean dark cockpit background
@@ -46,10 +51,9 @@ struct DashboardBackground: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [Theme.bg1, Theme.bg0], startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Theme.ice.opacity(0.07), .clear],
-                           center: .center, startRadius: 0, endRadius: 720)
-            RadialGradient(colors: [Theme.red.opacity(0.06), .clear],
-                           center: .bottom, startRadius: 0, endRadius: 560)
+            // a single cool ambient wash from the top — "lit cockpit" room light, no warm cast
+            RadialGradient(colors: [Theme.ice.opacity(0.05), .clear],
+                           center: .top, startRadius: 0, endRadius: 900)
         }
         .ignoresSafeArea()
     }
@@ -59,18 +63,19 @@ struct DashboardBackground: View {
 
 struct GlassPanel: ViewModifier {
     var tint: Color = Theme.ice
-    var radius: CGFloat = 18
+    var radius: CGFloat = 20
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Theme.panel.opacity(0.85))
+                    .fill(LinearGradient(colors: [Theme.glassTop, Theme.glassBot], startPoint: .top, endPoint: .bottom))
             )
-            .overlay(
+            .overlay(   // dual-tone hairline: brighter at the top edge → recedes downward (glassy bevel)
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(Theme.stroke, lineWidth: 1)
+                    .stroke(LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.025)],
+                                           startPoint: .top, endPoint: .bottom), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
+            .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
     }
 }
 
@@ -111,8 +116,8 @@ extension View {
         modifier(PanelReveal(revealed: revealed, delay: delay))
     }
     func sectionLabel() -> some View {
-        font(.system(size: 10.5, weight: .semibold, design: .rounded))
-            .tracking(2.5)
+        font(.system(size: 11.5, weight: .semibold, design: .rounded))
+            .tracking(2.2)
             .foregroundStyle(Theme.dim)
             .textCase(.uppercase)
     }

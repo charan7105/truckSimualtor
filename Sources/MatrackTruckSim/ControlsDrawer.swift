@@ -11,27 +11,36 @@ private struct Card<C: View>: View {
     var tint: Color = Theme.ice
     @ViewBuilder var content: () -> C
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
                 if !icon.isEmpty {
                     Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
+                        .frame(width: 23, height: 23)
+                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
                 }
-                Text(title).sectionLabel()
+                Text(title).font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .tracking(2).textCase(.uppercase).foregroundStyle(Theme.text.opacity(0.92))
                 Spacer()
             }
             content()
         }
-        .padding(16)
+        .padding(.horizontal, 15).padding(.vertical, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel.opacity(0.85))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(LinearGradient(colors: [Theme.glassTop, Theme.glassBot], startPoint: .top, endPoint: .bottom))
         )
         .overlay(alignment: .top) {
-            LinearGradient(colors: [tint.opacity(0.55), .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 2).clipShape(Capsule()).padding(.horizontal, 14).padding(.top, 0)
+            LinearGradient(colors: [tint.opacity(0.75), tint.opacity(0.0)], startPoint: .leading, endPoint: .trailing)
+                .frame(height: 2).clipShape(Capsule()).padding(.horizontal, 12)
+                .shadow(color: tint.opacity(0.5), radius: 4)
         }
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.stroke, lineWidth: 1))
-        .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.025)],
+                                       startPoint: .top, endPoint: .bottom), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
     }
 }
 
@@ -43,11 +52,6 @@ struct DrivePanel: View {
                 ToggleChip(title: "ENGINE", icon: "power", isOn: sim.ignitionOn, tint: Theme.green) { sim.setEngine(!sim.ignitionOn) }
                 ToggleChip(title: "AUTO", icon: "wand.and.stars", isOn: sim.autoDrive, tint: Theme.red) { sim.setAutoDrive(!sim.autoDrive) }
             }
-            HStack {
-                Text("MODE").sectionLabel(); Spacer()
-                Text(modeText).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1.5)
-                    .foregroundStyle(modeTint)
-            }
             Text("QUICK SET · KM/H").sectionLabel()
             HStack(spacing: 8) {
                 ForEach([0, 60, 90, 110], id: \.self) { v in
@@ -58,8 +62,11 @@ struct DrivePanel: View {
                     }
                 }
             }
-            HStack(alignment: .firstTextBaseline) {
-                Text("SPEED").sectionLabel(); Spacer()
+            // SPEED label + live MODE badge + value all on one line (mode no longer needs its own row)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("SPEED").sectionLabel()
+                Text(modeText).font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(modeTint)
+                Spacer()
                 Text("\(Int((sim.speedMph * 1.60934).rounded()))")
                     .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
                 Text("km/h").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
@@ -68,10 +75,7 @@ struct DrivePanel: View {
                                   set: { sim.setSpeed(sim.drivingRoute ? max(8, $0) / 1.60934 : $0 / 1.60934) }),
                    in: 0...130).tint(Theme.ice)
 
-            HStack {
-                Text("SIM SPEED · MAP PACE").sectionLabel(); Spacer()
-                Text("how fast the route plays").font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
-            }
+            Text("SIM SPEED · MAP PACE").sectionLabel()
             HStack(spacing: 6) {
                 ForEach([1, 5, 10, 25, 30], id: \.self) { x in
                     NeonButton(title: "\(x)×", tint: Theme.amber, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
@@ -102,8 +106,12 @@ struct RoutePanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
         Card(title: "ROUTE · NAVIGATION", icon: "map.fill", tint: Theme.ice) {
-            NavField(placeholder: "From — e.g. Dallas, TX", text: $sim.routeFrom, icon: "smallcircle.filled.circle", tint: Theme.green)
-            NavField(placeholder: "To — e.g. Houston, TX", text: $sim.routeTo, icon: "mappin.circle.fill", tint: Theme.red)
+            // From → To on ONE line (with the arrow reading left-to-right), then plan/drive actions paired up.
+            HStack(spacing: 7) {
+                NavField(placeholder: "From", text: $sim.routeFrom, icon: "smallcircle.filled.circle", tint: Theme.green)
+                Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.dim)
+                NavField(placeholder: "To", text: $sim.routeTo, icon: "mappin.circle.fill", tint: Theme.red)
+            }
             HStack(spacing: 8) {
                 NeonButton(title: sim.routeBusy ? "…" : "PLAN", icon: "map", tint: Theme.ice) {
                     Task { await sim.loadRoute(from: sim.routeFrom, to: sim.routeTo) }
@@ -118,19 +126,18 @@ struct RoutePanel: View {
                     Text(sim.routeInfo).font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(Theme.dim).lineLimit(1)
                 }
             }
-            if sim.drivingRoute {
-                NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopRouteDrive() }
-            } else {
-                NeonButton(title: "DRIVE ROUTE", icon: "play.fill", tint: Theme.green, filled: sim.hasRoute) { sim.startRouteDrive() }
+            HStack(spacing: 8) {
+                if sim.drivingRoute {
+                    NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopRouteDrive() }
+                } else {
+                    NeonButton(title: "DRIVE", icon: "play.fill", tint: Theme.green, filled: sim.hasRoute) { sim.startRouteDrive() }
+                }
+                if sim.dayDriving {
+                    NeonButton(title: "END DAY", icon: "stop.fill", tint: Theme.amber, filled: true) { sim.stopDay() }
+                } else {
+                    NeonButton(title: "DRIVE MY DAY", icon: "sun.max.fill", tint: Theme.amber) { Task { await sim.driveMyDay() } }
+                }
             }
-            if sim.dayDriving {
-                NeonButton(title: "END DAY", icon: "stop.fill", tint: Theme.amber, filled: true) { sim.stopDay() }
-            } else {
-                NeonButton(title: "DRIVE MY DAY", icon: "sun.max.fill", tint: Theme.amber) { Task { await sim.driveMyDay() } }
-            }
-            Text("Full state-crossing day at 30× · IFTA mileage + speeding/idle events. (HOS hour-clocks run real-time.)")
-                .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
-                .fixedSize(horizontal: false, vertical: true)
             if sim.drivingRoute || sim.routeProgress > 0 {
                 SegmentedProgress(progress: sim.routeProgress)
                 HStack {
@@ -147,7 +154,6 @@ struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var selectedScenarioId = 4   // Driving highway — a good default demo
     @State private var showSteps = false
-    @State private var guidedStep: Int? = nil   // non-nil = guided walkthrough is open at this step
     var body: some View {
         let sel = Scenarios.all.first { $0.id == selectedScenarioId }
         return Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
@@ -164,17 +170,7 @@ struct ScenarioPanel: View {
                 NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopScenario() }
             } else {
                 NeonButton(title: "RUN", icon: "play.fill", tint: Theme.red, filled: true) {
-                    if sel != nil { guidedStep = 0 }   // start the step-by-step guided walkthrough
-                }
-                .sheet(isPresented: Binding(get: { guidedStep != nil }, set: { if !$0 { guidedStep = nil } })) {
-                    if let step = guidedStep, let s = sel {
-                        GuidedStepView(scenario: s, step: step,
-                            onAdvance: {
-                                if s.appSteps[step].uppercased().contains("RUN") { sim.runScenario(s) }   // the "Tap RUN" step fires the real sim action
-                                if step + 1 < s.appSteps.count { guidedStep = step + 1 } else { guidedStep = nil }
-                            },
-                            onCancel: { guidedStep = nil })
-                    }
+                    if let s = sel { sim.startGuided(s) }   // opens the centered guided walkthrough overlay
                 }
             }
             if let steps = sel?.appSteps, !steps.isEmpty {
@@ -327,7 +323,7 @@ struct NetworkPanel: View {
                         }
                         .buttonStyle(.plain).hoverGlow()
                         .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
-                            Text("AUTO continuously sweeps the signal on its own (full ↔ weak ↔ poor) and every few minutes drops fully out of range to mimic a dead zone (tunnel / rural gap) — the app disconnects and auto-reconnects, just like a real drive. It's the default. FULL / POOR set link strength manually (lower = more dropped packets, still connected). DROP forces an immediate disconnect now, then re-advertises after the Auto-return timer, or press BACK, so the app reconnects.")
+                            Text("AUTO continuously sweeps the signal on its own (full ↔ weak ↔ poor) and every few minutes drops fully out of range to mimic a dead zone (tunnel / rural gap) — the app disconnects and auto-reconnects, just like a real drive. It's the default. FULL / POOR set link strength manually (lower = more latency, still connected — real BLE never drops packets on weak signal). DROP forces an immediate disconnect now, then re-advertises after the Auto-return timer, or press BACK, so the app reconnects.")
                                 .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
                                 .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
                         }
@@ -354,7 +350,15 @@ struct NetworkPanel: View {
 
                     Divider().overlay(Theme.stroke)
 
-                    // F2 — stored-packet dump (reproduce Harshith's fast-dump disconnect)
+                    // Raw transport effects (advanced). Weak signal adds latency (driven by SIGNAL / AUTO), not loss.
+                    Text("RAW EFFECTS").sectionLabel()
+                    cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
+                    cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
+                    cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
+
+                    Divider().overlay(Theme.stroke)
+
+                    // F2 — stored-packet dump (reproduce the fast-dump disconnect)
                     HStack {
                         Text("STORED DUMP").sectionLabel(); Spacer()
                         Text("\(sim.config.storedDumpCount) pkts").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
@@ -367,14 +371,6 @@ struct NetworkPanel: View {
                     }
                     Text("≈500ms reproduces the disconnect · 1s is safe.")
                         .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
-
-                    Divider().overlay(Theme.stroke)
-
-                    // Raw transport effects (advanced). Loss isn't a separate knob — it's driven by SIGNAL / AUTO (loss = 100 − signal).
-                    Text("RAW EFFECTS").sectionLabel()
-                    cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
-                    cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
-                    cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
                 }
             }
         }
@@ -442,18 +438,21 @@ struct PacketConsole: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 3) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(sim.log) { line in
                             HStack(spacing: 8) {
-                                Text(line.time).foregroundStyle(Theme.dim)
+                                Text(line.time).foregroundStyle(Theme.dim).monospacedDigit()
                                 Text(symbol(line.kind)).foregroundStyle(color(line.kind))
-                                Text(line.text).foregroundStyle(line.kind == .info ? Theme.dim : Theme.text)
+                                Text(line.text).foregroundStyle(line.kind == .info ? Theme.text.opacity(0.62) : Theme.text.opacity(0.9))
                                 Spacer()
                             }
-                            .font(.system(size: 11, design: .monospaced)).id(line.id)
+                            .font(.system(size: 12, design: .monospaced)).id(line.id)
                         }
-                    }.padding(.vertical, 4)
+                    }.padding(.vertical, 4).padding(.leading, 10)
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.white.opacity(0.06)).frame(width: 1) }
                 }
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                                             .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom))
                 .onChange(of: sim.log.count) { _ in
                     if let last = sim.log.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }

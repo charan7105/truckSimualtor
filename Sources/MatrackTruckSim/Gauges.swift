@@ -75,9 +75,10 @@ private struct GaugeRing: View {
                 .shadow(color: (arc.last ?? Theme.ice).opacity(arcOpacity * 0.45), radius: 7)
                 .animation(.easeOut(duration: 0.4), value: f)
                 .animation(.easeOut(duration: 0.3), value: arcOpacity)
-            // inner dial-face
-            Circle().fill(Theme.bg0.opacity(0.5)).frame(width: faceD, height: faceD)
-            Circle().stroke(Theme.stroke, lineWidth: 1).frame(width: faceD, height: faceD)
+            // inner dial-face (recessed, radially lit) + hairline rim
+            Circle().fill(RadialGradient(colors: Theme.dialFace, center: .center, startRadius: 0, endRadius: faceD / 2))
+                .frame(width: faceD, height: faceD)
+            Circle().stroke(Color.white.opacity(0.06), lineWidth: 1).frame(width: faceD, height: faceD)
             // comet tip at the value head
             if showCometTip && f > 0.001 {
                 Circle().fill(tipColor)
@@ -106,15 +107,18 @@ struct SpeedGauge: View {
         let kmh = speed * 1.60934
         ZStack {
             GaugeRing(frac: kmh / maxKmh, arc: Theme.speedArc, diameter: diameter,
-                      labels: labels, showCometTip: true, tipColor: Theme.ice)
-            VStack(spacing: -2) {
+                      labels: labels, redTickFrom: 0.9, showRedlineBand: true, redlineStart: 0.9,
+                      showCometTip: true, tipColor: Theme.ice)
+            VStack(spacing: 4) {
                 Text("\(Int(kmh.rounded()))")
-                    .font(.system(size: diameter * 0.26, weight: .bold, design: .rounded))
+                    .font(.system(size: diameter * 0.225, weight: .semibold, design: .rounded))
+                    .monospacedDigit().kerning(-1)
                     .foregroundStyle(Theme.text)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.3), value: speed)
-                Text("KM/H").font(.system(size: diameter * 0.045, weight: .bold, design: .rounded))
-                    .tracking(6).foregroundStyle(Theme.dim)
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: diameter * 0.2, height: 1)
+                Text("KM/H").font(.system(size: diameter * 0.05, weight: .semibold, design: .rounded))
+                    .tracking(2).foregroundStyle(Theme.dim)
             }
         }
         .frame(width: diameter, height: diameter)
@@ -142,14 +146,16 @@ struct TachGauge: View {
                       redlineStart: 30.0 / 36.0,
                       showCometTip: true,
                       tipColor: hot ? Theme.red : Theme.amber)
-            VStack(spacing: -2) {
+            VStack(spacing: 4) {
                 Text("\(rpm)")
-                    .font(.system(size: diameter * 0.19, weight: .bold, design: .rounded))
+                    .font(.system(size: diameter * 0.175, weight: .semibold, design: .rounded))
+                    .monospacedDigit().kerning(-1)
                     .foregroundStyle(hot ? Theme.red : Theme.text)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.3), value: rpm)
-                Text("RPM").font(.system(size: diameter * 0.045, weight: .bold, design: .rounded))
-                    .tracking(6).foregroundStyle(hot ? Theme.red.opacity(0.8) : Theme.dim)
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: diameter * 0.2, height: 1)
+                Text("RPM").font(.system(size: diameter * 0.05, weight: .semibold, design: .rounded))
+                    .tracking(2).foregroundStyle(hot ? Theme.red.opacity(0.8) : Theme.dim)
                     .animation(.easeOut(duration: 0.3), value: hot)
             }
         }
@@ -256,23 +262,27 @@ struct MetricTile: View {
     var unit: String = ""
     var tint: Color = Theme.ice
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 10, weight: .bold)).foregroundStyle(tint)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 10.5, weight: .bold)).foregroundStyle(tint)
+                    .frame(width: 22, height: 22)
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(tint.opacity(0.15)))
                 Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(1)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(1.2)
                     .foregroundStyle(Theme.dim).lineLimit(1).minimumScaleFactor(0.7)
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value).font(.system(size: 26, weight: .bold, design: .rounded))
+                Text(value).font(.system(size: 27, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(Theme.text).contentTransition(.numericText())
                     .lineLimit(1).minimumScaleFactor(0.5)
-                Text(unit).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+                Text(unit).font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(Theme.dim).baselineOffset(1)
             }
             .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16).padding(.vertical, 18)
+        .padding(.horizontal, 16).padding(.vertical, 14)
         .glassPanel(tint)
     }
 }
@@ -393,13 +403,17 @@ struct NeonButton: View {
                 Text(title).font(.system(size: 13, weight: .semibold, design: .rounded)).lineLimit(1).fixedSize()
             }
             .foregroundStyle(filled ? Theme.bg0 : tint)
-            .padding(.horizontal, 10).padding(.vertical, 9)
+            .padding(.horizontal, 10).padding(.vertical, 10)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(filled ? tint : tint.opacity(0.12))
+                    .fill(filled
+                          ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+                          : AnyShapeStyle(tint.opacity(0.12)))
             )
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(tint.opacity(0.55), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(filled ? tint.opacity(0.0) : tint.opacity(0.55), lineWidth: 1))
+            .shadow(color: filled ? tint.opacity(0.4) : .clear, radius: 9, y: 2)
         }
         .buttonStyle(.plain)
         .hoverGlow()

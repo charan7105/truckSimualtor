@@ -68,6 +68,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var routeTo = ""
     @Published var routeVersion = 0          // bumps only when a new route is loaded (drives map redraw)
 
+    // Guided scenario walkthrough — presented as a CENTERED overlay on the cockpit (not a corner sheet)
+    @Published var guidedScenario: Scenario?
+    @Published var guidedStep = 0
+
     let route = RouteEngine()
 
     var advertisedName: String { config.advertisedName }
@@ -211,6 +215,15 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
     func injectFault(_ code: String) { if !device.dtcCodes.contains(code) { device.dtcCodes.append(code) }; faults = device.dtcCodes; info("fault \(code) armed (app sees it on next readdtc)") }
     func clearFaults() { device.dtcCodes = []; faults = []; info("faults cleared") }
+
+    // Guided walkthrough control (centered overlay)
+    func startGuided(_ s: Scenario) { guidedStep = 0; guidedScenario = s }
+    func advanceGuided() {
+        guard let s = guidedScenario else { return }
+        if s.appSteps[guidedStep].uppercased().contains("RUN") { runScenario(s) }   // the "Tap RUN" step fires the real sim action
+        if guidedStep + 1 < s.appSteps.count { guidedStep += 1 } else { guidedScenario = nil }
+    }
+    func cancelGuided() { guidedScenario = nil }
     func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
     func setFuel2(_ pct: Double) { engine.fuelLevel2Pct = max(0, min(100, pct)); mirror() }
     func sendVINNow() { sendReliable(MTPacket.version(device)) }

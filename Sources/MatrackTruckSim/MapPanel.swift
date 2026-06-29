@@ -9,12 +9,29 @@ import QuartzCore
 struct ClusterMap: View {
     @ObservedObject var sim: SimController
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             RouteMapView(sim: sim)
-            CompassRose().padding(.bottom, 16)
+            // edge vignette so the bright map recedes into the dark chrome (centre stays clear)
+            RadialGradient(colors: [.clear, Theme.bg0.opacity(0.5)], center: .center, startRadius: 200, endRadius: 620)
+                .allowsHitTesting(false)
+            // top scrim so the distance / "mi left" pills always sit on darkness
+            LinearGradient(colors: [Color.black.opacity(0.38), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 88).frame(maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(false)
+            CompassRose().frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 16)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.stroke, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(   // 2px glass bezel (diagonal light → dark)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(LinearGradient(colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
+        )
+        .overlay(alignment: .topLeading) {   // accent tab — same language as the Card top-bars
+            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Theme.ice)
+                .frame(width: 38, height: 3).padding(.leading, 14)
+                .shadow(color: Theme.ice.opacity(0.6), radius: 4)
+        }
+        .shadow(color: .black.opacity(0.55), radius: 30, y: 16)
     }
 }
 
