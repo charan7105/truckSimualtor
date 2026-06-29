@@ -453,10 +453,15 @@ namespace MatrackSim.App
             Info(on ? "auto signal on" : "auto signal off");
         }
 
+        // Weak signal = added LATENCY, not packet loss: real BLE retransmits at the link layer, so the app
+        // gets every packet just slower, then cleanly disconnects at the edge. (RSSI itself can't be faked —
+        // a Windows peripheral has no TX-power API, so the phone's signal bar reflects real distance.)
+        private static double LatencyMsFor(double pct) => Math.Max(0, (100 - pct) * 9);   // FULL 0ms · WEAK(70) ~270ms · POOR(40) ~540ms
         public void SetSignal(double pct)
         {
             Config.SignalPct = pct;
-            Config.PacketLossPct = Math.Max(0, 100 - pct);        // reuse the EmitNow() loss gate
+            Config.ExtraDelayMs = LatencyMsFor(pct);              // weak signal → jittery latency via the EmitNow() delay
+            Config.PacketLossPct = 0;                             // BLE does NOT drop app packets on weak signal — it retransmits
             if (pct <= 0) { if (!LinkDown) DropLink(Config.RangeOutageSec); }   // idempotent: a slider drag to 0 arms once
             else if (LinkDown) ResumeLink();
         }
@@ -528,7 +533,7 @@ namespace MatrackSim.App
             dropTimer?.Dispose(); dropTimer = null; DropEndsAt = null;
             LinkDown = false;
             if (Config.SignalPct < 1) Config.SignalPct = preDropSignalPct;    // restore the pre-drop weak level (or 100)
-            Config.PacketLossPct = Math.Max(0, 100 - Config.SignalPct);
+            Config.ExtraDelayMs = LatencyMsFor(Config.SignalPct); Config.PacketLossPct = 0;
             if (serviceProvider == null)                                       // forced-disconnect teardown → bring the radio back
             {
                 Info("📶 back in range — re-advertising for reconnect");
@@ -853,11 +858,8 @@ namespace MatrackSim.App
 
         private void EmitNow(string payload)
         {
-            // Packet loss
-            if (RandRange(0, 100) < Config.PacketLossPct)
-            {
-                Push(new LogLine(Stamp(), $"{payload}  [dropped: packet loss]", LogLine.Kind.Drop)); return;
-            }
+            // Weak signal adds LATENCY, never drops: real BLE retransmits at the link layer, so the app gets
+            // every packet — just later (and jittered). Silent packet loss is not a real BLE failure mode.
             Push(new LogLine(Stamp(), payload, LogLine.Kind.Out));
             var chunks = MTPacket.Frame(payload);
             Action send = () => { foreach (var c in chunks) Queue(c); };

@@ -216,13 +216,16 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func sendVINNow() { sendReliable(MTPacket.version(device)) }
 
     // MARK: - F1: signal strength + out-of-range emulation
-    /// Signal 100→0. Above 0 it ramps packet loss (weak signal); at 0 it goes out of range (drops the link).
-    /// macOS has no TX-power API, so this is emulated: loss reuses the existing emitNow() gate, and
-    /// "out of range" = going silent so the *app* times out (~75s) → disconnects → auto-reconnects.
+    /// Signal 100→0. Weak signal = added LATENCY (not packet loss): real BLE retransmits at the link layer,
+    /// so a fringe link delivers every packet, just slower — then cleanly disconnects at the edge. (We can't
+    /// fake RSSI itself: a Mac/PC peripheral has no TX-power API, so the phone's signal bar reflects real
+    /// distance, not this control.) At 0 it goes out of range = silent → app times out (~75s) → reconnects.
     private var preDropSignalPct: Double = 100          // signal level to restore after a transient outage
+    private func latencyMsFor(_ pct: Double) -> Double { max(0, (100 - pct) * 9) }   // FULL 0ms · WEAK(70) ~270ms · POOR(40) ~540ms
     func setSignal(_ pct: Double) {
         config.signalPct = pct
-        config.packetLossPct = max(0, 100 - pct)        // reuse the emitNow() loss gate
+        config.extraDelayMs = latencyMsFor(pct)         // weak signal → jittery latency via the emitNow() delay
+        config.packetLossPct = 0                         // BLE does NOT drop app packets on weak signal — it retransmits
         if pct <= 0 { if !linkDown { dropLink(seconds: config.rangeOutageSec) } }   // idempotent: a slider drag to 0 arms once
         else if linkDown { resumeLink() }
     }
@@ -282,7 +285,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         dropTimer?.invalidate(); dropTimer = nil; dropEndsAt = nil
         linkDown = false
         if config.signalPct < 1 { config.signalPct = preDropSignalPct }    // restore the pre-drop weak level (or 100)
-        config.packetLossPct = max(0, 100 - config.signalPct)
+        config.extraDelayMs = latencyMsFor(config.signalPct); config.packetLossPct = 0
         if manager == nil {                                                // forced-disconnect teardown → bring the radio back
             info("📶 back in range — re-advertising for reconnect")
             startBLE()                                                     // recreates the peripheral → re-advertises → app rescans & reconnects
@@ -565,10 +568,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     private func emitNow(_ payload: String) {
-        // Packet loss
-        if Double.random(in: 0...100) < config.packetLossPct {
-            push(LogLine(time: stamp(), text: "\(payload)  [dropped: packet loss]", kind: .drop)); return
-        }
+        // Weak signal adds LATENCY, never drops: real BLE retransmits at the link layer, so the app gets
+        // every packet — just later (and jittered). Silent packet loss is not a real BLE failure mode.
         push(LogLine(time: stamp(), text: payload, kind: .out))
         let chunks = MTPacket.frame(payload)
         let send = { [weak self] in chunks.forEach { self?.queue($0) } }
