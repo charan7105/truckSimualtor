@@ -90,9 +90,9 @@
             </Ellipse>
         </Grid>
 
-        <!-- ===== Cluster face, laid out at the Mac design size (1500×1360) and scaled to fit ===== -->
+        <!-- ===== Cluster face, laid out at the Mac design size (16:10-ish laptop aspect) and scaled to fit ===== -->
         <Viewbox Stretch="Uniform">
-            <Grid Width="1500" Height="1360" Margin="22">
+            <Grid Width="1560" Height="1120" Margin="20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -100,7 +100,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- ================= TOP RAIL ================= -->
-                <Grid Grid.Row="0" Margin="0,0,0,18">
+                <Grid Grid.Row="0" Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -176,15 +176,17 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- ================= MAIN BODY ================= -->
+                <!-- ================= MAIN BODY — three independent columns (mirrors Mac clusterFace) ================= -->
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="384" />
-                        <ColumnDefinition Width="22" />
+                        <ColumnDefinition Width="392" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="392" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- ===== LEFT COLUMN ===== -->
+                    <!-- ===== LEFT COLUMN: speed dial → gear → ROUTE → DRIVE ===== -->
                     <Grid Grid.Column="0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -194,14 +196,105 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <!-- Speed gauge -->
-                        <ctl:DialGauge Grid.Row="0" Mode="Speed" Width="300" Height="300" HorizontalAlignment="Center"
+                        <!-- Speed gauge (negative bottom margin reclaims the dial's open bottom, like Mac) -->
+                        <ctl:DialGauge Grid.Row="0" Mode="Speed" Width="286" Height="286" HorizontalAlignment="Center" Margin="0,0,0,-24"
                                        Fraction="{Binding SpeedFraction}" CenterText="{Binding SpeedCenterText}" Unit="KM/H" />
                         <!-- Gear -->
-                        <ctl:GearIndicator Grid.Row="1" Gear="{Binding GearValue}" HorizontalAlignment="Center" Margin="0,6,0,12" />
+                        <ctl:GearIndicator Grid.Row="1" Gear="{Binding GearValue}" HorizontalAlignment="Center" Margin="0,6,0,14" />
 
-                        <!-- DRIVE panel -->
-                        <ctl:Card Grid.Row="2" Title="DRIVE" Glyph="&#xE7E8;" Tint="{StaticResource Green}" Margin="0,0,0,16">
+                        <!-- ROUTE · NAVIGATION panel (moves here, above DRIVE) -->
+                        <ctl:Card Grid.Row="2" Title="ROUTE · NAVIGATION" Glyph="&#xE707;" Tint="{StaticResource Ice}" Margin="0,0,0,14">
+                            <StackPanel>
+                                <!-- From → To on ONE row (two fields + arrow), mirrors Mac RoutePanel -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="10,8">
+                                        <DockPanel>
+                                            <!-- green origin marker (Mac smallcircle.filled.circle) -->
+                                            <Grid DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <Ellipse Stroke="{StaticResource Green}" StrokeThickness="2" />
+                                                <Ellipse Width="5" Height="5" Fill="{StaticResource Green}" />
+                                            </Grid>
+                                            <TextBox Text="{Binding RouteFrom, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
+                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                                     VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
+                                        </DockPanel>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="→" FontSize="13" FontWeight="Bold" Foreground="{StaticResource Dim}"
+                                               VerticalAlignment="Center" Margin="7,0,7,0" />
+                                    <Border Grid.Column="2" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="10,8">
+                                        <DockPanel>
+                                            <!-- red destination pin (Mac mappin.circle.fill) -->
+                                            <Ellipse DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                     Fill="{StaticResource Red}" />
+                                            <TextBox Text="{Binding RouteTo, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
+                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                                     VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
+                                        </DockPanel>
+                                    </Border>
+                                </Grid>
+                                <UniformGrid Columns="2" Margin="0,0,0,8">
+                                    <Button Content="🗺 PLAN" Style="{StaticResource NeonButton}" Click="Plan_Click" Margin="0,0,8,0" />
+                                    <Button Content="⤨ RANDOM" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="Random_Click" />
+                                </UniformGrid>
+                                <TextBlock Text="{Binding RouteInfo}" FontSize="11" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <!-- DRIVE ROUTE + DRIVE MY DAY paired on one row (Mac RoutePanel) -->
+                                <UniformGrid Columns="2" Margin="0,0,0,8">
+                                    <Button x:Name="DriveRouteButton" Click="DriveRoute_Click" Margin="0,0,8,0">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
+                                                <Setter Property="Content" Value="▶ DRIVE" />
+                                                <Setter Property="Foreground" Value="{StaticResource Green}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasRouteValue}" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource Green}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Green}" />
+                                                        <Setter Property="Foreground" Value="#FF08090B" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding DrivingRoute}" Value="True">
+                                                        <Setter Property="Content" Value="■ STOP" />
+                                                        <Setter Property="Background" Value="{StaticResource Red}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Red}" />
+                                                        <Setter Property="Foreground" Value="#FF08090B" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <Button x:Name="DayButton" Click="DriveMyDay_Click">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
+                                                <Setter Property="Content" Value="☀ DRIVE MY DAY" />
+                                                <Setter Property="Foreground" Value="{StaticResource Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DayDriving}" Value="True">
+                                                        <Setter Property="Content" Value="■ END DAY" />
+                                                        <Setter Property="Background" Value="{StaticResource Amber}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Amber}" />
+                                                        <Setter Property="Foreground" Value="#FF08090B" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </UniformGrid>
+                                <StackPanel Visibility="{Binding RouteProgressVisible, Converter={StaticResource BoolVis}}">
+                                    <ctl:SegmentedProgress Height="6" Progress="{Binding RouteProgress, Mode=OneWay}" />
+                                    <DockPanel Margin="0,6,0,0">
+                                        <TextBlock Text="{Binding RouteProgressPercentText}" FontSize="11" Foreground="{StaticResource Dim}" />
+                                        <TextBlock Text="{Binding RouteMilesLeftText}" HorizontalAlignment="Right" FontSize="11"
+                                                   FontWeight="SemiBold" Foreground="{StaticResource Ice}" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ctl:Card>
+
+                        <!-- DRIVE panel (MODE folded into the SPEED row, mirrors Mac DrivePanel) -->
+                        <ctl:Card Grid.Row="3" Title="DRIVE" Glyph="&#xE7E8;" Tint="{StaticResource Green}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
@@ -216,11 +309,6 @@
                                                   Tag="{StaticResource Red}" IsChecked="{Binding AutoDrive, Mode=OneWay}"
                                                   Click="Auto_Click" />
                                 </Grid>
-                                <DockPanel Margin="0,0,0,10">
-                                    <TextBlock Text="MODE" Style="{StaticResource Sec}" />
-                                    <TextBlock Text="{Binding ModeText}" HorizontalAlignment="Right" FontSize="11"
-                                               FontWeight="Black" Foreground="{Binding ModeBrush}" />
-                                </DockPanel>
                                 <TextBlock Text="QUICK SET · KM/H" Style="{StaticResource Sec}" Margin="0,0,0,6" />
                                 <UniformGrid Columns="4" Margin="0,0,0,10">
                                     <ToggleButton Content="STOP" Style="{StaticResource NeonToggle}" Tag="{StaticResource Red}"
@@ -232,8 +320,11 @@
                                     <ToggleButton Content="110" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
                                                   CommandParameter="110" IsChecked="{Binding ActiveSpeed110, Mode=OneWay}" Click="SpeedPreset_Click" />
                                 </UniformGrid>
+                                <!-- SPEED label + live MODE badge + value on one line (mode no longer has its own row) -->
                                 <DockPanel Margin="0,0,0,2">
-                                    <TextBlock Text="SPEED" Style="{StaticResource Sec}" />
+                                    <TextBlock Text="SPEED" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ModeText}" Margin="8,0,0,0" FontSize="10" FontWeight="Black"
+                                               Foreground="{Binding ModeBrush}" VerticalAlignment="Center" />
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                         <TextBlock Text="{Binding SpeedKmhText}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Ice}" />
                                         <TextBlock Text=" km/h" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Dim}"
@@ -241,11 +332,7 @@
                                     </StackPanel>
                                 </DockPanel>
                                 <Slider Minimum="0" Maximum="130" Value="{Binding SpeedKmh, Mode=TwoWay}" />
-                                <DockPanel Margin="0,10,0,6">
-                                    <TextBlock Text="SIM SPEED · MAP PACE" Style="{StaticResource Sec}" />
-                                    <TextBlock Text="how fast the route plays" HorizontalAlignment="Right" FontSize="9"
-                                               Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
-                                </DockPanel>
+                                <TextBlock Text="SIM SPEED · MAP PACE" Style="{StaticResource Sec}" Margin="0,10,0,6" />
                                 <UniformGrid Columns="5">
                                     <ToggleButton Content="1×" Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}" CommandParameter="1" IsChecked="{Binding ActiveT1, Mode=OneWay}" Click="TimeScale_Click" Margin="0,0,6,0" />
                                     <ToggleButton Content="5×" Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}" CommandParameter="5" IsChecked="{Binding ActiveT5, Mode=OneWay}" Click="TimeScale_Click" Margin="0,0,6,0" />
@@ -255,65 +342,266 @@
                                 </UniformGrid>
                             </StackPanel>
                         </ctl:Card>
+                    </Grid>
 
-                        <!-- SCENARIO panel -->
-                        <ctl:Card Grid.Row="3" Title="SCENARIO" Glyph="&#xE714;" Tint="{StaticResource Red}" Margin="0,0,0,16">
-                            <StackPanel>
-                                <ComboBox ItemsSource="{Binding Scenarios}" SelectedItem="{Binding SelectedScenario, Mode=TwoWay}"
-                                          Height="32" Margin="0,0,0,10" FontFamily="{StaticResource Rounded}" />
-                                <!-- One button like the Mac: filled-red RUN when idle, red-outline STOP while running -->
-                                <Button x:Name="ScenarioButton" Click="ScenarioToggle_Click" Margin="0,0,0,8">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
-                                            <Setter Property="Content" Value="▶ RUN" />
-                                            <Setter Property="Background" Value="{StaticResource Red}" />
-                                            <Setter Property="BorderBrush" Value="{StaticResource Red}" />
-                                            <Setter Property="Foreground" Value="#FF08090B" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ScenarioRunning}" Value="True">
-                                                    <Setter Property="Content" Value="■ STOP" />
-                                                    <Setter Property="Background" Value="Transparent" />
-                                                    <Setter Property="Foreground" Value="{StaticResource Red}" />
-                                                    <Setter Property="BorderBrush" Value="{StaticResource Red}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Button x:Name="StepsButton" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}"
-                                        HorizontalContentAlignment="Stretch" Click="Steps_Click">
-                                    <DockPanel>
-                                        <TextBlock Text="{Binding WhatHowText}" />
-                                        <TextBlock Text="⌃" DockPanel.Dock="Right" HorizontalAlignment="Right" />
-                                    </DockPanel>
-                                </Button>
-                                <Popup x:Name="StepsPopup" PlacementTarget="{Binding ElementName=StepsButton}" Placement="Bottom"
-                                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                                    <Border Background="{StaticResource Bg1}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
-                                            CornerRadius="14" Padding="18" Width="360" Margin="0,8,0,0">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding SelectedScenarioTitle}" FontSize="13" FontWeight="Black" Foreground="{StaticResource Text}" Margin="0,0,0,8" />
-                                            <TextBlock Text="WHAT IT DOES" Style="{StaticResource Sec}" Margin="0,0,0,3" />
-                                            <TextBlock Text="{Binding SelectedScenarioExpect}" FontSize="12" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,10" />
-                                            <Border Height="1" Background="{StaticResource Stroke}" Margin="0,0,0,10" />
-                                            <TextBlock Text="📋 DO THIS IN THE APP" FontSize="10" FontWeight="Black" Foreground="{StaticResource Amber}" Margin="0,0,0,8" />
-                                            <ItemsControl ItemsSource="{Binding SelectedScenarioSteps}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding}" FontSize="13" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
+                    <!-- ===== CENTER COLUMN: nav → map → telemetry → LIVE PACKET STREAM ===== -->
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Nav strip -->
+                        <Border Grid.Row="0" CornerRadius="18" Background="{StaticResource PanelGlass}"
+                                BorderBrush="{StaticResource Stroke}" BorderThickness="1" Margin="0,0,0,14" ClipToBounds="True">
+                            <Grid>
+                                <!-- Mac NavStrip order: [turn glyph] | distance + subtitle | (far right) flag + miles-left -->
+                                <Grid Margin="18,11">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10" Background="#246FD3FF" Margin="0,0,16,0">
+                                        <TextBlock Text="{Binding NavTurnGlyph}" FontSize="20" FontWeight="Bold"
+                                                   Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
-                                </Popup>
-                                <TextBlock Text="{Binding RunningScenario}" FontSize="11" Foreground="{StaticResource Dim}"
-                                           Margin="0,10,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </ctl:Card>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding NavDistanceText}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                        <TextBlock Text="{Binding NavSubtitle}" FontSize="12" FontWeight="Medium" Foreground="{StaticResource Dim}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Margin="16,0,0,0">
+                                        <TextBlock Text="🏁" FontFamily="Segoe UI Emoji" FontSize="13" Foreground="{StaticResource Dim}"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="{Binding NavMilesLeftText}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                                <!-- green progress underline at the bottom edge -->
+                                <ProgressBar VerticalAlignment="Bottom" Height="2" Minimum="0" Maximum="100"
+                                             Value="{Binding RoutePercent, Mode=OneWay}" Foreground="{StaticResource Green}"
+                                             Background="Transparent" BorderThickness="0" />
+                            </Grid>
+                        </Border>
 
-                        <!-- CONNECTION · SIGNAL panel -->
-                        <ctl:Card Grid.Row="4" Title="CONNECTION · SIGNAL" Glyph="&#xE704;" Tint="{StaticResource Blue}">
+                        <!-- Map (subtle bezel + an ice accent tab top-left) -->
+                        <Border Grid.Row="1" CornerRadius="18" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                ClipToBounds="True" Margin="0,0,0,14">
+                            <Grid>
+                                <ctl:OsmTileMap />
+                                <!-- ice accent tab (matches the Card accent-bar language) -->
+                                <Border Width="36" Height="4" CornerRadius="2" Background="{StaticResource Ice}" Opacity="0.85"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,0,0,0" />
+                                <ctl:CompassRose HeadingDeg="{Binding HeadingDeg}" Cardinal="{Binding Cardinal}"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Telemetry dock -->
+                        <UniformGrid Grid.Row="2" Columns="6" Margin="0,0,0,14">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#246FD3FF" Margin="0,0,6,0">
+                                            <TextBlock Text="◎" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="ODOMETER" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding OdometerText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                        <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#243E7BFA" Margin="0,0,6,0">
+                                            <TextBlock Text="⇄" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="TRIP" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding TripText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                        <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#243E7BFA" Margin="0,0,6,0">
+                                            <TextBlock Text="◷" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="ENG HRS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding EngineHoursText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                        <TextBlock Text=" h" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#246FD3FF" Margin="0,0,6,0">
+                                            <TextBlock Text="➤" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="HEADING" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding HeadingText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                        <TextBlock Text="°" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#2432D74B" Margin="0,0,6,0">
+                                            <TextBlock Text="≋" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding SatsBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="SATS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SatellitesText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold"
+                                               Foreground="{Binding SatsBrush}" Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,18">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="18" Height="18" CornerRadius="5" Background="#2432D74B" Margin="0,0,6,0">
+                                            <TextBlock Text="◉" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding EcmBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="ECM" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding EcmText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold"
+                                               Foreground="{Binding EcmBrush}" Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <!-- ===== LIVE PACKET STREAM (centre column only, fixed height) ===== -->
+                        <Border Grid.Row="3" Height="184" Style="{StaticResource GlassPanel}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBlock Text="LIVE PACKET STREAM" Style="{StaticResource Sec}" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding LogCountText}" FontFamily="{StaticResource Mono}" FontSize="10"
+                                                   Foreground="{StaticResource Dim}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <Button Content="EXPORT" Style="{StaticResource NeonButton}" Padding="10,5" Click="ExportLog_Click" Margin="0,0,8,0" />
+                                        <Button Content="CLEAR" Style="{StaticResource NeonButton}" Padding="10,5" Click="ClearLog_Click" />
+                                    </StackPanel>
+                                </DockPanel>
+                                <ListBox x:Name="LogList" Grid.Row="1" ItemsSource="{Binding Log}" Background="Transparent" BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="Focusable" Value="False" />
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Time}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding Symbol}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding Color}" Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding TextBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- ===== RIGHT COLUMN: tach dial → FUEL → CONNECTION · SIGNAL (fills to bottom) ===== -->
+                    <Grid Grid.Column="4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <ctl:DialGauge Grid.Row="0" Mode="Tach" Width="286" Height="286" HorizontalAlignment="Center"
+                                       Fraction="{Binding TachFraction}" CenterText="{Binding RpmText}" Unit="RPM"
+                                       Hot="{Binding TachHot}" Margin="0,0,0,14" />
+
+                        <!-- FUEL — combined "DUAL TANK" panel: two cylinders + two sliders (mirrors Mac fuelPanel) -->
+                        <Border Grid.Row="1" Style="{StaticResource GlassPanel}" Padding="0" Margin="0,0,0,14">
+                            <Grid>
+                                <!-- green accent bar along the top edge -->
+                                <Border Height="2" Margin="12,0,12,0" VerticalAlignment="Top" CornerRadius="1">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#B332D74B" Offset="0" />
+                                            <GradientStop Color="#0032D74B" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Margin="15,13">
+                                    <!-- header: fuel-pump chip + FUEL ... DUAL TANK -->
+                                    <DockPanel Margin="0,0,0,12">
+                                        <Border Width="23" Height="23" CornerRadius="7" Background="#2432D74B" Margin="0,0,9,0">
+                                            <TextBlock Text="⛽" FontFamily="Segoe UI Emoji" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="FUEL" FontFamily="{StaticResource Rounded}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+                                        <TextBlock Text="DUAL TANK" HorizontalAlignment="Right" FontSize="9.5" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <!-- body: [F1 cylinder] [F2 cylinder] | [FUEL 1 slider / FUEL 2 slider] -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                                            <ctl:FuelCylinder Value="{Binding FuelPct}" Tint="{Binding FuelTintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
+                                            <TextBlock Text="{Binding FuelPctText}" FontSize="13" FontWeight="Bold" Foreground="{Binding FuelBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,7,0,0" />
+                                            <TextBlock Text="F1" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="0,0,18,0">
+                                            <ctl:FuelCylinder Value="{Binding Fuel2Pct}" Tint="{Binding Fuel2TintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
+                                            <TextBlock Text="{Binding Fuel2PctText}" FontSize="13" FontWeight="Bold" Foreground="{Binding Fuel2Brush}"
+                                                       HorizontalAlignment="Center" Margin="0,7,0,0" />
+                                            <TextBlock Text="F2" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <!-- FUEL 1 slider (green) -->
+                                            <DockPanel Margin="0,0,0,4">
+                                                <TextBlock Text="FUEL 1" FontFamily="{StaticResource Rounded}" FontSize="11" FontWeight="Bold"
+                                                           Foreground="{Binding FuelBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding FuelPctText}" HorizontalAlignment="Right" FontFamily="{StaticResource Mono}"
+                                                           FontSize="13" FontWeight="Bold" Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+                                            </DockPanel>
+                                            <Slider Minimum="0" Maximum="100" Value="{Binding FuelSlider, Mode=TwoWay}" Foreground="{Binding FuelBrush}" Margin="0,0,0,16" />
+                                            <!-- FUEL 2 slider (blue) -->
+                                            <DockPanel Margin="0,0,0,4">
+                                                <TextBlock Text="FUEL 2" FontFamily="{StaticResource Rounded}" FontSize="11" FontWeight="Bold"
+                                                           Foreground="{Binding Fuel2Brush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Fuel2PctText}" HorizontalAlignment="Right" FontFamily="{StaticResource Mono}"
+                                                           FontSize="13" FontWeight="Bold" Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+                                            </DockPanel>
+                                            <Slider Minimum="0" Maximum="100" Value="{Binding Fuel2Slider, Mode=TwoWay}" Foreground="{Binding Fuel2Brush}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- CONNECTION · SIGNAL panel (moves here, fills to the bottom) -->
+                        <ctl:Card Grid.Row="2" Title="CONNECTION · SIGNAL" Glyph="&#xE704;" Tint="{StaticResource Blue}">
                             <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,10">
@@ -352,6 +640,27 @@
                                         <Slider Minimum="15" Maximum="180" Value="{Binding RangeOutageSec, Mode=TwoWay}" />
                                     </DockPanel>
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+                                    <TextBlock Text="RAW EFFECTS" Style="{StaticResource Sec}" Margin="0,0,0,6" />
+                                    <!-- Weak signal adds latency (driven by SIGNAL/AUTO), not loss. -->
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Dup" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding DuplicateText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0" Maximum="50" Value="{Binding DuplicatePct, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Reorder" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding OutOfOrderText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0" Maximum="50" Value="{Binding OutOfOrderPct, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Interval" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding PacketIntervalText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0.25" Maximum="3" Value="{Binding PacketIntervalSec, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,8,0,8" />
                                     <DockPanel Margin="0,0,0,6">
                                         <TextBlock Text="STORED DUMP" Style="{StaticResource Sec}" />
                                         <TextBlock Text="{Binding StoredDumpCountText}" HorizontalAlignment="Right"
@@ -386,335 +695,9 @@
                                         </Button.Style>
                                     </Button>
                                     <TextBlock Text="≈500ms reproduces the disconnect · 1s is safe." FontSize="9" Foreground="{StaticResource Dim}" />
-                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,8,0,8" />
-                                    <TextBlock Text="RAW EFFECTS" Style="{StaticResource Sec}" Margin="0,0,0,6" />
-                                    <!-- Loss is driven by SIGNAL/AUTO (loss = 100 − signal); the manual knob is redundant. -->
-                                    <DockPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Dup" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding DuplicateText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0" Maximum="50" Value="{Binding DuplicatePct, Mode=TwoWay}" />
-                                    </DockPanel>
-                                    <DockPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Reorder" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding OutOfOrderText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0" Maximum="50" Value="{Binding OutOfOrderPct, Mode=TwoWay}" />
-                                    </DockPanel>
-                                    <DockPanel>
-                                        <TextBlock Text="Interval" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding PacketIntervalText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0.25" Maximum="3" Value="{Binding PacketIntervalSec, Mode=TwoWay}" />
-                                    </DockPanel>
                                 </StackPanel>
                             </ScrollViewer>
                         </ctl:Card>
-                    </Grid>
-
-                    <!-- ===== RIGHT REGION ===== -->
-                    <Grid Grid.Column="2">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="230" />
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0" Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="22" />
-                                <ColumnDefinition Width="384" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- CENTER column: nav · map · telemetry -->
-                            <Grid Grid.Column="0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <!-- Nav strip -->
-                                <Border Grid.Row="0" CornerRadius="18" Background="{StaticResource PanelGlass}"
-                                        BorderBrush="{StaticResource Stroke}" BorderThickness="1" Margin="0,0,0,16" ClipToBounds="True">
-                                    <Grid>
-                                        <!-- Mac NavStrip order: [turn glyph] | distance + subtitle | (far right) flag + miles-left -->
-                                        <Grid Margin="18,11">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10" Background="#246FD3FF" Margin="0,0,16,0">
-                                                <TextBlock Text="{Binding NavTurnGlyph}" FontSize="20" FontWeight="Bold"
-                                                           Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding NavDistanceText}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource Text}" />
-                                                <TextBlock Text="{Binding NavSubtitle}" FontSize="12" FontWeight="Medium" Foreground="{StaticResource Dim}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Margin="16,0,0,0">
-                                                <TextBlock Text="🏁" FontFamily="Segoe UI Emoji" FontSize="13" Foreground="{StaticResource Dim}"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
-                                                <TextBlock Text="{Binding NavMilesLeftText}" FontSize="13" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource Text}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </Grid>
-                                        <!-- green progress underline at the bottom edge -->
-                                        <ProgressBar VerticalAlignment="Bottom" Height="2" Minimum="0" Maximum="100"
-                                                     Value="{Binding RoutePercent, Mode=OneWay}" Foreground="{StaticResource Green}"
-                                                     Background="Transparent" BorderThickness="0" />
-                                    </Grid>
-                                </Border>
-
-                                <!-- Map -->
-                                <Border Grid.Row="1" CornerRadius="18" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
-                                        ClipToBounds="True" Margin="0,0,0,16">
-                                    <Grid>
-                                        <ctl:OsmTileMap />
-                                        <ctl:CompassRose HeadingDeg="{Binding HeadingDeg}" Cardinal="{Binding Cardinal}"
-                                                         HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
-                                    </Grid>
-                                </Border>
-
-                                <!-- Telemetry dock -->
-                                <UniformGrid Grid.Row="2" Columns="6">
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="◎" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="ODOMETER" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                <TextBlock Text="{Binding OdometerText}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Text}" />
-                                                <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="⇄" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="TRIP" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                <TextBlock Text="{Binding TripText}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Text}" />
-                                                <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="◷" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="ENG HRS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                <TextBlock Text="{Binding EngineHoursText}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Text}" />
-                                                <TextBlock Text=" h" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="➤" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="HEADING" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                                <TextBlock Text="{Binding HeadingText}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Text}" />
-                                                <TextBlock Text="°" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="≋" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding SatsBrush}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="SATS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding SatellitesText}" FontSize="26" FontWeight="Bold"
-                                                       Foreground="{Binding SatsBrush}" Margin="0,8,0,0" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Style="{StaticResource GlassPanel}" Padding="16,18">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="◉" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding EcmBrush}" Margin="0,0,5,0" VerticalAlignment="Center" />
-                                                <TextBlock Text="ECM" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding EcmText}" FontSize="26" FontWeight="Bold"
-                                                       Foreground="{Binding EcmBrush}" Margin="0,8,0,0" />
-                                        </StackPanel>
-                                    </Border>
-                                </UniformGrid>
-                            </Grid>
-
-                            <!-- RIGHT column: tach · fuel · route -->
-                            <Grid Grid.Column="2">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <ctl:DialGauge Grid.Row="0" Mode="Tach" Width="300" Height="300" HorizontalAlignment="Center"
-                                               Fraction="{Binding TachFraction}" CenterText="{Binding RpmText}" Unit="RPM"
-                                               Hot="{Binding TachHot}" Margin="0,0,0,16" />
-
-                                <!-- Fuel -->
-                                <Border Grid.Row="1" Style="{StaticResource GlassPanel}" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <StackPanel Margin="0,0,36,0">
-                                                <ctl:FuelCylinder Value="{Binding FuelPct}" Tint="{Binding FuelTintColor}" HorizontalAlignment="Center" />
-                                                <TextBlock Text="{Binding FuelPctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding FuelBrush}"
-                                                           HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                                <TextBlock Text="FUEL 1" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
-                                            </StackPanel>
-                                            <StackPanel>
-                                                <ctl:FuelCylinder Value="{Binding Fuel2Pct}" Tint="{Binding Fuel2TintColor}" HorizontalAlignment="Center" />
-                                                <TextBlock Text="{Binding Fuel2PctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Fuel2Brush}"
-                                                           HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                                <TextBlock Text="FUEL 2" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                        <DockPanel Margin="0,14,0,0">
-                                            <TextBlock Text="FUEL 1" Width="46" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding FuelPctText}" Width="36" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                       FontFamily="{StaticResource Mono}" FontSize="11" FontWeight="Bold" Foreground="{Binding FuelBrush}" VerticalAlignment="Center" />
-                                            <Slider Minimum="0" Maximum="100" Value="{Binding FuelSlider, Mode=TwoWay}" />
-                                        </DockPanel>
-                                        <DockPanel Margin="0,6,0,0">
-                                            <TextBlock Text="FUEL 2" Width="46" Style="{StaticResource Sec}" VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding Fuel2PctText}" Width="36" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                       FontFamily="{StaticResource Mono}" FontSize="11" FontWeight="Bold" Foreground="{Binding Fuel2Brush}" VerticalAlignment="Center" />
-                                            <Slider Minimum="0" Maximum="100" Value="{Binding Fuel2Slider, Mode=TwoWay}" />
-                                        </DockPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- ROUTE panel -->
-                                <ctl:Card Grid.Row="2" Title="ROUTE · NAVIGATION" Glyph="&#xE707;" Tint="{StaticResource Ice}">
-                                    <StackPanel>
-                                        <Border CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="12,8" Margin="0,0,0,8">
-                                            <DockPanel>
-                                                <!-- green origin marker (Mac smallcircle.filled.circle) -->
-                                                <Grid DockPanel.Dock="Left" Width="13" Height="13" Margin="0,0,10,0" VerticalAlignment="Center">
-                                                    <Ellipse Stroke="{StaticResource Green}" StrokeThickness="2" />
-                                                    <Ellipse Width="5" Height="5" Fill="{StaticResource Green}" />
-                                                </Grid>
-                                                <TextBox Text="{Binding RouteFrom, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
-                                                         Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="13"
-                                                         VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
-                                            </DockPanel>
-                                        </Border>
-                                        <Border CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="12,8" Margin="0,0,0,8">
-                                            <DockPanel>
-                                                <!-- red destination pin (Mac mappin.circle.fill) -->
-                                                <Ellipse DockPanel.Dock="Left" Width="13" Height="13" Margin="0,0,10,0" VerticalAlignment="Center"
-                                                         Fill="{StaticResource Red}" />
-                                                <TextBox Text="{Binding RouteTo, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
-                                                         Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="13"
-                                                         VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
-                                            </DockPanel>
-                                        </Border>
-                                        <UniformGrid Columns="2" Margin="0,0,0,8">
-                                            <Button Content="🗺 PLAN" Style="{StaticResource NeonButton}" Click="Plan_Click" Margin="0,0,8,0" />
-                                            <Button Content="⤨ RANDOM" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="Random_Click" />
-                                        </UniformGrid>
-                                        <TextBlock Text="{Binding RouteInfo}" FontSize="11" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                        <!-- DRIVE ROUTE is filled green once a route exists (Mac filled: sim.hasRoute) -->
-                                        <Button x:Name="DriveRouteButton" Click="DriveRoute_Click" Margin="0,0,0,8">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
-                                                    <Setter Property="Content" Value="▶ DRIVE ROUTE" />
-                                                    <Setter Property="Foreground" Value="{StaticResource Green}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding HasRouteValue}" Value="True">
-                                                            <Setter Property="Background" Value="{StaticResource Green}" />
-                                                            <Setter Property="BorderBrush" Value="{StaticResource Green}" />
-                                                            <Setter Property="Foreground" Value="#FF08090B" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding DrivingRoute}" Value="True">
-                                                            <Setter Property="Content" Value="■ STOP" />
-                                                            <Setter Property="Background" Value="{StaticResource Red}" />
-                                                            <Setter Property="BorderBrush" Value="{StaticResource Red}" />
-                                                            <Setter Property="Foreground" Value="#FF08090B" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
-                                        <Button x:Name="DayButton" Click="DriveMyDay_Click" Margin="0,0,0,8">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
-                                                    <Setter Property="Content" Value="☀ DRIVE MY DAY" />
-                                                    <Setter Property="Foreground" Value="{StaticResource Amber}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding DayDriving}" Value="True">
-                                                            <Setter Property="Content" Value="■ END DAY" />
-                                                            <Setter Property="Background" Value="{StaticResource Amber}" />
-                                                            <Setter Property="BorderBrush" Value="{StaticResource Amber}" />
-                                                            <Setter Property="Foreground" Value="#FF08090B" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
-                                        <TextBlock Text="Full state-crossing day at 30× · IFTA mileage + speeding/idle events. (HOS hour-clocks run real-time.)"
-                                                   FontSize="9" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                        <StackPanel Visibility="{Binding RouteProgressVisible, Converter={StaticResource BoolVis}}">
-                                            <ctl:SegmentedProgress Height="6" Progress="{Binding RouteProgress, Mode=OneWay}" />
-                                            <DockPanel Margin="0,6,0,0">
-                                                <TextBlock Text="{Binding RouteProgressPercentText}" FontSize="11" Foreground="{StaticResource Dim}" />
-                                                <TextBlock Text="{Binding RouteMilesLeftText}" HorizontalAlignment="Right" FontSize="11"
-                                                           FontWeight="SemiBold" Foreground="{StaticResource Ice}" />
-                                            </DockPanel>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </ctl:Card>
-                            </Grid>
-                        </Grid>
-
-                        <!-- ===== PACKET CONSOLE ===== -->
-                        <Border Grid.Row="1" Style="{StaticResource GlassPanel}">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                                    <TextBlock Text="LIVE PACKET STREAM" Style="{StaticResource Sec}" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <TextBlock Text="{Binding LogCountText}" FontFamily="{StaticResource Mono}" FontSize="10"
-                                                   Foreground="{StaticResource Dim}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <Button Content="EXPORT" Style="{StaticResource NeonButton}" Padding="10,5" Click="ExportLog_Click" Margin="0,0,8,0" />
-                                        <Button Content="CLEAR" Style="{StaticResource NeonButton}" Padding="10,5" Click="ClearLog_Click" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <ListBox x:Name="LogList" Grid.Row="1" ItemsSource="{Binding Log}" Background="Transparent" BorderThickness="0"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                    <ListBox.ItemContainerStyle>
-                                        <Style TargetType="ListBoxItem">
-                                            <Setter Property="Background" Value="Transparent" />
-                                            <Setter Property="Padding" Value="0" />
-                                            <Setter Property="Focusable" Value="False" />
-                                        </Style>
-                                    </ListBox.ItemContainerStyle>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Time}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" Margin="0,0,8,0" />
-                                                <TextBlock Text="{Binding Symbol}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding Color}" Margin="0,0,8,0" />
-                                                <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding TextBrush}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Grid>
-                        </Border>
                     </Grid>
                 </Grid>
 
@@ -725,6 +708,67 @@
                         <TextBlock Text="{Binding FooterStatusText}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <!-- SCENARIO footer button + popup (mirrors Mac: scenarios are a testing tool tucked behind a footer button) -->
+                        <Button x:Name="ScenarioButton2" Content="{Binding ScenarioButtonText}" Style="{StaticResource NeonButton}" Padding="10,5"
+                                Foreground="{Binding ScenarioButtonBrush}" Click="Scenario_Click" Margin="0,0,8,0" />
+                        <Popup x:Name="ScenarioPopup" PlacementTarget="{Binding ElementName=ScenarioButton2}" Placement="Top"
+                               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                            <Border Background="{StaticResource Bg1}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                    CornerRadius="14" Padding="18" Width="380" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <DockPanel Margin="0,0,0,12">
+                                        <TextBlock Text="🎬" FontFamily="Segoe UI Emoji" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="SCENARIO" Style="{StaticResource Sec}" Foreground="{StaticResource Red}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <ComboBox ItemsSource="{Binding Scenarios}" SelectedItem="{Binding SelectedScenario, Mode=TwoWay}"
+                                              Height="32" Margin="0,0,0,10" FontFamily="{StaticResource Rounded}" />
+                                    <!-- One button like the Mac: filled-red RUN when idle (opens the guided overlay), red-outline STOP while running -->
+                                    <Button x:Name="ScenarioRunButton" Click="ScenarioToggle_Click" Margin="0,0,0,8">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
+                                                <Setter Property="Content" Value="▶ RUN" />
+                                                <Setter Property="Background" Value="{StaticResource Red}" />
+                                                <Setter Property="BorderBrush" Value="{StaticResource Red}" />
+                                                <Setter Property="Foreground" Value="#FF08090B" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ScenarioRunning}" Value="True">
+                                                        <Setter Property="Content" Value="■ STOP" />
+                                                        <Setter Property="Background" Value="Transparent" />
+                                                        <Setter Property="Foreground" Value="{StaticResource Red}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Red}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <Button x:Name="StepsButton" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}"
+                                            HorizontalContentAlignment="Stretch" Click="Steps_Click">
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding WhatHowText}" />
+                                            <TextBlock Text="⌃" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                                        </DockPanel>
+                                    </Button>
+                                    <!-- WHAT & HOW expander (inline; toggled by the button above) -->
+                                    <StackPanel x:Name="StepsExpander" Visibility="Collapsed" Margin="0,10,0,0">
+                                        <TextBlock Text="{Binding SelectedScenarioTitle}" FontSize="13" FontWeight="Black" Foreground="{StaticResource Text}" Margin="0,0,0,8" />
+                                        <TextBlock Text="WHAT IT DOES" Style="{StaticResource Sec}" Margin="0,0,0,3" />
+                                        <TextBlock Text="{Binding SelectedScenarioExpect}" FontSize="12" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                        <Border Height="1" Background="{StaticResource Stroke}" Margin="0,0,0,10" />
+                                        <TextBlock Text="📋 DO THIS IN THE APP" FontSize="10" FontWeight="Black" Foreground="{StaticResource Amber}" Margin="0,0,0,8" />
+                                        <ItemsControl ItemsSource="{Binding SelectedScenarioSteps}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" FontSize="13" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding RunningScenario}" FontSize="11" Foreground="{StaticResource Dim}"
+                                               Margin="0,10,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+
                         <Button x:Name="DtcButton" Content="{Binding DtcButtonText}" Style="{StaticResource NeonButton}" Padding="10,5"
                                 Foreground="{Binding DtcButtonBrush}" Click="Dtc_Click" Margin="0,0,8,0" />
                         <Popup x:Name="DtcPopup" PlacementTarget="{Binding ElementName=DtcButton}" Placement="Top"
@@ -828,6 +872,11 @@
                            HorizontalAlignment="Center" Margin="0,34,0,0"
                            Visibility="{Binding SystemsNominalVisible, Converter={StaticResource BoolVis}}" />
             </StackPanel>
+        </Grid>
+
+        <!-- ================= GUIDED WALKTHROUGH OVERLAY (centered, dim full-window scrim) ================= -->
+        <Grid x:Name="GuidedOverlay" Background="#94000000" Visibility="Collapsed" MouseDown="GuidedBackdrop_MouseDown">
+            <ContentControl x:Name="GuidedHost" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Window>

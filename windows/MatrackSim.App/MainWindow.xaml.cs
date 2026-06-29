@@ -124,17 +124,40 @@ namespace MatrackSim.App
             else await Sim.DriveMyDay();
         }
 
-        // MARK: - SCENARIO
+        // MARK: - SCENARIO  (tucked behind a footer button + popup, like DTC — mirrors the Mac)
+        private void Scenario_Click(object sender, RoutedEventArgs e) => ScenarioPopup.IsOpen = !ScenarioPopup.IsOpen;
+
         private void ScenarioToggle_Click(object sender, RoutedEventArgs e)
         {
+            ScenarioPopup.IsOpen = false;
             if (Sim.RunningScenario != null) { Sim.StopScenario(); return; }
             if (Sim.SelectedScenario == null) return;
-            var s = Sim.SelectedScenario.Value;
-            // Guided walkthrough: step the tester through the scenario; the "Run it" step fires the real
-            // sim action (for UDP/disconnect: drop link → record → dump on reconnect).
-            new GuidedStepWindow($"{s.Id}. {s.Name}", s.AppSteps, () => Sim.RunScenario(s)) { Owner = this }.ShowDialog();
+            // Guided walkthrough: step the tester through the scenario in a centered, full-window overlay; the
+            // "Run it" step fires the real sim action (for UDP/disconnect: drop link → record → dump on reconnect).
+            ShowGuided(Sim.SelectedScenario.Value);
         }
-        private void Steps_Click(object sender, RoutedEventArgs e) => StepsPopup.IsOpen = !StepsPopup.IsOpen;
+
+        private void Steps_Click(object sender, RoutedEventArgs e) =>
+            StepsExpander.Visibility = StepsExpander.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+
+        // MARK: - GUIDED WALKTHROUGH OVERLAY (centered on the whole window, like the Mac guidedScenario overlay)
+        private void ShowGuided(Scenario s)
+        {
+            GuidedHost.Content = new GuidedStepView($"{s.Id}. {s.Name}", s.AppSteps, () => Sim.RunScenario(s), CloseGuided);
+            GuidedOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void CloseGuided()
+        {
+            GuidedOverlay.Visibility = Visibility.Collapsed;
+            GuidedHost.Content = null;
+        }
+
+        // Tapping the dimmed backdrop (not the step card) dismisses the walkthrough, like the Mac scrim tap.
+        private void GuidedBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (ReferenceEquals(e.OriginalSource, GuidedOverlay)) CloseGuided();
+        }
 
         // MARK: - CONNECTION / SIGNAL
         private void Signal_Click(object sender, RoutedEventArgs e)

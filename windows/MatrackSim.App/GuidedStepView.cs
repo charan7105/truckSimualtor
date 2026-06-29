@@ -4,41 +4,40 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 
 namespace MatrackSim.App
 {
-    // Step-by-step guided walkthrough dialog (mirrors the macOS GuidedStepView). Walks a scenario's
+    // Step-by-step guided walkthrough card (mirrors the macOS GuidedStepView). Walks a scenario's
     // appSteps one instruction at a time; advancing past the "Run it" step fires the real sim action
     // (for the UDP / disconnect scenarios that's: drop the link, record the drive, dump it on reconnect),
     // so the tester is told exactly what to do in the ELD app at each moment.
-    public class GuidedStepWindow : Window
+    //
+    // Unlike the old top-level dialog, this is an in-window control hosted by MainWindow's centered guided
+    // overlay (a dim full-window scrim), matching the Mac flow where the walkthrough is centered on the
+    // whole cockpit rather than anchored to a corner.
+    public sealed class GuidedStepView : UserControl
     {
         private readonly string _title;
         private readonly IList<string> _steps;
         private readonly Action _onRun;
+        private readonly Action _onClose;
         private int _step;
 
         private static SolidColorBrush B(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
         private static readonly SolidColorBrush Bg = B("#101217"), Txt = B("#F4F6FA"), Amber = B("#F5A623"),
             Dim = B("#868E9C"), Stroke = B("#2A2E37"), Red = B("#E2122B"), Ice = B("#6FD3FF"), Dark = B("#08090B");
 
-        public GuidedStepWindow(string title, IList<string> steps, Action onRun)
+        public GuidedStepView(string title, IList<string> steps, Action onRun, Action onClose)
         {
-            _title = title; _steps = steps ?? new List<string>(); _onRun = onRun;
-            Title = "Guided run";
-            WindowStyle = WindowStyle.None;
-            ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
+            _title = title; _steps = steps ?? new List<string>(); _onRun = onRun; _onClose = onClose;
             Width = 460;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Background = Bg;
-            MouseLeftButtonDown += (s, e) => { try { DragMove(); } catch { } };
             Render();
         }
 
         private void Render()
         {
-            if (_steps.Count == 0) { Close(); return; }
+            if (_steps.Count == 0) { _onClose?.Invoke(); return; }
             bool isLast = _step + 1 >= _steps.Count;
             bool isRun = _steps[_step].ToUpperInvariant().Contains("RUN");
 
@@ -62,7 +61,7 @@ namespace MatrackSim.App
 
             var bar = new DockPanel { LastChildFill = false };
             var cancel = new Button { Content = "Cancel", Foreground = Dim, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, FontSize = 13 };
-            cancel.Click += (s, e) => Close();
+            cancel.Click += (s, e) => _onClose?.Invoke();
             DockPanel.SetDock(cancel, Dock.Left);
             var next = new Button
             {
@@ -75,14 +74,22 @@ namespace MatrackSim.App
             bar.Children.Add(cancel); bar.Children.Add(next);
             root.Children.Add(bar);
 
-            Content = new Border { BorderBrush = Stroke, BorderThickness = new Thickness(1), Child = root };
+            Content = new Border
+            {
+                Background = Bg,
+                CornerRadius = new CornerRadius(20),
+                BorderBrush = Stroke,
+                BorderThickness = new Thickness(1),
+                Child = root,
+                Effect = new DropShadowEffect { Color = Colors.Black, Opacity = 0.6, BlurRadius = 44, ShadowDepth = 22, Direction = 270 },
+            };
         }
 
         private void Advance()
         {
             if (_steps[_step].ToUpperInvariant().Contains("RUN")) { try { _onRun?.Invoke(); } catch { } }
             if (_step + 1 < _steps.Count) { _step++; Render(); }
-            else Close();
+            else _onClose?.Invoke();
         }
     }
 }

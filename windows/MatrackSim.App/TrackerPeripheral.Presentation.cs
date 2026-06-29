@@ -91,6 +91,7 @@ namespace MatrackSim.App
                 case nameof(RunningScenario):
                     Raise(nameof(ModeText)); Raise(nameof(ModeBrush)); Raise(nameof(IsDumping)); Raise(nameof(FooterStatusText));
                     Raise(nameof(GearValue)); Raise(nameof(ScenarioRunning));
+                    Raise(nameof(ScenarioButtonText)); Raise(nameof(ScenarioButtonBrush));
                     break;
                 case nameof(LinkDown):
                 case nameof(DropEndsAt):
@@ -410,6 +411,9 @@ namespace MatrackSim.App
         public bool IsDumping => RunningScenario != null && RunningScenario.StartsWith("Stored dump", StringComparison.Ordinal);
         /// <summary>True while a scenario is playing — drives the single RUN/STOP scenario button (Mac parity).</summary>
         public bool ScenarioRunning => RunningScenario != null;
+        /// <summary>Footer SCENARIO button label/tint (Mac tucks scenarios behind a footer button, like DTC).</summary>
+        public string ScenarioButtonText => RunningScenario == null ? "🎬 SCENARIO" : "🎬 SCENARIO ▸ RUNNING";
+        public Brush ScenarioButtonBrush => RunningScenario == null ? ThemeBrushes.Dim : ThemeBrushes.Amber;
 
         // ---- Diagnostics --------------------------------------------------------------------------
         public bool FaultsEmpty => Faults == null || Faults.Count == 0;

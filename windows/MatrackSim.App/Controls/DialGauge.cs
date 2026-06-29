@@ -47,6 +47,7 @@ namespace MatrackSim.App.Controls
         // ---- Theme colours -----------------------------------------------------------------------
         private static readonly Color Ice = (Color)ColorConverter.ConvertFromString("#6FD3FF");
         private static readonly Color IceLt = (Color)ColorConverter.ConvertFromString("#9FE6FF");
+        private static readonly Color Blue = (Color)ColorConverter.ConvertFromString("#3E7BFA");
         private static readonly Color Red = (Color)ColorConverter.ConvertFromString("#E2122B");
         private static readonly Color Amber = (Color)ColorConverter.ConvertFromString("#F5A623");
         private static readonly Color TextC = (Color)ColorConverter.ConvertFromString("#F4F6FA");
@@ -86,7 +87,9 @@ namespace MatrackSim.App.Controls
             int tickCount = tach ? 36 : 40;
             int majorEvery = tach ? 6 : 8;
             double redTickFrom = tach ? 30.0 / 36.0 : 1.1;
-            var arcStops = tach ? new[] { Ice, Amber, Red } : new[] { Ice, IceLt, Red };
+            // Matched instrument pair: both dials sweep the same cool ice→blue gradient (mirrors Theme.speedArc /
+            // tachArc). Danger is carried only by the redline band/ticks, so the two gauges read as one cluster.
+            var arcStops = new[] { Ice, Blue };
             var labels = tach
                 ? new (double, string)[] { (0, "0"), (0.333, "1k"), (0.667, "2k"), (1.0, "3k") }
                 : new (double, string)[] { (0, "0"), (0.2, "40"), (0.4, "80"), (0.6, "120"), (0.8, "160"), (1.0, "200") };
@@ -151,20 +154,30 @@ namespace MatrackSim.App.Controls
                 // comet tip + glow
                 double tipDeg = StartDeg + SweepDeg * f;
                 Point tip = OnCircle(cx, cy, arcR, tipDeg);
-                Color tipColor = tach ? (Hot ? Red : Amber) : Ice;
+                Color tipColor = (tach && Hot) ? Red : Ice;   // bright comet head on both dials; red only when hot
                 var glow = new SolidColorBrush(Color.FromArgb(191, tipColor.R, tipColor.G, tipColor.B));
                 dc.DrawEllipse(glow, null, tip, lw * 0.62, lw * 0.62);
                 dc.DrawEllipse(new SolidColorBrush(tipColor), null, tip, lw * 0.31, lw * 0.31);
             }
 
-            // ---- inner dial-face ----
-            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(128, Bg0.R, Bg0.G, Bg0.B)), null, new Point(cx, cy), faceD / 2, faceD / 2);
-            dc.DrawEllipse(null, new Pen(new SolidColorBrush(StrokeC), 1), new Point(cx, cy), faceD / 2, faceD / 2);
+            // ---- inner dial-face (recessed, radially-lit — mirrors Theme.dialFace) ----
+            var faceCenter = new Point(cx, cy);
+            var faceFill = new RadialGradientBrush(
+                (Color)ColorConverter.ConvertFromString("#15181E"),
+                (Color)ColorConverter.ConvertFromString("#0A0B0E"))
+            {
+                GradientOrigin = new Point(0.5, 0.38),
+                Center = new Point(0.5, 0.5),
+                RadiusX = 0.5,
+                RadiusY = 0.5,
+            };
+            dc.DrawEllipse(faceFill, null, faceCenter, faceD / 2, faceD / 2);
+            dc.DrawEllipse(null, new Pen(new SolidColorBrush(StrokeC), 1), faceCenter, faceD / 2, faceD / 2);
 
-            // ---- center readout ----
+            // ---- center readout (smaller than before; tabular/monospaced digits) ----
             Color bigColor = (tach && Hot) ? Red : TextC;
-            double bigSize = tach ? diameter * 0.19 : diameter * 0.26;
-            var big = MakeText(CenterText ?? "", bigSize, bigColor, FontWeights.Bold);
+            double bigSize = tach ? diameter * 0.175 : diameter * 0.225;
+            var big = MakeText(CenterText ?? "", bigSize, bigColor, FontWeights.Bold, mono: true);
             var unit = MakeText(Unit ?? "", diameter * 0.045, (tach && Hot) ? Red : DimC, FontWeights.Bold, tracking: 6);
             double blockH = big.Height + unit.Height - 2;
             double topY = cy - blockH / 2;
@@ -206,7 +219,7 @@ namespace MatrackSim.App.Controls
         private static readonly Typeface Face = new Typeface(
             new FontFamily("Segoe UI Variable Display, Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
-        private FormattedText MakeText(string s, double size, Color color, FontWeight weight, double tracking = 0)
+        private FormattedText MakeText(string s, double size, Color color, FontWeight weight, double tracking = 0, bool mono = false)
         {
             if (tracking > 0 && s.Length > 1)
             {
@@ -214,7 +227,8 @@ namespace MatrackSim.App.Controls
                 foreach (var ch in s) { sb.Append(ch); sb.Append(' '); }
                 s = sb.ToString().TrimEnd();
             }
-            var tf = new Typeface(new FontFamily("Segoe UI Variable Display, Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal);
+            var family = mono ? "Cascadia Mono, Consolas, Courier New" : "Segoe UI Variable Display, Segoe UI";
+            var tf = new Typeface(new FontFamily(family), FontStyles.Normal, weight, FontStretches.Normal);
             return new FormattedText(s ?? "", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, size,
                 new SolidColorBrush(color), VisualTreeHelper.GetDpi(this).PixelsPerDip);
         }

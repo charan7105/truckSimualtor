@@ -241,7 +241,9 @@
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
                                                 <Grid Background="Transparent">
-                                                    <Border Height="5" CornerRadius="2.5" Background="{StaticResource Ice}" VerticalAlignment="Center" />
+                                                    <!-- active track follows the Slider's Foreground (defaults to Ice; fuel sliders tint green/blue) -->
+                                                    <Border Height="5" CornerRadius="2.5" VerticalAlignment="Center"
+                                                            Background="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Slider}}}" />
                                                 </Grid>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
