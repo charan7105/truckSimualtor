@@ -36,7 +36,19 @@
         <SolidColorBrush x:Key="IceDim" Color="{StaticResource IceDimColor}" />
         <SolidColorBrush x:Key="Dimmer" Color="{StaticResource DimmerColor}" />
 
-        <FontFamily x:Key="Rounded">Segoe UI Variable Display, Segoe UI, Arial</FontFamily>
+        <!-- ===== Premium glass material (mirrors Theme.glassTop/glassBot + the dual-tone hairline) ===== -->
+        <!-- Top-lit panel fill: #171A20 (lit top) → #0E1014 (recessed bottom) -->
+        <LinearGradientBrush x:Key="GlassFill" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF171A20" Offset="0" />
+            <GradientStop Color="#FF0E1014" Offset="1" />
+        </LinearGradientBrush>
+        <!-- Hairline that's brighter at the top edge and fades downward (glassy bevel): white .10 → white .025 -->
+        <LinearGradientBrush x:Key="GlassStroke" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#1AFFFFFF" Offset="0" />
+            <GradientStop Color="#06FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+
+        <FontFamily x:Key="Rounded">Segoe UI Variable Display, Segoe UI Variable Text, Segoe UI, Segoe UI Semibold</FontFamily>
         <FontFamily x:Key="Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
         <!-- Native Win11 icon font — crisp monochrome glyphs that tint properly (the SF-Symbols stand-in) -->
         <FontFamily x:Key="Fluent">Segoe Fluent Icons</FontFamily>
@@ -44,31 +56,34 @@
         <!-- Section label: small, spaced, dim caps (mirrors .sectionLabel()) -->
         <Style x:Key="SectionLabel" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="11.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource Dim}" />
-            <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         </Style>
 
-        <!-- Glass panel container (mirrors glassPanel() / Card) -->
+        <!-- Glass panel container (mirrors glassPanel() / Card) — top-lit gradient + dual-tone hairline -->
         <Style x:Key="GlassPanel" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource PanelGlass}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
+            <Setter Property="Background" Value="{StaticResource GlassFill}" />
+            <Setter Property="BorderBrush" Value="{StaticResource GlassStroke}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="18" />
             <Setter Property="Padding" Value="16" />
             <Setter Property="Effect">
                 <Setter.Value>
-                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="18" ShadowDepth="10" Direction="270" />
+                    <DropShadowEffect Color="Black" Opacity="0.45" BlurRadius="18" ShadowDepth="10" Direction="270" />
                 </Setter.Value>
             </Setter>
         </Style>
 
         <!-- Only the font here. The default text COLOUR comes from Window.Foreground (inherited), so a closer
              TextElement.Foreground (e.g. on a button's content) can override it. An implicit Foreground setter
-             would beat inheritance and force button text white — which is the bug this avoids. -->
+             would beat inheritance and force button text white — which is the bug this avoids.
+             TextRenderingMode=ClearType + FormattingMode=Ideal = crisp, smooth premium text (default Grayscale
+             rendering is what makes WPF text look thin/jagged/"cheap"). -->
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+            <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
         </Style>
 
         <!-- NeonButton: flat tinted button. Tint is supplied per-instance via Tag (a brush). -->
@@ -190,10 +205,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ctl:Card}">
-                        <Border CornerRadius="18" Background="{StaticResource PanelGlass}"
-                                BorderBrush="{StaticResource Stroke}" BorderThickness="1">
+                        <Border CornerRadius="18" Background="{StaticResource GlassFill}"
+                                BorderBrush="{StaticResource GlassStroke}" BorderThickness="1">
                             <Border.Effect>
-                                <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="18" ShadowDepth="10" Direction="270" />
+                                <DropShadowEffect Color="Black" Opacity="0.45" BlurRadius="18" ShadowDepth="10" Direction="270" />
                             </Border.Effect>
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -201,7 +216,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <!-- accent bar -->
+                                <!-- accent bar (tint → transparent, with a soft glow) -->
                                 <Border Grid.Row="0" Height="2" Margin="14,0,14,0" CornerRadius="1">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -209,15 +224,22 @@
                                             <GradientStop Color="#00000000" Offset="1" />
                                         </LinearGradientBrush>
                                     </Border.Background>
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="{Binding Tint.Color, RelativeSource={RelativeSource TemplatedParent}}" BlurRadius="5" ShadowDepth="0" Opacity="0.5" />
+                                    </Border.Effect>
                                 </Border>
-                                <!-- header -->
-                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="16,14,16,12">
-                                    <TextBlock Text="{TemplateBinding Glyph}" Foreground="{TemplateBinding Tint}" FontFamily="{StaticResource Fluent}"
-                                               FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
+                                <!-- header: tinted icon chip + brighter title -->
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="15,14,15,11">
+                                    <Grid Width="23" Height="23" Margin="0,0,9,0" VerticalAlignment="Center">
+                                        <Border CornerRadius="7" Background="{TemplateBinding Tint}" Opacity="0.14" />
+                                        <TextBlock Text="{TemplateBinding Glyph}" Foreground="{TemplateBinding Tint}" FontFamily="{StaticResource Fluent}"
+                                                   FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <TextBlock Text="{TemplateBinding Title}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                               FontWeight="SemiBold" Foreground="{StaticResource Text}" Opacity="0.92" VerticalAlignment="Center" />
                                 </StackPanel>
                                 <!-- content -->
-                                <ContentPresenter Grid.Row="2" Content="{TemplateBinding InnerContent}" Margin="16,0,16,16" />
+                                <ContentPresenter Grid.Row="2" Content="{TemplateBinding InnerContent}" Margin="15,0,15,15" />
                             </Grid>
                         </Border>
                     </ControlTemplate>
