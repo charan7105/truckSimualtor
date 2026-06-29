@@ -127,8 +127,12 @@ namespace MatrackSim.App
         // MARK: - SCENARIO
         private void ScenarioToggle_Click(object sender, RoutedEventArgs e)
         {
-            if (Sim.RunningScenario != null) Sim.StopScenario();
-            else if (Sim.SelectedScenario != null) Sim.RunScenario(Sim.SelectedScenario);
+            if (Sim.RunningScenario != null) { Sim.StopScenario(); return; }
+            if (Sim.SelectedScenario == null) return;
+            var s = Sim.SelectedScenario.Value;
+            // Guided walkthrough: step the tester through the scenario; the "Run it" step fires the real
+            // sim action (for UDP/disconnect: drop link → record → dump on reconnect).
+            new GuidedStepWindow($"{s.Id}. {s.Name}", s.AppSteps, () => Sim.RunScenario(s)) { Owner = this }.ShowDialog();
         }
         private void Steps_Click(object sender, RoutedEventArgs e) => StepsPopup.IsOpen = !StepsPopup.IsOpen;
 
