@@ -420,7 +420,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// Scenarios whose `expect:` depends on the app processing STORED packets (replay or Unassigned Driving):
     /// they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
     static func isStoredReplay(_ s: Scenario) -> Bool {
-        if s.id == 21 { return true }                                   // Unassigned Driving
+        if s.id == 12 { return true }                                   // Unassigned Driving (UDP)
         switch s.transport { case .disconnect, .storedBacklog: return true; default: return false }
     }
 

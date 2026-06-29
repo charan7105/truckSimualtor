@@ -54,7 +54,7 @@ enum SelfTest {
         print("Stored-replay path (RunScenario for stored/UDP scenarios):")
         for s in Scenarios.all {
             let isStored: Bool
-            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 21) }
+            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
             if !isStored { continue }
             let sr = ScenarioRunner.storedReplay(for: s, config: .default)
             let n = sr.count
@@ -62,8 +62,8 @@ enum SelfTest {
             var valid = true
             for em in sr where validate(em) != nil { valid = false; break }
             var ok = allStored && valid && n > 0
-            if s.id == 11 && n != 30 { ok = false }
-            if s.id == 12 && n != 300 { ok = false }
+            if s.id == 7 && n != 30 { ok = false }
+            if s.id == 8 && n != 300 { ok = false }
             if !ok { allPass = false }
             print("  [\(ok ? "OK" : "FAIL")] S\(s.id) \(s.name): \(n) backdated stored packets")
         }
@@ -98,24 +98,24 @@ enum SelfTest {
     // MARK: scenario-level invariants
     private static func scenarioInvariant(_ s: Scenario, _ em: [Emitted]) -> String? {
         switch s.id {
-        case 2, 19:   // engine off → at least one shutdown (ignition 0) ignition packet
+        case 2:   // engine off → at least one shutdown (ignition 0) ignition packet
             let hasShutdown = em.contains { $0.kind == .ignition && (MTDecoder.decode($0.wire)?.ignition == 0) }
             return hasShutdown ? nil : "expected a shutdown (ignition=0) event"
-        case 8, 9, 10:   // disconnect → stored replay present
+        case 6:   // disconnect → stored replay present (inline run() output)
             let stored = em.filter { $0.kind == .stored }.count
             let marker = em.contains { $0.wire.hasPrefix("LAST_STORED_PACKET") }
             return (stored > 0 && marker) ? nil : "expected stored replay after reconnect (got \(stored) stored)"
-        case 11:
+        case 7:
             let stored = em.filter { $0.kind == .stored }.count
             return stored == 30 ? nil : "expected 30 stored backlog packets, got \(stored)"
-        case 12:
+        case 8:
             let stored = em.filter { $0.kind == .stored }.count
             return stored == 300 ? nil : "expected 300 stored backlog packets, got \(stored)"
-        case 13:   // duplicates: some consecutive identical wires
+        case 9:   // duplicates: some consecutive identical wires
             var dup = false
             for i in 1..<max(1, em.count) where em[i].wire == em[i-1].wire && em[i].kind == .live { dup = true; break }
             return dup ? nil : "expected duplicate packets"
-        case 15:   // parse failure injected + rejected
+        case 11:   // parse failure injected + rejected
             return em.contains { $0.kind == .malformed } ? nil : "expected an injected malformed packet"
         default:
             // every scenario must emit at least one valid live packet

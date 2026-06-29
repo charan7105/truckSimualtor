@@ -376,66 +376,37 @@ namespace MatrackSim.Core
                 new Scenario(3, "Idle", "On-duty, no driving",
                     new List<Phase> { new Phase(30, 0, true) },
                     appSteps: new List<string> { "Tap RUN", "Engine on but not moving → app stays On-Duty (not Driving)" }),
-                new Scenario(4, "Driving low speed", "Auto-driving at ~25 mph",
-                    new List<Phase> { new Phase(5, 0, true), new Phase(30, 25, true) },
-                    appSteps: new List<string> { "Tap RUN", "At ~25 mph (≥5 mph) the app auto-switches to Driving" }),
-                new Scenario(5, "Driving highway", "Auto-driving at ~65 mph",
+                new Scenario(4, "Driving highway", "Auto-driving at ~65 mph",
                     new List<Phase> { new Phase(5, 0, true), new Phase(40, 65, true) },
                     appSteps: new List<string> { "Tap RUN", "At ~65 mph the app shows Driving; speed & location update live" }),
-                new Scenario(6, "Speed changes", "Speed varies; stays driving",
-                    new List<Phase> { new Phase(15, 65, true), new Phase(15, 30, true), new Phase(15, 55, true) },
-                    appSteps: new List<string> { "Tap RUN", "Speed rises and falls; app stays in Driving throughout" }),
-                new Scenario(7, "Stop after drive", "Driving → stop → on-duty",
-                    new List<Phase> { new Phase(30, 60, true), new Phase(370, 0, true) },   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible) before Driving→On-Duty
+                new Scenario(5, "Stop after drive", "Driving → stop → on-duty",
+                    new List<Phase> { new Phase(30, 60, true), new Phase(370, 0, true) },   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible)
                     appSteps: new List<string> { "Tap RUN", "Drive, then stay stopped (engine on) ~6 min → app moves Driving → On-Duty" }),
-                new Scenario(8, "BLE disconnect during drive", "Buffer then stored replay",
+                new Scenario(6, "BLE disconnect during drive", "Buffer then stored replay",
                     new List<Phase> { new Phase(60, 60, true) },
                     transport: Transport.Disconnect(15, 20),
                     appSteps: new List<string> { "Tap RUN", "Link drops mid-drive, then reconnects", "App replays buffered 'stored' packets — no miles lost" }),
-                new Scenario(9, "Reconnect after 10 min", "Stored replay after long outage",
-                    new List<Phase> { new Phase(60, 60, true) },
-                    transport: Transport.Disconnect(10, 600),
-                    appSteps: new List<string> { "Tap RUN", "After a long outage and reconnect, app processes a larger stored batch" }),
-                new Scenario(10, "Reconnect after hours", "Large stored replay after very long outage",
-                    new List<Phase> { new Phase(90, 60, true) },
-                    transport: Transport.Disconnect(10, 7200),
-                    appSteps: new List<string> { "Tap RUN", "After a very long outage, app handles a big stored backlog" }),
-                new Scenario(11, "Stored packets later", "Stored backlog processed",
+                new Scenario(7, "Stored packets later", "Stored backlog processed",
                     new List<Phase> { new Phase(20, 50, true) },
                     transport: Transport.StoredBacklog(30),
                     appSteps: new List<string> { "Tap RUN", "App receives a stored backlog up front and processes it" }),
-                new Scenario(12, "Large stored backlog", "Big stored batch, no corruption",
+                new Scenario(8, "Large stored backlog", "Big stored batch, no corruption",
                     new List<Phase> { new Phase(10, 50, true) },
                     transport: Transport.StoredBacklog(300),
                     appSteps: new List<string> { "Tap RUN", "300 stored packets delivered → app stays stable, no corruption" }),
-                new Scenario(13, "Duplicate packets", "Duplicates dropped by app dedup",
+                new Scenario(9, "Duplicate packets", "Duplicates dropped by app dedup",
                     new List<Phase> { new Phase(40, 60, true) },
                     transport: Transport.Duplicate(5),
                     appSteps: new List<string> { "Tap RUN", "Duplicate packets are sent → app de-dupes (no double miles)" }),
-                new Scenario(14, "Out-of-order packets", "App tolerates reordering",
+                new Scenario(10, "Out-of-order packets", "App tolerates reordering",
                     new List<Phase> { new Phase(40, 60, true) },
                     transport: Transport.OutOfOrder(6),
                     appSteps: new List<string> { "Tap RUN", "Packets arrive reordered → app tolerates it without errors" }),
-                new Scenario(15, "Packet parsing failure", "Malformed packet rejected, no crash",
+                new Scenario(11, "Packet parsing failure", "Malformed packet rejected, no crash",
                     new List<Phase> { new Phase(30, 55, true) },
                     transport: Transport.ParseFailure(10),
                     appSteps: new List<string> { "Tap RUN", "A malformed packet is sent → app rejects it and keeps running (no crash)" }),
-                new Scenario(16, "Duty status conflict", "Speed>0 with ignition cycling",
-                    new List<Phase> { new Phase(15, 60, true), new Phase(5, 60, false), new Phase(15, 60, true) },
-                    appSteps: new List<string> { "Tap RUN", "Speed > 0 while ignition cycles off/on → check the app's duty-status handling" }),
-                new Scenario(17, "HOS violation (timing-limited)", "Long drive; HOS clock is wall-clock bound",
-                    new List<Phase> { new Phase(120, 65, true) },
-                    appSteps: new List<string> { "Tap RUN", "Long continuous drive → watch the 11h driving clock count down", "Note: HOS clocks run on real time" }),
-                new Scenario(18, "Cycle exhaustion (timing-limited)", "Very long drive",
-                    new List<Phase> { new Phase(180, 65, true) },
-                    appSteps: new List<string> { "Tap RUN", "Very long drive → cycle (70h) hours accrue", "Real-time bound — runs against the wall clock" }),
-                new Scenario(19, "Cycle reset/recovery", "Long off period after drive",
-                    new List<Phase> { new Phase(30, 60, true), new Phase(60, 0, false) },
-                    appSteps: new List<string> { "Tap RUN", "Drive then a long engine-off period → app shows rest toward a cycle reset" }),
-                new Scenario(20, "Long simulation loop", "Many phases, stable",
-                    BuildScenario20Phases(),
-                    appSteps: new List<string> { "Tap RUN", "Many drive/stop cycles → app stays stable over a long run" }),
-                new Scenario(21, "Unassigned Driving (log out first)",
+                new Scenario(12, "Unassigned Driving (log out first)",
                     "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
                     new List<Phase> { new Phase(5, 0, true), new Phase(300, 60, true) },
                     appSteps: new List<string>
@@ -447,17 +418,6 @@ namespace MatrackSim.Core
                     }),
             };
             return list;
-        }
-
-        private static List<Phase> BuildScenario20Phases()
-        {
-            var phases = new List<Phase>();
-            for (int i = 0; i < 10; i++)
-            {
-                phases.Add(new Phase(10, 65, true));
-                phases.Add(new Phase(6, 0, true));
-            }
-            return phases;
         }
     }
 }

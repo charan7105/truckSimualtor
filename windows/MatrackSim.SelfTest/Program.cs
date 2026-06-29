@@ -72,7 +72,7 @@ namespace MatrackSim.SelfTest
             {
                 bool isStored = s.Transport.TKind == Transport.TransportKind.Disconnect
                              || s.Transport.TKind == Transport.TransportKind.StoredBacklog
-                             || s.Id == 21;
+                             || s.Id == 12;
                 if (!isStored) continue;
                 var sr = ScenarioRunner.StoredReplay(s, SimConfig.Default);
                 int n = sr.Count;
@@ -80,8 +80,8 @@ namespace MatrackSim.SelfTest
                 bool valid = true;
                 foreach (var em in sr) { if (Validate(em) != null) { valid = false; break; } }
                 bool ok = allStored && valid && n > 0;
-                if (s.Id == 11 && n != 30) ok = false;
-                if (s.Id == 12 && n != 300) ok = false;
+                if (s.Id == 7 && n != 30) ok = false;
+                if (s.Id == 8 && n != 300) ok = false;
                 if (!ok) allPass = false;
                 Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + " " + s.Name + ": " + n + " backdated stored packets");
             }
@@ -130,8 +130,7 @@ namespace MatrackSim.SelfTest
         {
             switch (s.Id)
             {
-                case 2:
-                case 19:   // engine off → at least one shutdown (ignition 0) ignition packet
+                case 2:   // engine off → at least one shutdown (ignition 0) ignition packet
                 {
                     bool hasShutdown = em.Any(x =>
                     {
@@ -141,25 +140,23 @@ namespace MatrackSim.SelfTest
                     });
                     return hasShutdown ? null : "expected a shutdown (ignition=0) event";
                 }
-                case 8:
-                case 9:
-                case 10:   // disconnect → stored replay present
+                case 6:   // disconnect → stored replay present (inline Run() output)
                 {
                     int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
                     bool marker = em.Any(x => x.Wire.StartsWith("LAST_STORED_PACKET", StringComparison.Ordinal));
                     return (stored > 0 && marker) ? null : "expected stored replay after reconnect (got " + stored + " stored)";
                 }
-                case 11:
+                case 7:
                 {
                     int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
                     return stored == 30 ? null : "expected 30 stored backlog packets, got " + stored;
                 }
-                case 12:
+                case 8:
                 {
                     int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
                     return stored == 300 ? null : "expected 300 stored backlog packets, got " + stored;
                 }
-                case 13:   // duplicates: some consecutive identical wires
+                case 9:   // duplicates: some consecutive identical wires
                 {
                     bool dup = false;
                     for (int i = 1; i < Math.Max(1, em.Count); i++)
@@ -168,7 +165,7 @@ namespace MatrackSim.SelfTest
                     }
                     return dup ? null : "expected duplicate packets";
                 }
-                case 15:   // parse failure injected + rejected
+                case 11:   // parse failure injected + rejected
                     return em.Any(x => x.ItemKind == Emitted.Kind.Malformed) ? null : "expected an injected malformed packet";
                 default:
                     // every scenario must emit at least one valid live packet

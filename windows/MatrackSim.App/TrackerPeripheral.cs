@@ -689,7 +689,7 @@ namespace MatrackSim.App
         // they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
         public static bool IsStoredReplay(Scenario s)
         {
-            if (s.Id == 21) return true;                                  // Unassigned Driving
+            if (s.Id == 12) return true;                                  // Unassigned Driving (UDP)
             return s.Transport.TKind == Transport.TransportKind.Disconnect
                 || s.Transport.TKind == Transport.TransportKind.StoredBacklog;
         }
