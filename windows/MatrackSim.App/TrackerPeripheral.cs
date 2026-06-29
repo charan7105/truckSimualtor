@@ -1073,6 +1073,30 @@ namespace MatrackSim.App
         {
             try
             {
+                // Windows BLE advertising REQUIRES the adapter to support the peripheral role. Many built-in /
+                // USB adapters are central-only: StartAdvertising() then silently no-ops — nothing is broadcast,
+                // no exception is thrown — which is exactly why a generic scanner (nRF) sees nothing while the app
+                // used to claim "Advertising". Detect and report it honestly up front.
+                var adapter = await BluetoothAdapter.GetDefaultAsync();
+                if (adapter == null)
+                {
+                    Status = "No Bluetooth adapter"; StatusColorValue = StatusColor.Red;
+                    Info("✗ no Bluetooth adapter found — cannot advertise");
+                    return;
+                }
+                if (!adapter.IsLowEnergySupported)
+                {
+                    Status = "BLE unsupported"; StatusColorValue = StatusColor.Red;
+                    Info("✗ this adapter has no Bluetooth LE — cannot advertise");
+                    return;
+                }
+                if (!adapter.IsPeripheralRoleSupported)
+                {
+                    Status = "Adapter can't advertise"; StatusColorValue = StatusColor.Red;
+                    Info("✗ this Bluetooth adapter does NOT support the peripheral (advertising) role — the ELD app and BLE scanners will never see it. Fix: use a peripheral-capable USB BLE dongle, or the ESP32 advertiser.");
+                    return;
+                }
+
                 var serviceUuid = Guid.Parse("7add0001-f286-4c78-adda-520c4ba3500c");
                 var result = await GattServiceProvider.CreateAsync(serviceUuid);
                 if (result.Error != BluetoothError.Success)
@@ -1121,6 +1145,21 @@ namespace MatrackSim.App
 
                 // Advertise. NOTE: Windows broadcasts the machine NAME — there is no per-app local-name API.
                 // The PC must be renamed to start with "ELD-MA" for the ELD app to find it (see header comment).
+                // Only claim "Advertising" once the radio is ACTUALLY broadcasting. The status arrives async;
+                // if it ever lands on anything but Started, the link is not on air and a scanner sees nothing.
+                provider.AdvertisementStatusChanged += (s, e) => PostToUi(() =>
+                {
+                    if (e.Status == GattServiceProviderAdvertisementStatus.Started)
+                    {
+                        Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
+                    }
+                    else
+                    {
+                        Status = $"Not advertising ({e.Status})"; StatusColorValue = StatusColor.Red;
+                        Info($"⚠ advertisement is NOT on air (status: {e.Status}) — a scanner will see nothing");
+                    }
+                });
+
                 provider.StartAdvertising(new GattServiceProviderAdvertisingParameters
                 {
                     IsConnectable = true,
@@ -1128,10 +1167,14 @@ namespace MatrackSim.App
                 });
 
                 EnsureClock();
-                Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
                 Info("Bluetooth on — publishing tracker service");
                 Info($"advertising as \"{AdvertisedName}\" — waiting for the ELD app");
                 Info("Windows advertises the PC NAME — rename this PC to start with \"ELD-MA\" so the ELD app can find it");
+                // Reflect the current status immediately (Started usually arrives via the event above).
+                if (provider.AdvertisementStatus == GattServiceProviderAdvertisementStatus.Started)
+                { Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber; }
+                else
+                { Status = "Starting advertisement…"; StatusColorValue = StatusColor.Amber; }
             }
             catch (Exception ex)
             {
