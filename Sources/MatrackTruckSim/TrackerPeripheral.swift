@@ -30,6 +30,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // Live telemetry (mirrored from EngineState each tick)
     @Published var ignitionOn = false
     @Published var autoDrive = false
+    @Published var autoSignal = true                // AUTO: self-driving signal sweep (full↔weak↔poor), on by default
     @Published var speedMph = 0.0
     @Published var rpm = 0
     @Published var odometerMiles = 25_000.0
@@ -82,6 +83,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private let uiTickSec = 0.2                // smooth sim/UI clock (decoupled from packet cadence)
     private var sinceLastPacket = 0.0
     private var autoSpeedCountdown = 0.0       // AUTO: seconds until the next random target-speed change
+    private var autoSignalCountdown = 0.0      // AUTO signal: seconds until the next random signal level
+    private var autoSignalDipCountdown = Double.random(in: 300...600)   // AUTO signal: seconds until the next out-of-range dip (dead zone)
     private var dropTimer: Timer?             // F1: out-of-range outage timer
     private var nextViolationAtMeters = 0.0   // F3: distance-triggered violation scheduler
     private var violationHoldSec = 0.0        // F3: remaining seconds of the active violation
@@ -219,6 +222,16 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         config.packetLossPct = max(0, 100 - pct)        // reuse the emitNow() loss gate
         if pct <= 0 { if !linkDown { dropLink(seconds: config.rangeOutageSec) } }   // idempotent: a slider drag to 0 arms once
         else if linkDown { resumeLink() }
+    }
+
+    /// AUTO signal = self-driving connection demo: periodically reassign the emulated BLE signal
+    /// strength so the link sweeps full ↔ weak ↔ poor on its own. A manual preset or DROP turns it
+    /// off (a deliberate override), mirroring how a manual speed set ends AUTO cruise.
+    func setAutoSignal(_ on: Bool) {
+        autoSignal = on
+        if on { autoSignalCountdown = 0; autoSignalDipCountdown = Double.random(in: 300...600); ensureClock() }   // reassign a level next tick; schedule first dead-zone dip
+        else { setSignal(100) }                            // switching AUTO off leaves the link at full
+        info("auto signal \(on ? "on" : "off")")
     }
 
     /// EMULATED out-of-range: suppress telemetry for `seconds`. We never stop advertising (the app
@@ -566,6 +579,18 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func step() {
         guard runningScenario == nil else { return }        // scenario playback owns the stream
         let dt = uiTickSec
+        if autoSignal && !linkDown {                        // AUTO: sweep signal strength on its own (skip while out of range)
+            autoSignalCountdown -= dt
+            if autoSignalCountdown <= 0 {
+                autoSignalCountdown = Double.random(in: 3...6)
+                setSignal(Double(Int.random(in: 20...100)))
+            }
+            autoSignalDipCountdown -= dt                     // occasional dead-zone: a real out-of-range dip (tunnel / rural gap)
+            if autoSignalDipCountdown <= 0 {
+                autoSignalDipCountdown = Double.random(in: 300...600)
+                dropLink(seconds: config.rangeOutageSec)
+            }
+        }
         if drivingRoute && route.hasRoute {
             engine.ignitionOn = true
             if autoDrive {                                  // AUTO: vary cruise speed like real driving

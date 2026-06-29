@@ -140,8 +140,11 @@ namespace MatrackSim.App
         private void Signal_Click(object sender, RoutedEventArgs e)
         {
             double pct = double.Parse(Param(sender), CultureInfo.InvariantCulture);
+            Sim.AutoSignal = false;                 // manual preset takes over from AUTO
             Sim.SetSignal(pct);
         }
+
+        private void AutoSignal_Click(object sender, RoutedEventArgs e) => Sim.SetAutoSignal(!Sim.AutoSignal);
 
         private void Drop_Click(object sender, RoutedEventArgs e)
         {
@@ -153,7 +156,7 @@ namespace MatrackSim.App
             // the same provider advertising preserves the identity, so the app times out, drops, and reconnects to
             // the still-live peripheral — the same conditions as the initial connect, which works. See DropLink.
             if (Sim.LinkDown) Sim.ResumeLink();
-            else Sim.DropLink(Sim.Config.RangeOutageSec);
+            else { Sim.AutoSignal = false; Sim.DropLink(Sim.Config.RangeOutageSec); }
         }
 
         private void Dump_Click(object sender, RoutedEventArgs e) =>

@@ -323,7 +323,7 @@
                                     </DockPanel>
                                     <UniformGrid Columns="4" Margin="0,0,0,8">
                                         <ToggleButton Content="FULL" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}" CommandParameter="100" IsChecked="{Binding ActiveSigFull, Mode=OneWay}" Click="Signal_Click" Margin="0,0,6,0" />
-                                        <ToggleButton Content="WEAK" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}" CommandParameter="60" IsChecked="{Binding ActiveSigWeak, Mode=OneWay}" Click="Signal_Click" Margin="0,0,6,0" />
+                                        <ToggleButton Content="AUTO" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}" IsChecked="{Binding ActiveSigAuto, Mode=OneWay}" Click="AutoSignal_Click" Margin="0,0,6,0" />
                                         <ToggleButton Content="POOR" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}" CommandParameter="25" IsChecked="{Binding ActiveSigPoor, Mode=OneWay}" Click="Signal_Click" Margin="0,0,6,0" />
                                         <Button x:Name="DropButton" Click="Drop_Click">
                                             <Button.Style>
@@ -388,12 +388,7 @@
                                     <TextBlock Text="≈500ms reproduces the disconnect · 1s is safe." FontSize="9" Foreground="{StaticResource Dim}" />
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,8,0,8" />
                                     <TextBlock Text="RAW EFFECTS" Style="{StaticResource Sec}" Margin="0,0,0,6" />
-                                    <DockPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Loss" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding PacketLossText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0" Maximum="50" Value="{Binding PacketLossPct, Mode=TwoWay}" />
-                                    </DockPanel>
+                                    <!-- Loss is driven by SIGNAL/AUTO (loss = 100 − signal); the manual knob is redundant. -->
                                     <DockPanel Margin="0,0,0,4">
                                         <TextBlock Text="Dup" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding DuplicateText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"

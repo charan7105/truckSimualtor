@@ -52,7 +52,7 @@ namespace MatrackSim.App
         {
             Raise(nameof(ActiveSpeedStop)); Raise(nameof(ActiveSpeed60)); Raise(nameof(ActiveSpeed90)); Raise(nameof(ActiveSpeed110));
             Raise(nameof(ActiveT1)); Raise(nameof(ActiveT5)); Raise(nameof(ActiveT10)); Raise(nameof(ActiveT25)); Raise(nameof(ActiveT30));
-            Raise(nameof(ActiveSigFull)); Raise(nameof(ActiveSigWeak)); Raise(nameof(ActiveSigPoor));
+            Raise(nameof(ActiveSigFull)); Raise(nameof(ActiveSigAuto)); Raise(nameof(ActiveSigPoor));
         }
 
         /// <summary>Run an action on the UI thread (or inline if already there / no app present).</summary>
@@ -214,7 +214,7 @@ namespace MatrackSim.App
         public bool ActiveT25 => (int)Math.Round(Config.RouteTimeScale) == 25;
         public bool ActiveT30 => (int)Math.Round(Config.RouteTimeScale) == 30;
         public bool ActiveSigFull => !LinkDown && (int)Math.Round(Config.SignalPct) == 100;
-        public bool ActiveSigWeak => !LinkDown && (int)Math.Round(Config.SignalPct) == 60;
+        public bool ActiveSigAuto => AutoSignal;
         public bool ActiveSigPoor => !LinkDown && (int)Math.Round(Config.SignalPct) == 25;
 
         // ---- CONNECTION / SIGNAL (F1) -------------------------------------------------------------

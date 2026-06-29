@@ -150,6 +150,9 @@ namespace MatrackSim.App
         private bool _autoDrive;
         public bool AutoDrive { get => _autoDrive; set => Set(ref _autoDrive, value); }
 
+        private bool _autoSignal = true;
+        public bool AutoSignal { get => _autoSignal; set => Set(ref _autoSignal, value); }
+
         private double _speedMph;
         public double SpeedMph { get => _speedMph; set => Set(ref _speedMph, value); }
 
@@ -252,6 +255,8 @@ namespace MatrackSim.App
         private const double uiTickSec = 0.2;                // smooth sim/UI clock (decoupled from packet cadence)
         private double sinceLastPacket;
         private double autoSpeedCountdown;          // AUTO: seconds until the next random target-speed change
+        private double autoSignalCountdown;         // AUTO SIGNAL: seconds until the next random signal-strength change
+        private double autoSignalDipCountdown = RandRange(300, 600);   // AUTO SIGNAL: seconds until the next out-of-range dip (dead zone)
         private Timer dropTimer;                    // F1: out-of-range outage timer
         private double nextViolationAtMeters;       // F3: distance-triggered violation scheduler
         private double violationHoldSec;            // F3: remaining seconds of the active violation
@@ -427,6 +432,27 @@ namespace MatrackSim.App
         /// "out of range" = going silent so the *app* times out (~75s) → disconnects → auto-reconnects.
         /// </summary>
         private double preDropSignalPct = 100;          // signal level to restore after a transient outage
+
+        /// <summary>
+        /// AUTO SIGNAL: self-driving link quality. When on, Step() periodically reassigns a random signal
+        /// strength so the link sweeps full↔weak↔poor on its own. A manual preset or DROP turns it off.
+        /// </summary>
+        public void SetAutoSignal(bool on)
+        {
+            AutoSignal = on;
+            if (on)
+            {
+                autoSignalCountdown = 0;                                 // pick a fresh auto signal immediately
+                autoSignalDipCountdown = RandRange(300, 600);            // schedule the first dead-zone dip
+                EnsureClock();
+            }
+            else
+            {
+                SetSignal(100);                                         // settle back to full when auto is turned off
+            }
+            Info(on ? "auto signal on" : "auto signal off");
+        }
+
         public void SetSignal(double pct)
         {
             Config.SignalPct = pct;
@@ -907,6 +933,21 @@ namespace MatrackSim.App
         {
             if (runningScenario != null) return;        // scenario playback owns the stream
             double dt = uiTickSec;
+            if (AutoSignal && !LinkDown)                 // AUTO SIGNAL: sweep link quality like real driving
+            {
+                autoSignalCountdown -= dt;
+                if (autoSignalCountdown <= 0)
+                {
+                    autoSignalCountdown = RandRange(3, 6);
+                    SetSignal(RandInt(20, 100));
+                }
+                autoSignalDipCountdown -= dt;                 // occasional dead-zone: a real out-of-range dip (tunnel / rural gap)
+                if (autoSignalDipCountdown <= 0)
+                {
+                    autoSignalDipCountdown = RandRange(300, 600);
+                    DropLink(Config.RangeOutageSec);
+                }
+            }
             if (DrivingRoute && Route.HasRoute)
             {
                 engine.IgnitionOn = true;

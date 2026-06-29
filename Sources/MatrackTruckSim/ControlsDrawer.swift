@@ -327,18 +327,18 @@ struct NetworkPanel: View {
                         }
                         .buttonStyle(.plain).hoverGlow()
                         .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
-                            Text("DROP forces an immediate disconnect — the BLE link is torn down so the app drops right away (a real disconnect), then re-advertises after the Auto-return timer, or press BACK, so the app reconnects. FULL / WEAK / POOR set link strength (lower = more dropped packets, still connected).")
+                            Text("AUTO continuously sweeps the signal on its own (full ↔ weak ↔ poor) and every few minutes drops fully out of range to mimic a dead zone (tunnel / rural gap) — the app disconnects and auto-reconnects, just like a real drive. It's the default. FULL / POOR set link strength manually (lower = more dropped packets, still connected). DROP forces an immediate disconnect now, then re-advertises after the Auto-return timer, or press BACK, so the app reconnects.")
                                 .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
                                 .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
                         }
                     }
                     HStack(spacing: 6) {
                         signalPreset("FULL", 100)
-                        signalPreset("WEAK", 60)
+                        NeonButton(title: "AUTO", tint: Theme.ice, filled: sim.autoSignal) { sim.setAutoSignal(!sim.autoSignal) }
                         signalPreset("POOR", 25)
                         NeonButton(title: sim.linkDown ? "BACK" : "DROP", icon: sim.linkDown ? "wifi" : "wifi.slash",
                                    tint: Theme.red, filled: sim.linkDown) {
-                            if sim.linkDown { sim.resumeLink() } else { sim.forceDisconnect(seconds: sim.config.rangeOutageSec) }
+                            if sim.linkDown { sim.resumeLink() } else { sim.autoSignal = false; sim.forceDisconnect(seconds: sim.config.rangeOutageSec) }
                         }
                     }
                     if sim.linkDown {
@@ -370,9 +370,8 @@ struct NetworkPanel: View {
 
                     Divider().overlay(Theme.stroke)
 
-                    // Raw transport effects (advanced)
+                    // Raw transport effects (advanced). Loss isn't a separate knob — it's driven by SIGNAL / AUTO (loss = 100 − signal).
                     Text("RAW EFFECTS").sectionLabel()
-                    cfgSlider("Loss", \.packetLossPct, 0...50, "%", 0)
                     cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
                     cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
                     cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
@@ -406,8 +405,8 @@ struct NetworkPanel: View {
     private func signalPreset(_ title: String, _ pct: Double) -> some View {
         // Uniform neutral style so the row reads as one control; only the active level is highlighted.
         // (The colour meaning lives in the FULL/WEAK/POOR state label above.)
-        let active = !sim.linkDown && Int(sim.config.signalPct.rounded()) == Int(pct)
-        return NeonButton(title: title, tint: Theme.ice, filled: active) { sim.setSignal(pct) }
+        let active = !sim.linkDown && !sim.autoSignal && Int(sim.config.signalPct.rounded()) == Int(pct)
+        return NeonButton(title: title, tint: Theme.ice, filled: active) { sim.autoSignal = false; sim.setSignal(pct) }
     }
 
     private var countSlider: some View {
