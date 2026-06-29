@@ -9,6 +9,9 @@ import SwiftUI
 /// Power-on state machine for the cinematic ignition sequence.
 enum ClusterPhase { case cold, igniting, sweep, settle, live }
 
+/// Who the dashboard scenario banner is waiting on, right now.
+enum ScenarioActor { case working, yourTurn, done }
+
 struct LogLine: Identifiable {
     enum Kind { case out, inbound, info, drop }
     let id = UUID()
@@ -410,6 +413,27 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pendingStoredCadence: Double = 1.0
     @Published var runningScenario: String?
 
+    // Live dashboard banner for a running scenario — so the user always sees what's happening,
+    // even when the gauges are idle (stored-replay scenarios re-send a past drive, so speed stays 0).
+    @Published var scenarioStatus: String?            // banner text; nil = no banner
+    @Published var scenarioActor: ScenarioActor = .working
+    @Published var scenarioProgress: Double?          // 0…1, or nil for indeterminate (spinner)
+    private var scenarioTotal = 0
+    private var bannerClearTimer: Timer?
+
+    private func banner(_ text: String, _ actor: ScenarioActor = .working, _ progress: Double? = nil) {
+        bannerClearTimer?.invalidate()
+        scenarioStatus = text; scenarioActor = actor; scenarioProgress = progress
+    }
+    private func bannerDone(_ text: String) {
+        banner(text, .done, 1)
+        bannerClearTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: false) { [weak self] _ in self?.clearBanner() }
+    }
+    private func clearBanner() {
+        bannerClearTimer?.invalidate()
+        scenarioStatus = nil; scenarioActor = .working; scenarioProgress = nil; scenarioTotal = 0
+    }
+
     func runScenario(_ s: Scenario) {
         autoDrive = false; drivingRoute = false; dayDriving = false   // step() pauses normal emission while a scenario runs
         runningScenario = s.name
@@ -423,6 +447,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             return
         }
         scenarioQueue = ScenarioRunner.run(s, config: config)
+        scenarioTotal = scenarioQueue.count
+        banner("Streaming “\(s.name)” to the app…", .working, 0)
         info("▶ scenario '\(s.name)' — \(scenarioQueue.count) packets (effects baked in)")
         scenarioTimer?.invalidate()
         scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, config.packetIntervalSec), repeats: true) { [weak self] _ in
@@ -444,11 +470,12 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard !stored.isEmpty else { return }
         pendingStored = stored
         pendingStoredCadence = cadenceSec
+        banner("Recorded \(stored.count) packets — dropping the link so the app reconnects…", .working, nil)
         forceDisconnect(seconds: outageSec)
     }
 
     func stopScenario() {
-        scenarioTimer?.invalidate(); scenarioQueue.removeAll(); runningScenario = nil; info("scenario stopped")
+        scenarioTimer?.invalidate(); scenarioQueue.removeAll(); runningScenario = nil; clearBanner(); info("scenario stopped")
     }
 
     /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
@@ -466,8 +493,13 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     private func popScenario() {
-        guard !scenarioQueue.isEmpty else { scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil; mirror(); info("✓ scenario complete"); return }
+        guard !scenarioQueue.isEmpty else {
+            scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil
+            bannerDone("Done — check the app.")
+            mirror(); info("✓ scenario complete"); return
+        }
         let em = scenarioQueue.removeFirst()
+        if scenarioTotal > 0 { scenarioProgress = min(1, 1 - Double(scenarioQueue.count) / Double(scenarioTotal)) }
         switch em.kind {
         case .raw:
             sendRaw(em.wire)
@@ -671,7 +703,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 q.append(Emitted(wire: "SAVED PACKET COUNT:\(n)", kind: .raw))
                 pendingStored = []
                 scenarioQueue = q
+                scenarioTotal = q.count
                 runningScenario = "Stored replay (\(n))"
+                banner("Reconnected — sending the recorded trip to the app…", .working, 0)
                 scenarioTimer?.invalidate()
                 scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, pendingStoredCadence), repeats: true) { [weak self] _ in self?.popScenario() }
                 info("▶ app reconnected & sent readstr → dumping \(n) stored packets (replay/UDP fires now)")

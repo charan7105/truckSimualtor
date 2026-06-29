@@ -82,8 +82,51 @@ struct VINChip: View {
 struct NavStrip: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
-        let active = sim.hasRoute
+        if let status = sim.scenarioStatus {
+            scenarioBanner(status)
+                .padding(.horizontal, 18).padding(.vertical, 11)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel.opacity(0.92)))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(bannerTint.opacity(0.5), lineWidth: 1))
+                .animation(.easeInOut(duration: 0.25), value: sim.scenarioStatus)
+        } else { routeStrip }
+    }
+
+    private var bannerTint: Color {
+        switch sim.scenarioActor { case .working: return Theme.ice; case .yourTurn: return Theme.amber; case .done: return Theme.green }
+    }
+
+    @ViewBuilder private func scenarioBanner(_ status: String) -> some View {
+        let label: String = { switch sim.scenarioActor { case .working: return "SIMULATOR WORKING"; case .yourTurn: return "YOUR TURN"; case .done: return "DONE" } }()
+        let icon: String = { switch sim.scenarioActor { case .working: return "antenna.radiowaves.left.and.right"; case .yourTurn: return "hand.tap.fill"; case .done: return "checkmark.circle.fill" } }()
         HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(bannerTint.opacity(0.16)).frame(width: 44, height: 44)
+                if sim.scenarioActor == .working && sim.scenarioProgress == nil {
+                    ProgressView().controlSize(.small).tint(bannerTint)
+                } else {
+                    Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundStyle(bannerTint)
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label).font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1.3).foregroundStyle(bannerTint)
+                Text(status).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Theme.text)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            if let p = sim.scenarioProgress {
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text("\(Int(p * 100))%").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(bannerTint)
+                    Capsule().fill(Theme.stroke).frame(width: 92, height: 5)
+                        .overlay(alignment: .leading) { Capsule().fill(bannerTint).frame(width: 92 * p, height: 5) }
+                }
+            }
+        }
+    }
+
+    private var routeStrip: some View {
+        let active = sim.hasRoute
+        return HStack(spacing: 16) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.ice.opacity(0.14)).frame(width: 44, height: 44)
                 Image(systemName: active ? sim.nextTurn.icon : "location.slash")
