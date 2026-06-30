@@ -94,12 +94,17 @@
             </Ellipse>
         </Grid>
 
-        <!-- ===== Cluster face, laid out at the Mac design size (16:10-ish laptop aspect) and scaled to fit ===== -->
-        <Viewbox x:Name="Stage" Stretch="Uniform" Opacity="0">
-            <Viewbox.RenderTransform>
+        <!-- ===== Cluster face. FLUID like the Mac: the cockpit is laid out at the live window WIDTH and
+             scaled to FIT the height (Relayout() in code-behind), so the centre lane fills the screen and
+             the side bars use the full width instead of letterboxing on wide monitors. ===== -->
+        <Grid x:Name="Stage" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid.RenderTransform>
                 <TranslateTransform x:Name="StageT" Y="22" />
-            </Viewbox.RenderTransform>
-            <Grid Width="1800" Height="1120" Margin="20">
+            </Grid.RenderTransform>
+            <Grid x:Name="Cockpit" Height="1120">
+                <Grid.LayoutTransform>
+                    <ScaleTransform x:Name="StageScale" ScaleX="1" ScaleY="1" />
+                </Grid.LayoutTransform>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -626,13 +631,13 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,18,0">
-                                            <ctl:FuelCylinder Value="{Binding FuelPct}" Tint="{Binding FuelTintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
+                                            <ctl:FuelCylinder Value="{Binding FuelPct}" Tint="{Binding FuelTintColor}" Width="44" Height="88" HorizontalAlignment="Center" />
                                             <TextBlock Text="{Binding FuelPctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding FuelBrush}"
                                                        HorizontalAlignment="Center" Margin="0,7,0,0" />
                                             <TextBlock Text="F1" Style="{StaticResource Sec}" FontSize="9" HorizontalAlignment="Center" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="0,0,18,0">
-                                            <ctl:FuelCylinder Value="{Binding Fuel2Pct}" Tint="{Binding Fuel2TintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
+                                            <ctl:FuelCylinder Value="{Binding Fuel2Pct}" Tint="{Binding Fuel2TintColor}" Width="44" Height="88" HorizontalAlignment="Center" />
                                             <TextBlock Text="{Binding Fuel2PctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Fuel2Brush}"
                                                        HorizontalAlignment="Center" Margin="0,7,0,0" />
                                             <TextBlock Text="F2" Style="{StaticResource Sec}" FontSize="9" HorizontalAlignment="Center" />
@@ -856,7 +861,7 @@
                     </StackPanel>
                 </DockPanel>
             </Grid>
-        </Viewbox>
+        </Grid>
 
         <!-- ================= IGNITION OVERLAY ================= -->
         <Grid x:Name="Ignition" Background="#FF08090B" Visibility="{Binding IgnitionVisible, Converter={StaticResource BoolVis}}"

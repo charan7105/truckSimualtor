@@ -33,8 +33,9 @@ namespace MatrackSim.App
             SourceInitialized += (s, e) => EnableDarkTitleBar();
             // A maximized WPF window overhangs the monitor by ~7px on every edge, clipping content flush to
             // the border (the footer DTC/REPLAY buttons). Inset the cockpit by that much only when maximized.
-            StateChanged += (s, e) => ApplyMaximizeInset();
-            Loaded += (s, e) => ApplyMaximizeInset();
+            StateChanged += (s, e) => { ApplyMaximizeInset(); Relayout(); };
+            Loaded += (s, e) => { ApplyMaximizeInset(); Relayout(); };
+            SizeChanged += (s, e) => Relayout();
 
             // `demo` arg: skip the ignition sweep, load a random route and drive it — mirrors ContentView.onAppear.
             if (Environment.GetCommandLineArgs().Length > 1 && Environment.GetCommandLineArgs()[1] == "demo")
@@ -73,6 +74,30 @@ namespace MatrackSim.App
             RootGrid.Margin = WindowState == WindowState.Maximized
                 ? new Thickness(SystemParameters.WindowResizeBorderThickness.Left + 1)
                 : new Thickness(0);
+        }
+
+        // FLUID layout (mirrors the Mac): lay the cockpit out at the live window WIDTH and scale to FIT the
+        // height, so the centre lane fills the screen and the side bars use the whole width — no letterbox on
+        // wide monitors. Below a comfortable minimum width we letterbox instead of crushing the columns.
+        private const double DesignHeight = 1120;
+        private const double MinCockpitWidth = 1480;   // 392 + 392 side bars + gutters + a comfortable centre
+        private void Relayout()
+        {
+            if (Cockpit == null || StageScale == null) return;
+            double inset = 24;
+            double availW = RootGrid.ActualWidth - inset * 2;
+            double availH = RootGrid.ActualHeight - inset * 2;
+            if (availW <= 0 || availH <= 0) return;
+
+            double scale = availH / DesignHeight;            // fit the height (grow on tall screens, shrink on short)
+            double w = availW / scale;                       // width that, once scaled, exactly fills availW
+            if (w < MinCockpitWidth)                         // too narrow → cap width and shrink further (letterbox top/bottom)
+            {
+                w = MinCockpitWidth;
+                scale = System.Math.Min(availH / DesignHeight, availW / MinCockpitWidth);
+            }
+            Cockpit.Width = w;
+            StageScale.ScaleX = StageScale.ScaleY = scale;
         }
 
         private void Log_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)

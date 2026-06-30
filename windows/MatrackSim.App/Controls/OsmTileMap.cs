@@ -34,8 +34,8 @@ namespace MatrackSim.App.Controls
         private bool _have;
         private static readonly Color RouteBlue = (Color)ColorConverter.ConvertFromString("#2D7DF6"); // Google/Apple route blue
         private static readonly Color Red = (Color)ColorConverter.ConvertFromString("#E2122B");
-        // Light loading backdrop matching Voyager's land tone (shown only until tiles arrive).
-        private static readonly Brush Bg = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EAE7E1"));
+        // Dark loading backdrop matching the CARTO dark tiles (shown only until tiles arrive).
+        private static readonly Brush Bg = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0C0E13"));
 
         public OsmTileMap()
         {
@@ -165,7 +165,7 @@ namespace MatrackSim.App.Controls
         private async System.Threading.Tasks.Task FetchTile(int z, int x, int y, string key)
         {
             char sub = "abc"[(x + y) % 3];
-            string url = $"https://{sub}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+            string url = $"https://{sub}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";   // dark tiles → match the Mac dark map
             try
             {
                 byte[] bytes = await Http.GetByteArrayAsync(url);
