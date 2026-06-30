@@ -69,7 +69,9 @@ namespace MatrackSim.Core
             OdometerMiles += milesThisTick;
             EngineHours += dt / 3600.0;
             Rpm = SpeedMph > 0 ? IdleRpmConfig + (int)(SpeedMph * RpmPerMphConfig) : IdleRpmConfig;
-            FuelLevelPct = System.Math.Max(0, FuelLevelPct - milesThisTick * FuelBurnPctPerMile);
+            // Both tanks drain with distance (dual-tank crossfeed); tank 2 a touch slower so they don't read identical.
+            FuelLevelPct  = System.Math.Max(0, FuelLevelPct  - milesThisTick * FuelBurnPctPerMile);
+            FuelLevel2Pct = System.Math.Max(0, FuelLevel2Pct - milesThisTick * FuelBurnPctPerMile * 0.85);
         }
     }
 }

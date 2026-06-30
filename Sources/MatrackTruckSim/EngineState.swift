@@ -52,6 +52,8 @@ final class EngineState {
         odometerMiles += milesThisTick
         engineHours += dt / 3600.0
         rpm = speedMph > 0 ? idleRpmConfig + Int(speedMph * rpmPerMphConfig) : idleRpmConfig
-        fuelLevelPct = max(0, fuelLevelPct - milesThisTick * fuelBurnPctPerMile)
+        // Both tanks drain with distance (dual-tank crossfeed); tank 2 a touch slower so they don't read identical.
+        fuelLevelPct  = max(0, fuelLevelPct  - milesThisTick * fuelBurnPctPerMile)
+        fuelLevel2Pct = max(0, fuelLevel2Pct - milesThisTick * fuelBurnPctPerMile * 0.85)
     }
 }
