@@ -29,6 +29,12 @@ namespace MatrackSim.App
             DataContext = new TrackerPeripheral();
             Sim.Log.CollectionChanged += Log_CollectionChanged;
 
+            // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
+            // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
+            SimBridge.Shared.Position = () => (Sim.CurrentLat, Sim.CurrentLon, Sim.HeadingDeg, Sim.SpeedMph,
+                string.IsNullOrEmpty(Sim.RouteFrom) ? "Free drive" : $"{Sim.RouteFrom} → {Sim.RouteTo}");
+            SimBridge.Shared.Start();
+
             // Dark, Mac-like title bar instead of the default white Windows chrome.
             SourceInitialized += (s, e) => EnableDarkTitleBar();
             // A maximized WPF window overhangs the monitor by ~7px on every edge, clipping content flush to

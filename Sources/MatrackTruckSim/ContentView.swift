@@ -11,6 +11,7 @@ struct ContentView: View {
     private let designSize = CGSize(width: 1800, height: 1120)
     @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
     @State private var showScenario = false // scenarios are a testing tool → tucked behind a footer button, like DTC
+    @ObservedObject private var bridge = SimBridge.shared   // LAN link the Fuel App follows
 
     var body: some View {
         GeometryReader { geo in
@@ -36,6 +37,13 @@ struct ContentView: View {
             renderer.scale = 2
             if let icon = renderer.nsImage { NSApp.applicationIconImage = icon }
             sim.startBLE()
+            // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
+            // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
+            SimBridge.shared.position = {
+                (sim.currentLat, sim.currentLon, sim.headingDeg, sim.speedMph,
+                 sim.routeFrom.isEmpty ? "Free drive" : "\(sim.routeFrom) → \(sim.routeTo)")
+            }
+            SimBridge.shared.start()
             if ProcessInfo.processInfo.arguments.contains("dash") {
                 sim.skipStartup()                    // jump straight to the live dashboard (static, for screenshots)
             }
@@ -169,6 +177,18 @@ struct ContentView: View {
             Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 12)).foregroundStyle(sim.statusColor)
             Text("Advertising as ELD-MA · \(sim.streaming ? "streaming" : "waiting for ELD app")")
                 .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim).lineLimit(1)
+            if bridge.running {
+                HStack(spacing: 5) {
+                    Image(systemName: "fuelpump.fill").font(.system(size: 10)).foregroundStyle(Theme.green)
+                    Text("FUEL LINK \(bridge.linkIP):\(String(bridge.port))")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.green)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 9).padding(.vertical, 3)
+                .background(Capsule().fill(Theme.green.opacity(0.12)))
+                .overlay(Capsule().stroke(Theme.green.opacity(0.4), lineWidth: 1))
+                .help("On the phone's Fuel App → Link to sim → enter this address. Phone + this computer must share WiFi (or the phone's hotspot).")
+            }
             Spacer()
             Button { showScenario.toggle() } label: {
                 HStack(spacing: 6) {

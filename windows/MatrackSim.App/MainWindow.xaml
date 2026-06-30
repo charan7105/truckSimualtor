@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ctl="clr-namespace:MatrackSim.App.Controls"
+        xmlns:app="clr-namespace:MatrackSim.App"
         Title="Matrack Truck Sim" Height="1010" Width="1500"
         MinHeight="680" MinWidth="1000"
         WindowStartupLocation="CenterScreen" WindowState="Maximized"
@@ -771,6 +772,12 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <TextBlock Text="{Binding FooterStatusText}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                        <!-- Fuel-app link address (phone's Fuel App → Link to sim → enter this) -->
+                        <Border Margin="14,0,0,0" Padding="9,3" CornerRadius="11" Background="#1F32D74B" BorderBrush="#6632D74B" BorderThickness="1"
+                                Visibility="{Binding Source={x:Static app:SimBridge.Shared}, Path=Running, Converter={StaticResource BoolVis}}">
+                            <TextBlock Text="{Binding Source={x:Static app:SimBridge.Shared}, Path=LinkText}" FontFamily="{StaticResource Mono}"
+                                       FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Green}" VerticalAlignment="Center" />
+                        </Border>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <!-- SCENARIO footer button + popup (mirrors Mac: scenarios are a testing tool tucked behind a footer button) -->
