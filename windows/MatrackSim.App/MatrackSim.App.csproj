@@ -12,6 +12,9 @@
     <AssemblyName>MatrackSim</AssemblyName>
     <!-- Truck-wheel app icon (matches the macOS HaulLogo) — used for the exe, taskbar and window title bar. -->
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- Per-Monitor-V2 DPI awareness so the UI renders crisp at native resolution on high-DPI / 4K screens
+         instead of being bitmap-stretched (the soft, low-res "720p" look that makes everything read cheap). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MatrackSim.Core/MatrackSim.Core.csproj" />

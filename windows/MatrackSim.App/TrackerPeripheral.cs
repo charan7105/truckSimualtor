@@ -93,13 +93,15 @@ namespace MatrackSim.App
             b.Freeze();
             return b;
         }
-        public static readonly System.Windows.Media.Brush Text  = Make("#FFE8EDF4");
-        public static readonly System.Windows.Media.Brush Dim   = Make("#FF8A93A6");
-        public static readonly System.Windows.Media.Brush Ice   = Make("#FF5AC8FA");
-        public static readonly System.Windows.Media.Brush Blue  = Make("#FF4A8BFF");
-        public static readonly System.Windows.Media.Brush Green = Make("#FF34C759");
-        public static readonly System.Windows.Media.Brush Amber = Make("#FFFFB020");
-        public static readonly System.Windows.Media.Brush Red   = Make("#FFFF3B30");
+        // Exact mirror of App.xaml / Theme.swift (these previously drifted to iOS system colours,
+        // making the packet log + status read a different palette than the rest of the UI).
+        public static readonly System.Windows.Media.Brush Text  = Make("#FFF4F6FA");
+        public static readonly System.Windows.Media.Brush Dim   = Make("#FF868E9C");
+        public static readonly System.Windows.Media.Brush Ice   = Make("#FF6FD3FF");
+        public static readonly System.Windows.Media.Brush Blue  = Make("#FF3E7BFA");
+        public static readonly System.Windows.Media.Brush Green = Make("#FF32D74B");
+        public static readonly System.Windows.Media.Brush Amber = Make("#FFF5A623");
+        public static readonly System.Windows.Media.Brush Red   = Make("#FFE2122B");
     }
 
     public sealed partial class TrackerPeripheral : INotifyPropertyChanged
