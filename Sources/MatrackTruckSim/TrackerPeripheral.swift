@@ -85,6 +85,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var pending: [Data] = []
     private var lastIgnitionSent: Bool?
     private var heldPacket: String?            // for out-of-order injection
+    private var lastDataPayload: String?       // F1: last live packet — re-emitted if the app NAKs ($ERR)
+    private var awaitingAck = false            // F1: between a live packet and its $ACK (only when ackGatedCadence)
+    private var awaitingAckSince: Date?
     private var lastWatchdog = Date()          // app sends $wdg every ~20s; a real tracker stops streaming if it stops
     private let bootOdometerMiles = SimConfig.default.startOdometerMiles   // for trip distance
     private let uiTickSec = 0.2                // smooth sim/UI clock (decoupled from packet cadence)
@@ -583,6 +586,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func emitNow(_ payload: String) {
         // Weak signal adds LATENCY, never drops: real BLE retransmits at the link layer, so the app gets
         // every packet — just later (and jittered). Silent packet loss is not a real BLE failure mode.
+        lastDataPayload = payload                                   // F1: remember it in case the app NAKs
+        if config.ackGatedCadence { awaitingAck = true; awaitingAckSince = Date() }
         push(LogLine(time: stamp(), text: payload, kind: .out))
         let chunks = MTPacket.frame(payload)
         let send = { [weak self] in chunks.forEach { self?.queue($0) } }
@@ -667,7 +672,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         mirror()
 
         sinceLastPacket += dt
-        if streaming && !linkDown && sinceLastPacket >= config.packetIntervalSec {   // linkDown = out of range → silent
+        // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
+        // (a lost ACK proceeds after 3 intervals), so the stream is robust if the app misses one.
+        let ackReady = !config.ackGatedCadence || !awaitingAck
+            || (awaitingAckSince.map { Date().timeIntervalSince($0) > config.packetIntervalSec * 3 } ?? true)
+        if streaming && !linkDown && ackReady && sinceLastPacket >= config.packetIntervalSec {   // linkDown = out of range → silent
             sinceLastPacket = 0
             if lastIgnitionSent != engine.ignitionOn { sendReliable(MTPacket.ignition(engine, on: engine.ignitionOn)); lastIgnitionSent = engine.ignitionOn }
             sendPacket(MTPacket.livePosition(engine))
@@ -730,6 +739,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         else if c.hasPrefix("readdtc") { sendReliable(MTPacket.dtc(device.dtcCodes, ignition: engine.ignitionOn ? 1 : 0, rpm: engine.rpm)) }
         else if c.hasPrefix("clrdtc") { device.dtcCodes = []; faults = [] }
         else if c.hasPrefix("stopdata") { sendRaw("ACK,STOP") }
+        else if c.hasPrefix("$ack") || c.hasPrefix("ack") { awaitingAck = false }   // F1: app confirmed the last frame (mirrors real $ACK flow control)
+        else if c.hasPrefix("$err") || c.hasPrefix("err") {                          // F1: app rejected a frame → retransmit, like real firmware
+            awaitingAck = false
+            if let p = lastDataPayload { push(LogLine(time: stamp(), text: "\(p)  [retransmit ← $ERR]", kind: .out)); emitNow(p) }
+        }
         else if c.hasPrefix("$wdg") || c.hasPrefix("wdg") { lastWatchdog = Date() }   // keepalive: consume like a real tracker (no reply)
     }
 
@@ -767,6 +781,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
+        awaitingAck = false; awaitingAckSince = nil                                    // F1: clear ack-gate so reconnect streams cleanly
         if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
         dropTimer?.invalidate(); dropTimer = nil; linkDown = false; dropEndsAt = nil   // out-of-range ends when the link actually drops → reconnect resumes streaming
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber

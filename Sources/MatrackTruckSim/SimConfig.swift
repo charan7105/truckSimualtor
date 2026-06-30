@@ -43,9 +43,14 @@ struct SimConfig: Codable, Equatable {
     var outOfOrderPct: Double = 0
     /// Extra random delay added before sending each packet (ms).
     var extraDelayMs: Double = 0
-    /// Emulated BLE signal strength 0–100 (100 = full). Maps to packetLossPct = 100 − signalPct;
-    /// 0 = out of range. (macOS has no TX-power API, so "weak signal" is emulated via loss + drop.)
+    /// Emulated BLE signal strength 0–100 (100 = full). Weak signal is modeled as added LATENCY
+    /// (extraDelayMs), NOT packet loss — real BLE retransmits at the link layer. 0 = out of range.
+    /// (macOS/Windows expose no TX-power API, so true RSSI can't be lowered; latency emulates the link.)
     var signalPct: Double = 100
+    /// F1 flow control: when true, the live stream waits for the app's $ACK before sending the next
+    /// packet (true ACK-gated cadence); when false (default) it streams on packetIntervalSec. Off by
+    /// default because real-tracker ACK gating is unconfirmed — this lets devs exercise both modes.
+    var ackGatedCadence: Bool = false
 
     // MARK: Disconnect / reconnect / stored backlog
     /// When a disconnect scenario fires, how long to stay disconnected (sim seconds).

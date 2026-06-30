@@ -80,7 +80,8 @@ enum MTPacket {
 
     /// Split a payload into the app's BLE chunk frames.
     /// Each frame = "$" + <total digit> + <current digit> + <1 reserved char> + <payload slice>;
-    /// the assembled payload ends with "$$"; total/current are single decimal digits (≤9 chunks).
+    /// the assembled payload ends with "$$"; total/current are single HEX digits — the iOS/Android
+    /// parsers both read them with radix 16, so we emit hex to match byte-exactly (≤9 chunks here).
     static func frame(_ payload: String) -> [Data] {
         let body = Array(payload + "$$")
         let size = max(16, Int((Double(body.count) / 9.0).rounded(.up)))
@@ -89,7 +90,8 @@ enum MTPacket {
         }
         let total = slices.count
         return slices.enumerated().map { (i, slice) in
-            Data(("$\(total)\(i)0" + String(slice)).utf8)   // reserved char = '0' (app ignores index 3)
+            // reserved char = '0' (app ignores index 3); hex digits match the apps' radix-16 parse
+            Data(("$\(String(total, radix: 16))\(String(i, radix: 16))0" + String(slice)).utf8)
         }
     }
 }
