@@ -46,8 +46,8 @@ namespace MatrackSim.Core
         public int HeadingDeg = 103;
 
         // Extended telemetry (full LP field set)
-        public double FuelLevelPct = 75.5;
-        public double FuelLevel2Pct = 60.0;
+        public double FuelLevelPct = 30.0;
+        public double FuelLevel2Pct = 24.0;
         public int Satellites = 11;
         public bool EcmActive = true;
 

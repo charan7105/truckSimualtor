@@ -105,6 +105,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         applyConfigToEngine()
         vin = device.vin
         firmware = "\(device.mcuFW) · BLE \(device.bleFW)"
+        // Fuel-app link: broadcast the live position on the LAN (the Fuel App's "Link to sim" reads it).
+        // Started here — not in a view's onAppear — so it runs at launch regardless of window rendering.
+        SimBridge.shared.position = { [weak self] in
+            guard let self else { return (0, 0, 0, 0, "") }
+            return (self.currentLat, self.currentLon, self.headingDeg, self.speedMph,
+                    self.routeFrom.isEmpty ? "Free drive" : "\(self.routeFrom) → \(self.routeTo)")
+        }
+        SimBridge.shared.start()
     }
 
     func startBLE() {

@@ -32,8 +32,8 @@ final class EngineState {
     var headingDeg = 103
 
     // Extended telemetry (full LP field set)
-    var fuelLevelPct = 75.5
-    var fuelLevel2Pct = 60.0
+    var fuelLevelPct = 30.0
+    var fuelLevel2Pct = 24.0
     var satellites = 11
     var ecmActive = true
 

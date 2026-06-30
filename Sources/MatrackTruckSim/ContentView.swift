@@ -37,13 +37,6 @@ struct ContentView: View {
             renderer.scale = 2
             if let icon = renderer.nsImage { NSApp.applicationIconImage = icon }
             sim.startBLE()
-            // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
-            // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
-            SimBridge.shared.position = {
-                (sim.currentLat, sim.currentLon, sim.headingDeg, sim.speedMph,
-                 sim.routeFrom.isEmpty ? "Free drive" : "\(sim.routeFrom) → \(sim.routeTo)")
-            }
-            SimBridge.shared.start()
             if ProcessInfo.processInfo.arguments.contains("dash") {
                 sim.skipStartup()                    // jump straight to the live dashboard (static, for screenshots)
             }

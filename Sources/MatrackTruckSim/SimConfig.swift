@@ -33,9 +33,9 @@ struct SimConfig: Codable, Equatable {
     // MARK: Starting telemetry
     var startOdometerMiles: Double = 25_000
     var startEngineHours: Double = 4_352.5
-    var startFuelPct: Double = 78
+    var startFuelPct: Double = 30                 // start low so a trip reaches the low-fuel warning (<20%)
     /// %/mile fuel burn while moving.
-    var fuelBurnPctPerMile: Double = 0.02
+    var fuelBurnPctPerMile: Double = 0.05         // visible drain — most trips dip into the red
 
     // MARK: Network / transport effects (0–100 = percent)
     var packetLossPct: Double = 0
