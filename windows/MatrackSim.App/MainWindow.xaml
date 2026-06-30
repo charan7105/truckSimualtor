@@ -41,7 +41,7 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="wash" Property="Opacity" Value="0.16" />
+                                <Setter TargetName="wash" Property="Opacity" Value="0.14" />
                                 <Setter TargetName="bd" Property="Background" Value="Transparent" />
                                 <Setter TargetName="bd" Property="BorderBrush" Value="Transparent" />
                                 <Setter TargetName="line" Property="Opacity" Value="0.6" />
@@ -99,7 +99,7 @@
             <Viewbox.RenderTransform>
                 <TranslateTransform x:Name="StageT" Y="22" />
             </Viewbox.RenderTransform>
-            <Grid Width="1560" Height="1120" Margin="20">
+            <Grid Width="1800" Height="1120" Margin="20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -133,7 +133,7 @@
                         </Border>
                         <!-- VIN chip (editable; border lights ice when focused) -->
                         <Border CornerRadius="14" Background="{StaticResource PanelGlass}"
-                                BorderThickness="1" Padding="12,6" Margin="0,0,10,0">
+                                BorderThickness="1" Padding="12,8" Margin="0,0,10,0">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
@@ -145,12 +145,17 @@
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="#" Foreground="{StaticResource Dim}" FontFamily="{StaticResource Mono}" FontSize="11"
+                                           FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,7,0" />
                                 <TextBox Text="{Binding Vin, UpdateSourceTrigger=PropertyChanged}" Width="180"
                                          Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}"
                                          FontFamily="{StaticResource Mono}" FontSize="13" FontWeight="Bold"
                                          VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
                                 <TextBlock Text="{Binding VinBadge}" Foreground="{Binding VinBadgeBrush}" FontSize="8"
                                            FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                <!-- pencil affordance (Mac VINChip) -->
+                                <TextBlock Text="&#xE70F;" FontFamily="{StaticResource Fluent}" FontSize="10"
+                                           Foreground="{StaticResource Dim}" VerticalAlignment="Center" Margin="7,0,0,0" />
                             </StackPanel>
                         </Border>
                         <!-- Status pill -->
@@ -219,7 +224,7 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="10,8">
+                                    <Border Grid.Column="0" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="12,10">
                                         <DockPanel>
                                             <!-- green origin marker (Mac smallcircle.filled.circle) -->
                                             <Grid DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center">
@@ -227,19 +232,19 @@
                                                 <Ellipse Width="5" Height="5" Fill="{StaticResource Green}" />
                                             </Grid>
                                             <TextBox Text="{Binding RouteFrom, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
-                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="13"
                                                      VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
                                         </DockPanel>
                                     </Border>
                                     <TextBlock Grid.Column="1" Text="→" FontSize="13" FontWeight="Bold" Foreground="{StaticResource Dim}"
                                                VerticalAlignment="Center" Margin="7,0,7,0" />
-                                    <Border Grid.Column="2" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="10,8">
+                                    <Border Grid.Column="2" CornerRadius="10" Background="#73080A0E" BorderBrush="{StaticResource Stroke}" BorderThickness="1" Padding="12,10">
                                         <DockPanel>
                                             <!-- red destination pin (Mac mappin.circle.fill) -->
                                             <Ellipse DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center"
                                                      Fill="{StaticResource Red}" />
                                             <TextBox Text="{Binding RouteTo, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0"
-                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                                     Foreground="{StaticResource Text}" FontFamily="{StaticResource Rounded}" FontSize="13"
                                                      VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
                                         </DockPanel>
                                     </Border>
@@ -394,99 +399,136 @@
                             </Grid>
                         </Border>
 
-                        <!-- Map (subtle bezel + an ice accent tab top-left) -->
-                        <Border Grid.Row="1" CornerRadius="18" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
-                                ClipToBounds="True" Margin="0,0,0,14">
-                            <Grid>
-                                <ctl:OsmTileMap />
-                                <!-- ice accent tab (matches the Card accent-bar language) -->
-                                <Border Width="36" Height="4" CornerRadius="2" Background="{StaticResource Ice}" Opacity="0.85"
-                                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,0,0,0" />
-                                <ctl:CompassRose HeadingDeg="{Binding HeadingDeg}" Cardinal="{Binding Cardinal}"
-                                                 HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
-                            </Grid>
-                        </Border>
+                        <!-- Map MFD (mirrors MapPanel.swift ClusterMap): radius 20, diagonal glass bezel, edge
+                             vignette, top scrim, glowing ice accent tab, and an outer drop shadow. -->
+                        <Grid Grid.Row="1" Margin="0,0,0,14">
+                            <!-- outer shadow on a separate underlay so the live map isn't rasterised by the Effect -->
+                            <Border CornerRadius="20" Background="{StaticResource Bg0}">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="Black" Opacity="0.55" BlurRadius="30" ShadowDepth="16" Direction="270" />
+                                </Border.Effect>
+                            </Border>
+                            <!-- map + overlays, clipped to a 1.5px diagonal bezel (white .14 topLeft → white .02 bottomRight) -->
+                            <Border CornerRadius="20" ClipToBounds="True" BorderThickness="1.5">
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#24FFFFFF" Offset="0" />
+                                        <GradientStop Color="#05FFFFFF" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Grid>
+                                    <ctl:OsmTileMap />
+                                    <!-- edge vignette: clear centre → #08090B @ .5 at the edges -->
+                                    <Rectangle IsHitTestVisible="False">
+                                        <Rectangle.Fill>
+                                            <RadialGradientBrush GradientOrigin="0.5,0.5" Center="0.5,0.5" RadiusX="0.75" RadiusY="0.75">
+                                                <GradientStop Color="#0008090B" Offset="0.45" />
+                                                <GradientStop Color="#8008090B" Offset="1" />
+                                            </RadialGradientBrush>
+                                        </Rectangle.Fill>
+                                    </Rectangle>
+                                    <!-- top scrim (~88px) so the route / distance pills sit on darkness -->
+                                    <Border Height="88" VerticalAlignment="Top" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#61000000" Offset="0" />
+                                                <GradientStop Color="#00000000" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <ctl:CompassRose HeadingDeg="{Binding HeadingDeg}" Cardinal="{Binding Cardinal}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
+                                </Grid>
+                            </Border>
+                            <!-- ice accent tab (38×3, radius 2, soft glow) — same language as the Card top-bars -->
+                            <Border Width="38" Height="3" CornerRadius="2" Background="{StaticResource Ice}"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,0,0,0">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#6FD3FF" BlurRadius="4" ShadowDepth="0" Opacity="0.6" />
+                                </Border.Effect>
+                            </Border>
+                        </Grid>
 
                         <!-- Telemetry dock -->
                         <UniformGrid Grid.Row="2" Columns="6" Margin="0,0,0,14">
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14" Margin="0,0,12,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#246FD3FF" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#246FD3FF" Margin="0,0,6,0">
                                             <TextBlock Text="◎" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="ODOMETER" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="ODOMETER" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Text="{Binding OdometerText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding OdometerText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
                                         <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14" Margin="0,0,12,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#243E7BFA" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#243E7BFA" Margin="0,0,6,0">
                                             <TextBlock Text="⇄" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="TRIP" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="TRIP" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Text="{Binding TripText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding TripText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
                                         <TextBlock Text=" mi" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14" Margin="0,0,12,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#243E7BFA" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#243E7BFA" Margin="0,0,6,0">
                                             <TextBlock Text="◷" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Blue}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="ENG HRS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="ENG HRS" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Text="{Binding EngineHoursText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding EngineHoursText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
                                         <TextBlock Text=" h" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14" Margin="0,0,12,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#246FD3FF" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#246FD3FF" Margin="0,0,6,0">
                                             <TextBlock Text="➤" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{StaticResource Ice}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="HEADING" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="HEADING" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Text="{Binding HeadingText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold" Foreground="{StaticResource Text}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding HeadingText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
                                         <TextBlock Text="°" FontSize="12" Foreground="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18" Margin="0,0,12,0">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14" Margin="0,0,12,0">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#2432D74B" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#2432D74B" Margin="0,0,6,0">
                                             <TextBlock Text="≋" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding SatsBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="SATS" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="SATS" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding SatellitesText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold"
-                                               Foreground="{Binding SatsBrush}" Margin="0,8,0,0" />
+                                    <TextBlock Text="{Binding SatellitesText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold"
+                                               Foreground="{Binding SatsBrush}" Margin="0,7,0,0" />
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource GlassPanel}" Padding="16,18">
+                            <Border Style="{StaticResource GlassPanel}" Padding="16,14">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Border Width="18" Height="18" CornerRadius="5" Background="#2432D74B" Margin="0,0,6,0">
+                                        <Border Width="22" Height="22" CornerRadius="6" Background="#2432D74B" Margin="0,0,6,0">
                                             <TextBlock Text="◉" FontFamily="Segoe UI Symbol" FontSize="10" Foreground="{Binding EcmBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="ECM" Style="{StaticResource Sec}" VerticalAlignment="Center" />
+                                        <TextBlock Text="ECM" Style="{StaticResource TileLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding EcmText}" FontFamily="{StaticResource Mono}" FontSize="24" FontWeight="Bold"
-                                               Foreground="{Binding EcmBrush}" Margin="0,8,0,0" />
+                                    <TextBlock Text="{Binding EcmText}" FontFamily="{StaticResource Mono}" FontSize="27" FontWeight="SemiBold"
+                                               Foreground="{Binding EcmBrush}" Margin="0,7,0,0" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
@@ -507,8 +549,19 @@
                                         <Button Content="CLEAR" Style="{StaticResource NeonButton}" Padding="10,5" Click="ClearLog_Click" />
                                     </StackPanel>
                                 </DockPanel>
+                                <!-- 1px white@.06 left gutter rule (mirrors the Mac PacketConsole) -->
+                                <Border Grid.Row="1" Width="1" Background="#0FFFFFFF" HorizontalAlignment="Left" />
                                 <ListBox x:Name="LogList" Grid.Row="1" ItemsSource="{Binding Log}" Background="Transparent" BorderThickness="0"
+                                         Margin="10,0,0,0"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <!-- top fade mask: transparent → opaque over ~5% -->
+                                    <ListBox.OpacityMask>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#00000000" Offset="0" />
+                                            <GradientStop Color="#FF000000" Offset="0.05" />
+                                            <GradientStop Color="#FF000000" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </ListBox.OpacityMask>
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Background" Value="Transparent" />
@@ -519,9 +572,9 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Time}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" Margin="0,0,8,0" />
-                                                <TextBlock Text="{Binding Symbol}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding Color}" Margin="0,0,8,0" />
-                                                <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding TextBrush}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Time}" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource Dim}" Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding Symbol}" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{Binding Color}" Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{Binding TextBrush}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
@@ -574,15 +627,15 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,18,0">
                                             <ctl:FuelCylinder Value="{Binding FuelPct}" Tint="{Binding FuelTintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
-                                            <TextBlock Text="{Binding FuelPctText}" FontSize="13" FontWeight="Bold" Foreground="{Binding FuelBrush}"
+                                            <TextBlock Text="{Binding FuelPctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding FuelBrush}"
                                                        HorizontalAlignment="Center" Margin="0,7,0,0" />
-                                            <TextBlock Text="F1" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
+                                            <TextBlock Text="F1" Style="{StaticResource Sec}" FontSize="9" HorizontalAlignment="Center" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="0,0,18,0">
                                             <ctl:FuelCylinder Value="{Binding Fuel2Pct}" Tint="{Binding Fuel2TintColor}" Width="46" Height="104" HorizontalAlignment="Center" />
-                                            <TextBlock Text="{Binding Fuel2PctText}" FontSize="13" FontWeight="Bold" Foreground="{Binding Fuel2Brush}"
+                                            <TextBlock Text="{Binding Fuel2PctText}" FontSize="15" FontWeight="Bold" Foreground="{Binding Fuel2Brush}"
                                                        HorizontalAlignment="Center" Margin="0,7,0,0" />
-                                            <TextBlock Text="F2" Style="{StaticResource Sec}" HorizontalAlignment="Center" />
+                                            <TextBlock Text="F2" Style="{StaticResource Sec}" FontSize="9" HorizontalAlignment="Center" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                             <!-- FUEL 1 slider (green) -->

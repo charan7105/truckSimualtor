@@ -250,6 +250,9 @@ namespace MatrackSim.App
         private readonly List<byte[]> pending = new List<byte[]>();
         private bool? lastIgnitionSent;
         private string heldPacket;                 // for out-of-order injection
+        private string lastDataPayload;            // F1: last live packet — re-emitted if the app NAKs ($ERR)
+        private bool awaitingAck;                  // F1: between a live packet and its $ACK (only when AckGatedCadence)
+        private DateTime? awaitingAckSince;
         private DateTime lastWatchdog = DateTime.UtcNow;   // app sends $wdg every ~20s; a real tracker stops streaming if it stops
         private readonly double bootOdometerMiles = SimConfig.Default.StartOdometerMiles;   // for trip distance
         private const double uiTickSec = 0.2;                // smooth sim/UI clock (decoupled from packet cadence)
@@ -860,6 +863,8 @@ namespace MatrackSim.App
         {
             // Weak signal adds LATENCY, never drops: real BLE retransmits at the link layer, so the app gets
             // every packet — just later (and jittered). Silent packet loss is not a real BLE failure mode.
+            lastDataPayload = payload;                                  // F1: remember it in case the app NAKs
+            if (Config.AckGatedCadence) { awaitingAck = true; awaitingAckSince = DateTime.UtcNow; }
             Push(new LogLine(Stamp(), payload, LogLine.Kind.Out));
             var chunks = MTPacket.Frame(payload);
             Action send = () => { foreach (var c in chunks) Queue(c); };
@@ -988,7 +993,11 @@ namespace MatrackSim.App
             Mirror();
 
             sinceLastPacket += dt;
-            if (Streaming && !LinkDown && sinceLastPacket >= Config.PacketIntervalSec)   // linkDown = out of range → silent
+            // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
+            // (a lost ACK proceeds after 3 intervals), so the stream is robust if the app misses one.
+            bool ackReady = !Config.AckGatedCadence || !awaitingAck
+                || (awaitingAckSince.HasValue && (DateTime.UtcNow - awaitingAckSince.Value).TotalSeconds > Config.PacketIntervalSec * 3);
+            if (Streaming && !LinkDown && ackReady && sinceLastPacket >= Config.PacketIntervalSec)   // linkDown = out of range → silent
             {
                 sinceLastPacket = 0;
                 if (lastIgnitionSent != engine.IgnitionOn) { SendReliable(MTPacket.Ignition(engine, engine.IgnitionOn)); lastIgnitionSent = engine.IgnitionOn; }
@@ -1065,6 +1074,12 @@ namespace MatrackSim.App
             else if (c.StartsWith("readdtc")) { SendReliable(MTPacket.Dtc(device.DtcCodes, engine.IgnitionOn ? 1 : 0, engine.Rpm)); }
             else if (c.StartsWith("clrdtc")) { device.DtcCodes = new List<string>(); Faults = new List<string>(); }
             else if (c.StartsWith("stopdata")) { SendRaw("ACK,STOP"); }
+            else if (c.StartsWith("$ack") || c.StartsWith("ack")) { awaitingAck = false; }   // F1: app confirmed the last frame (mirrors real $ACK flow control)
+            else if (c.StartsWith("$err") || c.StartsWith("err"))                            // F1: app rejected a frame → retransmit, like real firmware
+            {
+                awaitingAck = false;
+                if (lastDataPayload != null) { Push(new LogLine(Stamp(), lastDataPayload + "  [retransmit ← $ERR]", LogLine.Kind.Out)); EmitNow(lastDataPayload); }
+            }
             else if (c.StartsWith("$wdg") || c.StartsWith("wdg")) { lastWatchdog = DateTime.UtcNow; }   // keepalive: consume like a real tracker (no reply)
         }
 
@@ -1227,6 +1242,7 @@ namespace MatrackSim.App
             else if (count == 0)   // last central unsubscribed → disconnected
             {
                 Connected = false; Streaming = false; heldPacket = null; pending.Clear();   // drop stale out-of-order hold + unsent chunks
+                awaitingAck = false; awaitingAckSince = null;                               // F1: clear ack-gate so reconnect streams cleanly
                 if (runningScenario != null) StopScenario();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
                 dropTimer?.Dispose(); dropTimer = null; LinkDown = false; DropEndsAt = null;   // out-of-range ends when the link actually drops → reconnect resumes streaming
                 Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;

@@ -62,8 +62,25 @@ namespace MatrackSim.App.Controls
         protected override Size MeasureOverride(Size a) =>
             new Size(PadX * 2 + Gears.Length * CellW + (Gears.Length - 1) * Gap, PadY * 2 + CellH);
 
+        // Glass material (mirrors Theme.glassTop/glassBot + the dual-tone white hairline)
+        private static readonly Color GlassTop = (Color)ColorConverter.ConvertFromString("#171A20");
+        private static readonly Color GlassBot = (Color)ColorConverter.ConvertFromString("#0E1014");
+
         protected override void OnRender(DrawingContext dc)
         {
+            // glass panel backing (Mac GearIndicator uses .glassPanel(): top-lit gradient + hairline, radius 18)
+            double w = ActualWidth, h = ActualHeight;
+            if (w > 0 && h > 0)
+            {
+                var panel = new RectangleGeometry(new Rect(0, 0, w, h), 18, 18);
+                var fill = new LinearGradientBrush(GlassTop, GlassBot, 90);
+                var hair = new LinearGradientBrush(
+                    Color.FromArgb(26, 255, 255, 255), Color.FromArgb(6, 255, 255, 255), 90);
+                dc.DrawGeometry(fill, null, panel);
+                var inset = new RectangleGeometry(new Rect(0.5, 0.5, w - 1, h - 1), 18, 18);
+                dc.DrawGeometry(null, new Pen(hair, 1), inset);
+            }
+
             double x = PadX, y = PadY;
             var tf = new Typeface(new FontFamily("Segoe UI Variable Display, Segoe UI"), FontStyles.Normal, FontWeights.Black, FontStretches.Normal);
             foreach (var g in Gears)

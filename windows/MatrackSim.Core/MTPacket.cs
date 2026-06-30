@@ -120,7 +120,8 @@ namespace MatrackSim.Core
         /// <summary>
         /// Split a payload into the app's BLE chunk frames.
         /// Each frame = "$" + &lt;total digit&gt; + &lt;current digit&gt; + &lt;1 reserved char&gt; + &lt;payload slice&gt;;
-        /// the assembled payload ends with "$$"; total/current are single decimal digits (≤9 chunks).
+        /// the assembled payload ends with "$$"; total/current are single HEX digits — the iOS/Android
+        /// parsers both read them with radix 16, so we emit hex to match byte-exactly (≤9 chunks here).
         /// </summary>
         public static List<byte[]> Frame(string payload)
         {
@@ -138,9 +139,9 @@ namespace MatrackSim.Core
             var frames = new List<byte[]>(total);
             for (int i = 0; i < total; i++)
             {
-                // reserved char = '0' (app ignores index 3)
-                string frame = "$" + total.ToString(CultureInfo.InvariantCulture)
-                                   + i.ToString(CultureInfo.InvariantCulture)
+                // reserved char = '0' (app ignores index 3); hex digits match the apps' radix-16 parse
+                string frame = "$" + total.ToString("x", CultureInfo.InvariantCulture)
+                                   + i.ToString("x", CultureInfo.InvariantCulture)
                                    + "0" + new string(slices[i]);
                 frames.Add(Encoding.UTF8.GetBytes(frame));
             }

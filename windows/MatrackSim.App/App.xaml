@@ -61,6 +61,11 @@
             <Setter Property="Foreground" Value="{StaticResource Dim}" />
         </Style>
 
+        <!-- Telemetry-tile label: 10px semibold dim (mirrors Gauges.swift MetricTile title) -->
+        <Style x:Key="TileLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionLabel}">
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+
         <!-- Glass panel container (mirrors glassPanel() / Card) — top-lit gradient + dual-tone hairline -->
         <Style x:Key="GlassPanel" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource GlassFill}" />
@@ -97,7 +102,7 @@
             <Setter Property="FontFamily" Value="{StaticResource Rounded}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="Padding" Value="10,10" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -113,6 +118,15 @@
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   Margin="{TemplateBinding Padding}"
                                                   TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                            <!-- filled-only sheen: darkens the bottom to ~0.8× tint, mirroring the Mac [tint → tint*0.8] gradient -->
+                            <Border x:Name="sheen" CornerRadius="11" Opacity="0" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#00000000" Offset="0" />
+                                        <GradientStop Color="#33000000" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
                             </Border>
                             <!-- soft tint border — Mac strokes at tint.opacity(0.55), not full strength -->
                             <Border x:Name="line" CornerRadius="11" BorderBrush="{TemplateBinding BorderBrush}"
@@ -142,9 +156,17 @@
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
                             </Trigger>
-                            <!-- Filled CTAs set Foreground to the dark cockpit colour — suppress the tint wash for them. -->
+                            <!-- Filled CTAs set Foreground to the dark cockpit colour — suppress the tint wash, show the
+                                 vertical sheen, and add the Mac drop shadow (tint @ 0.4, blur 9, y 2). -->
                             <Trigger Property="Foreground" Value="#FF08090B">
                                 <Setter TargetName="wash" Property="Opacity" Value="0" />
+                                <Setter TargetName="sheen" Property="Opacity" Value="1" />
+                                <Setter TargetName="bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="{Binding Background.Color, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          BlurRadius="9" ShadowDepth="2" Direction="270" Opacity="0.4" />
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4" />
@@ -172,9 +194,18 @@
                             <!-- inactive = faint tint wash (Mac filled:false uses tint.opacity(0.12)); active = solid tint -->
                             <Border x:Name="wash" CornerRadius="11"
                                     Background="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Opacity="0.12" />
-                            <Border x:Name="bd" CornerRadius="11" Padding="10,9" Background="Transparent">
+                            <Border x:Name="bd" CornerRadius="11" Padding="10,10" Background="Transparent">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                            <!-- filled-only sheen: darkens the bottom to ~0.8× tint (Mac [tint → tint*0.8]) -->
+                            <Border x:Name="sheen" CornerRadius="11" Opacity="0" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#00000000" Offset="0" />
+                                        <GradientStop Color="#33000000" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
                             </Border>
                             <!-- soft tint border (tint.opacity(0.55) like the Mac), drawn over the fill -->
                             <Border x:Name="line" CornerRadius="11" BorderThickness="1" Opacity="0.55" IsHitTestVisible="False"
@@ -184,6 +215,13 @@
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="wash" Property="Opacity" Value="0" />
                                 <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                                <Setter TargetName="sheen" Property="Opacity" Value="1" />
+                                <Setter TargetName="bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="{Binding Tag.Color, RelativeSource={RelativeSource TemplatedParent}}"
+                                                          BlurRadius="9" ShadowDepth="2" Direction="270" Opacity="0.4" />
+                                    </Setter.Value>
+                                </Setter>
                                 <Setter Property="Foreground" Value="#FF08090B" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
