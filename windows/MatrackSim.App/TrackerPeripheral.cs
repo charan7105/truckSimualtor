@@ -245,6 +245,8 @@ namespace MatrackSim.App
         private GattServiceProvider serviceProvider;          // CBPeripheralManager → GattServiceProvider
         private GattLocalCharacteristic dataChar;             // notify (7add0003)
         private GattLocalCharacteristic commandChar;          // write  (7add0002)
+        private int advertiseRetries;                         // F1: how many times we've retried after an Aborted advertisement
+        private const int MaxAdvertiseRetries = 5;
         private readonly EngineState engine = new EngineState();
         private DeviceInfo device = new DeviceInfo();
         private Timer tick;
@@ -1168,7 +1170,26 @@ namespace MatrackSim.App
                 {
                     if (e.Status == GattServiceProviderAdvertisementStatus.Started)
                     {
+                        advertiseRetries = 0;
                         Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
+                    }
+                    else if (e.Status == GattServiceProviderAdvertisementStatus.Aborted)
+                    {
+                        // The BT stack accepted the call then tore the advertisement down — usually a transient
+                        // radio/driver hiccup or a stale advertiser. Stop cleanly and retry a few times.
+                        if (advertiseRetries < MaxAdvertiseRetries)
+                        {
+                            advertiseRetries++;
+                            Status = $"Advert aborted — retrying ({advertiseRetries}/{MaxAdvertiseRetries})…";
+                            StatusColorValue = StatusColor.Amber;
+                            Info($"⚠ advertisement aborted by the BT stack — retry {advertiseRetries}/{MaxAdvertiseRetries}");
+                            _ = RetryAdvertiseAsync(s);
+                        }
+                        else
+                        {
+                            Status = "Advertising failed (aborted)"; StatusColorValue = StatusColor.Red;
+                            Info("✗ advertising keeps aborting — toggle Bluetooth off/on, close other apps using BLE (a connected device or another GATT server), or use the ESP32 advertiser");
+                        }
                     }
                     else
                     {
@@ -1177,11 +1198,8 @@ namespace MatrackSim.App
                     }
                 });
 
-                provider.StartAdvertising(new GattServiceProviderAdvertisingParameters
-                {
-                    IsConnectable = true,
-                    IsDiscoverable = true,
-                });
+                advertiseRetries = 0;
+                StartAdvertisingSafely(provider);
 
                 EnsureClock();
                 Info("Bluetooth on — publishing tracker service");
@@ -1198,6 +1216,35 @@ namespace MatrackSim.App
                 Status = "Bluetooth error"; StatusColorValue = StatusColor.Red;
                 Info($"BLE setup failed: {ex.Message}");
             }
+        }
+
+        // Start advertising defensively: stop any in-flight advertisement first (a stale advertiser is a common
+        // cause of the immediate "Aborted"), then start. Swallows the rare synchronous throw so a hiccup on one
+        // attempt doesn't kill the retry loop.
+        private void StartAdvertisingSafely(GattServiceProvider p)
+        {
+            if (p == null) return;
+            try { if (p.AdvertisementStatus == GattServiceProviderAdvertisementStatus.Started) p.StopAdvertising(); }
+            catch { /* nothing to stop */ }
+            try
+            {
+                p.StartAdvertising(new GattServiceProviderAdvertisingParameters
+                {
+                    IsConnectable = true,
+                    IsDiscoverable = true,
+                });
+            }
+            catch (Exception ex) { Info($"start advertising threw: {ex.Message}"); }
+        }
+
+        // After an Aborted status: stop, wait for the radio to settle, then start again on the UI thread.
+        private async Task RetryAdvertiseAsync(GattServiceProvider p)
+        {
+            if (p == null) return;
+            try { p.StopAdvertising(); } catch { }
+            await Task.Delay(1500);
+            if (serviceProvider != p) return;                    // torn down / replaced meanwhile → abandon this retry
+            PostToUi(() => StartAdvertisingSafely(p));
         }
 
         // didReceiveWrite → handle each write request (read value, log inbound, handle command, respond).
