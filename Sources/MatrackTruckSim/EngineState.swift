@@ -45,6 +45,9 @@ final class EngineState {
     /// GPS-derived speed on the wire (km/h). Tracks vehicle speed.
     var gpsSpeedKmh: Int { Int((speedMph * 1.60934).rounded()) }
 
+    /// Both tanks dry — the engine stalls, so the truck can't move until it's refueled.
+    var outOfFuel: Bool { fuelLevelPct <= 0 && fuelLevel2Pct <= 0 }
+
     /// Advance by `dt` seconds. Integrates distance + engine hours and models RPM + fuel burn.
     func advance(dt: Double) {
         guard ignitionOn else { rpm = 0; speedMph = 0; return }

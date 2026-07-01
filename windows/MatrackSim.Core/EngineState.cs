@@ -59,6 +59,9 @@ namespace MatrackSim.Core
         /// <summary>GPS-derived speed on the wire (km/h). Tracks vehicle speed.</summary>
         public int GpsSpeedKmh => (int)System.Math.Round(SpeedMph * 1.60934, System.MidpointRounding.AwayFromZero);
 
+        /// <summary>Both tanks dry — the engine stalls, so the truck can't move until it's refueled.</summary>
+        public bool OutOfFuel => FuelLevelPct <= 0 && FuelLevel2Pct <= 0;
+
         /// <summary>
         /// Advance by `dt` seconds. Integrates distance + engine hours and models RPM + fuel burn.
         /// </summary>

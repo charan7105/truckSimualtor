@@ -39,9 +39,12 @@ namespace MatrackSim.Core
         // Starting telemetry
         public double StartOdometerMiles = 25_000;
         public double StartEngineHours = 4_352.5;
-        public double StartFuelPct = 30;              // start low so a trip reaches the low-fuel warning (<20%)
-        /// <summary>%/mile fuel burn while moving.</summary>
-        public double FuelBurnPctPerMile = 0.05;      // visible drain — most trips dip into the red
+        public double StartFuelPct = 30;              // start low so a short leg reaches the low-fuel warning
+        /// <summary>%/mile fuel burn while moving. High on purpose: a short leg (~50 mi) hits the warning
+        /// and ~100 mi empties the tank, so testers reliably reach the "open the Fuel App / refuel" flow.</summary>
+        public double FuelBurnPctPerMile = 0.3;
+        /// <summary>Tank-1 % at/under which the sim raises the "low fuel — open the Fuel App" prompt.</summary>
+        public double LowFuelWarnPct = 15;
 
         // Network / transport effects (0–100 = percent)
         public double PacketLossPct = 0;

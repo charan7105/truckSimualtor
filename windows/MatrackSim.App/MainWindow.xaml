@@ -950,5 +950,10 @@
         <Grid x:Name="GuidedOverlay" Background="#94000000" Visibility="Collapsed" MouseDown="GuidedBackdrop_MouseDown">
             <ContentControl x:Name="GuidedHost" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Grid>
+
+        <!-- ================= LOW-FUEL OVERLAY (centered, dim full-window scrim) ================= -->
+        <Grid x:Name="LowFuelOverlay" Background="#9E000000" Visibility="Collapsed" MouseDown="LowFuelBackdrop_MouseDown">
+            <ContentControl x:Name="LowFuelHost" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Grid>
     </Grid>
 </Window>

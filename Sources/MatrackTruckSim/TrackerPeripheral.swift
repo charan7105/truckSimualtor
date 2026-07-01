@@ -72,6 +72,12 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var guidedScenario: Scenario?
     @Published var guidedStep = 0
 
+    // Low-fuel → "open the Fuel App / refuel" prompt, shown as a centered overlay. Edge-triggered so it
+    // fires once when tank 1 crosses the warning level, and once more when both tanks run dry.
+    @Published var showLowFuel = false
+    private var lowFuelNotified = false
+    private var outOfFuelNotified = false
+
     let route = RouteEngine()
 
     var advertisedName: String { config.advertisedName }
@@ -237,6 +243,33 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func cancelGuided() { guidedScenario = nil }
     func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
     func setFuel2(_ pct: Double) { engine.fuelLevel2Pct = max(0, min(100, pct)); mirror() }
+
+    /// Refuel BOTH tanks to `pct` — the "arrived at a station, fill up" action from the low-fuel prompt.
+    func refuel(toPct pct: Double) {
+        let p = max(0, min(100, pct))
+        engine.fuelLevelPct = p; engine.fuelLevel2Pct = p
+        lowFuelNotified = false; outOfFuelNotified = false; showLowFuel = false
+        mirror(); info("refueled to \(Int(p))%")
+    }
+    func dismissLowFuel() { showLowFuel = false }
+
+    /// Edge-triggered low-fuel prompting: fire once when tank 1 hits the warning level, and once more when
+    /// both tanks run dry (truck stalls). Each arm resets after a refuel so it can fire again next drain.
+    private func detectLowFuel() {
+        if engine.fuelLevelPct <= config.lowFuelWarnPct {
+            if !lowFuelNotified { lowFuelNotified = true; showLowFuel = true
+                info("low fuel \(Int(engine.fuelLevelPct))% — open the Fuel App, find a station, refuel") }
+        } else if engine.fuelLevelPct > config.lowFuelWarnPct + 3 {
+            lowFuelNotified = false
+        }
+        if engine.outOfFuel {
+            if !outOfFuelNotified { outOfFuelNotified = true; showLowFuel = true
+                status = "Out of fuel — refuel to continue"; statusColor = Theme.red
+                info("OUT OF FUEL — truck stopped; refuel to continue") }
+        } else {
+            outOfFuelNotified = false
+        }
+    }
     func sendVINNow() { sendReliable(MTPacket.version(device)) }
 
     // MARK: - F1: signal strength + out-of-range emulation
@@ -660,7 +693,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 }
             }
             let driveDt = dt * config.routeTimeScale        // compress time so the truck visibly crosses the route
-            updateRouteSpeed(dt: driveDt)
+            if engine.outOfFuel {                           // stalled: empty tanks → coast to a stop, ignore the target
+                engine.speedMph = max(0, engine.speedMph - config.decelMphPerSec * driveDt)
+            } else {
+                updateRouteSpeed(dt: driveDt)
+            }
             let metersThisTick = engine.speedMph * 0.44704 * driveDt
             if let pos = route.advance(meters: metersThisTick) {
                 engine.latitude = pos.coord.latitude; engine.longitude = pos.coord.longitude; engine.headingDeg = pos.headingDeg
@@ -675,9 +712,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 info("route complete — arrived")
             }
         } else {
+            if engine.outOfFuel { engine.speedMph = 0 }     // stalled: can't move on empty tanks
             engine.advance(dt: dt * config.timeMultiplier)
         }
         mirror()
+        detectLowFuel()                                     // raise the "open the Fuel App / refuel" prompt when low
 
         sinceLastPacket += dt
         // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever

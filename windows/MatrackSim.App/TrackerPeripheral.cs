@@ -173,6 +173,13 @@ namespace MatrackSim.App
         private double _fuel2Pct = 60.0;
         public double Fuel2Pct { get => _fuel2Pct; set => Set(ref _fuel2Pct, value); }
 
+        // Low-fuel → "open the Fuel App / refuel" prompt (centered overlay). Edge-triggered so it fires once
+        // when tank 1 crosses the warning level, and once more when both tanks run dry.
+        private bool _showLowFuel;
+        public bool ShowLowFuel { get => _showLowFuel; set => Set(ref _showLowFuel, value); }
+        private bool lowFuelNotified;
+        private bool outOfFuelNotified;
+
         private int _satellites = 11;
         public int Satellites { get => _satellites; set => Set(ref _satellites, value); }
 
@@ -430,6 +437,41 @@ namespace MatrackSim.App
         public void ClearFaults() { device.DtcCodes = new List<string>(); Faults = new List<string>(); Info("faults cleared"); }
         public void SetFuel(double pct) { engine.FuelLevelPct = Math.Max(0, Math.Min(100, pct)); Mirror(); }
         public void SetFuel2(double pct) { engine.FuelLevel2Pct = Math.Max(0, Math.Min(100, pct)); Mirror(); }
+
+        /// <summary>Refuel BOTH tanks to `pct` — the "arrived at a station, fill up" action from the low-fuel prompt.</summary>
+        public void Refuel(double pct)
+        {
+            double p = Math.Max(0, Math.Min(100, pct));
+            engine.FuelLevelPct = p; engine.FuelLevel2Pct = p;
+            lowFuelNotified = false; outOfFuelNotified = false; ShowLowFuel = false;
+            Mirror(); Info("refueled to " + (int)p + "%");
+        }
+        public void DismissLowFuel() { ShowLowFuel = false; }
+
+        /// <summary>Edge-triggered low-fuel prompting: fire once when tank 1 hits the warning level, and once
+        /// more when both tanks run dry (truck stalls). Each arm resets after a refuel so it can fire again.</summary>
+        private void DetectLowFuel()
+        {
+            if (engine.FuelLevelPct <= Config.LowFuelWarnPct)
+            {
+                if (!lowFuelNotified) { lowFuelNotified = true; ShowLowFuel = true;
+                    Info("low fuel " + (int)engine.FuelLevelPct + "% — open the Fuel App, find a station, refuel"); }
+            }
+            else if (engine.FuelLevelPct > Config.LowFuelWarnPct + 3)
+            {
+                lowFuelNotified = false;
+            }
+            if (engine.OutOfFuel)
+            {
+                if (!outOfFuelNotified) { outOfFuelNotified = true; ShowLowFuel = true;
+                    Status = "Out of fuel — refuel to continue"; StatusColorValue = StatusColor.Red;
+                    Info("OUT OF FUEL — truck stopped; refuel to continue"); }
+            }
+            else
+            {
+                outOfFuelNotified = false;
+            }
+        }
         public void SendVINNow() { SendReliable(MTPacket.Version(device)); }
 
         // MARK: - F1: signal strength + out-of-range emulation
@@ -972,7 +1014,10 @@ namespace MatrackSim.App
                     }
                 }
                 double driveDt = dt * Config.RouteTimeScale;        // compress time so the truck visibly crosses the route
-                UpdateRouteSpeed(driveDt);
+                if (engine.OutOfFuel)                               // stalled: empty tanks → coast to a stop, ignore the target
+                    engine.SpeedMph = Math.Max(0, engine.SpeedMph - Config.DecelMphPerSec * driveDt);
+                else
+                    UpdateRouteSpeed(driveDt);
                 double metersThisTick = engine.SpeedMph * 0.44704 * driveDt;
                 var pos = Route.Advance(metersThisTick);
                 if (pos.HasValue)
@@ -992,9 +1037,11 @@ namespace MatrackSim.App
             }
             else
             {
+                if (engine.OutOfFuel) engine.SpeedMph = 0;          // stalled: can't move on empty tanks
                 engine.Advance(dt * Config.TimeMultiplier);
             }
             Mirror();
+            DetectLowFuel();                                        // raise the "open the Fuel App / refuel" prompt when low
 
             sinceLastPacket += dt;
             // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever

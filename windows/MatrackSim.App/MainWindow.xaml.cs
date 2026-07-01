@@ -28,6 +28,7 @@ namespace MatrackSim.App
             InitializeComponent();
             DataContext = new TrackerPeripheral();
             Sim.Log.CollectionChanged += Log_CollectionChanged;
+            Sim.PropertyChanged += Sim_PropertyChanged;     // drive the low-fuel overlay off the controller flag
 
             // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
             // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
@@ -188,6 +189,35 @@ namespace MatrackSim.App
         private void GuidedBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (ReferenceEquals(e.OriginalSource, GuidedOverlay)) CloseGuided();
+        }
+
+        // MARK: - LOW-FUEL OVERLAY (centered, mirrors the Mac lowFuel overlay). Driven by the controller's
+        // ShowLowFuel flag — raised when a tank crosses the warning level or both run dry.
+        private void Sim_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(TrackerPeripheral.ShowLowFuel))
+            {
+                if (Sim.ShowLowFuel) ShowLowFuel(); else CloseLowFuel();
+            }
+        }
+
+        private void ShowLowFuel()
+        {
+            bool empty = Sim.FuelPct <= 0 && Sim.Fuel2Pct <= 0;
+            LowFuelHost.Content = new LowFuelView(Sim.FuelPct, empty, pct => Sim.Refuel(pct), CloseLowFuel);
+            LowFuelOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void CloseLowFuel()
+        {
+            LowFuelOverlay.Visibility = Visibility.Collapsed;
+            LowFuelHost.Content = null;
+            Sim.DismissLowFuel();
+        }
+
+        private void LowFuelBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (ReferenceEquals(e.OriginalSource, LowFuelOverlay)) CloseLowFuel();
         }
 
         // MARK: - CONNECTION / SIGNAL

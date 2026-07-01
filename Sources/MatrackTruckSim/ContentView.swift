@@ -80,8 +80,71 @@ struct ContentView: View {
                 }
                 .zIndex(60)
             }
+            if sim.showLowFuel {
+                ZStack {
+                    Color.black.opacity(0.62).ignoresSafeArea()
+                        .onTapGesture { sim.dismissLowFuel() }       // tap the backdrop to dismiss
+                    lowFuelCard
+                        .shadow(color: .black.opacity(0.6), radius: 44, y: 22)
+                }
+                .zIndex(65)
+            }
         }
         .onChange(of: sim.guidedScenario != nil) { open in if open { showScenario = false; showDTC = false } }
+    }
+
+    // Low-fuel prompt: the drain is the hook that pushes the tester into the Matrack Fuel App, then lets
+    // them "refuel at the station" (¼/½/¾/Full → both tanks). Also the way to un-stall an empty truck.
+    private var lowFuelCard: some View {
+        let empty = sim.fuelPct <= 0 && sim.fuel2Pct <= 0
+        return VStack(alignment: .leading, spacing: 15) {
+            HStack(spacing: 10) {
+                Image(systemName: empty ? "fuelpump.slash.fill" : "fuelpump.fill")
+                    .font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.red)
+                Text(empty ? "OUT OF FUEL" : "LOW FUEL · \(Int(sim.fuelPct))%")
+                    .font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Theme.text)
+                Spacer()
+            }
+            Text(empty
+                 ? "The truck has stopped — both tanks are empty. Fill up to keep driving."
+                 : "Fuel is running low. Time to find a station.")
+                .font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.text.opacity(0.9))
+            VStack(alignment: .leading, spacing: 7) {
+                lowFuelStep("1", "Open the Matrack Fuel App on your phone.")
+                lowFuelStep("2", "Don't have it? Get it from truck-simualtor.vercel.app.")
+                lowFuelStep("3", "Link it to this simulator — you'll see your current location.")
+                lowFuelStep("4", "Find a nearby station, then fill up:")
+            }
+            HStack(spacing: 9) {
+                ForEach([("¼", 25.0), ("½", 50.0), ("¾", 75.0), ("Full", 100.0)], id: \.0) { label, pct in
+                    Button { sim.refuel(toPct: pct) } label: {
+                        Text(label).font(.system(size: 15, weight: .bold, design: .rounded))
+                            .frame(maxWidth: .infinity).frame(height: 42)
+                            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.green.opacity(0.18)))
+                            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Theme.green.opacity(0.5), lineWidth: 1))
+                            .foregroundStyle(Theme.green)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Button("Later") { sim.dismissLowFuel() }
+                .buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.dim).frame(maxWidth: .infinity)
+        }
+        .padding(24)
+        .frame(width: 452)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.red.opacity(0.5), lineWidth: 1))
+    }
+
+    private func lowFuelStep(_ n: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text(n).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(Theme.green)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Theme.green.opacity(0.16)))
+            Text(text).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.text.opacity(0.85))
+            Spacer(minLength: 0)
+        }
     }
 
     private var clusterFace: some View {

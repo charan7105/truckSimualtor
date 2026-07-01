@@ -33,9 +33,12 @@ struct SimConfig: Codable, Equatable {
     // MARK: Starting telemetry
     var startOdometerMiles: Double = 25_000
     var startEngineHours: Double = 4_352.5
-    var startFuelPct: Double = 30                 // start low so a trip reaches the low-fuel warning (<20%)
-    /// %/mile fuel burn while moving.
-    var fuelBurnPctPerMile: Double = 0.05         // visible drain — most trips dip into the red
+    var startFuelPct: Double = 30                 // start low so a short leg reaches the low-fuel warning
+    /// %/mile fuel burn while moving. High on purpose: a short leg (~50 mi) hits the warning and
+    /// ~100 mi empties the tank, so testers reliably reach the "open the Fuel App / refuel" flow.
+    var fuelBurnPctPerMile: Double = 0.3
+    /// Tank-1 % at/under which the sim raises the "low fuel — open the Fuel App" prompt.
+    var lowFuelWarnPct: Double = 15
 
     // MARK: Network / transport effects (0–100 = percent)
     var packetLossPct: Double = 0
