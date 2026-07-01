@@ -39,6 +39,7 @@ namespace MatrackSim.App
         public string LinkText => Running ? $"FUEL LINK {LinkIP}:{Port}" : "";
 
         private TcpListener _listener;
+        private System.Threading.Timer _ipTimer;
 
         public void Start()
         {
@@ -49,9 +50,19 @@ namespace MatrackSim.App
                 _listener.Start();
                 LinkIP = LocalIPv4() ?? "—";
                 Running = true;
+                // The Wi-Fi / hotspot IP can change; keep the displayed link address current.
+                _ipTimer = new System.Threading.Timer(_ => RefreshIP(), null, 3000, 3000);
                 _ = AcceptLoop();
             }
             catch { Running = false; _listener = null; }
+        }
+
+        private void RefreshIP()
+        {
+            var ip = LocalIPv4() ?? "—";
+            var disp = System.Windows.Application.Current?.Dispatcher;
+            if (disp == null || disp.CheckAccess()) LinkIP = ip;
+            else disp.BeginInvoke((Action)(() => LinkIP = ip));
         }
 
         private async Task AcceptLoop()

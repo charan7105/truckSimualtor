@@ -46,7 +46,12 @@ final class SimBridge: ObservableObject {
 
         serverFD = fd
         NSLog("SimBridge listening on :%d", Int(portNumber))
-        DispatchQueue.main.async { self.running = true; self.refreshAddress() }
+        DispatchQueue.main.async {
+            self.running = true
+            self.refreshAddress()
+            // The Wi-Fi/hotspot IP can change (hotspot ↔ router); keep the displayed link address current.
+            Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refreshAddress() }
+        }
         Thread.detachNewThread { [weak self] in self?.acceptLoop(fd) }
     }
 

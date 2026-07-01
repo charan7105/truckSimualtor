@@ -37,6 +37,14 @@ struct ContentView: View {
             renderer.scale = 2
             if let icon = renderer.nsImage { NSApp.applicationIconImage = icon }
             sim.startBLE()
+            // Fuel-app link: point the LAN position feed at THIS instance — the one the window drives.
+            // Wiring it in SimController.init can capture a non-driven copy (SwiftUI may build SimController()
+            // more than once), which freezes /pos at the parked start; re-point it to the live sim here.
+            SimBridge.shared.position = { [weak sim] in
+                guard let sim else { return (0, 0, 0, 0, "") }
+                return (sim.currentLat, sim.currentLon, sim.headingDeg, sim.speedMph,
+                        sim.routeFrom.isEmpty ? "Free drive" : "\(sim.routeFrom) → \(sim.routeTo)")
+            }
             if ProcessInfo.processInfo.arguments.contains("dash") {
                 sim.skipStartup()                    // jump straight to the live dashboard (static, for screenshots)
             }
