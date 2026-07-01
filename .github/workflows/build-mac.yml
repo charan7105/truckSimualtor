@@ -1,0 +1,37 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:        # lets you run it manually from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Package.swift'
+      - 'package-mac.sh'
+      - '.github/workflows/build-mac.yml'
+
+permissions:
+  contents: write           # needed to attach the build to the Release
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Self-test the core (must pass)
+        run: swift run MatrackTruckSim selftest
+
+      - name: Build + package the Mac app (universal, ad-hoc signed)
+        run: ./package-mac.sh
+
+      - name: Upload as a build artifact (downloadable from this run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MatrackTruckSim-mac
+          path: MatrackTruckSim-mac.zip
+
+      - name: Attach to the v1.0.0 Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload v1.0.0 MatrackTruckSim-mac.zip --clobber --repo ${{ github.repository }}
