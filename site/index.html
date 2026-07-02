@@ -327,10 +327,35 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <div class="mini">On the phone: allow <b>“Install unknown apps”</b> for your browser when prompted, then tap the file → <b>Install</b>. Signed by Matrack Inc.</div>
     </div></div>
     <div class="s2"><div class="n"><svg viewBox="0 0 24 24" fill="currentColor" style="width:19px;height:19px"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg></div><div>
-      <h4>iPhone · via TestFlight</h4>
-      <p>iOS test builds ship through Apple <b>TestFlight</b> (a raw <kbd>.ipa</kbd> can't be installed from a link). Install the free TestFlight app, then tap the invite link.</p>
-      <a class="dl" aria-disabled="true" style="margin-top:13px;opacity:.5;pointer-events:none" href="#fuelapp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>TestFlight invite — coming soon</a>
-      <div class="mini">The public TestFlight link will be added here once the iOS build is uploaded to App Store Connect.</div>
+      <h4>iPhone · install link</h4>
+      <p>Open this link <b>on the iPhone in Safari</b> and follow the prompts to install.</p>
+      <a class="dl" style="margin-top:13px" href="https://loadly.io/9HqhLTzr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Install for iPhone</a>
+      <div class="keynote">Your iPhone must be <b>registered first</b>. If you see <b>“Unable to install”</b> or your <b>UDID hasn't been added</b>, contact <b>Charan</b> to add your device — then reopen this link.</div>
+    </div></div>
+  </div>
+
+  <div class="shd" style="margin-top:52px"><div class="ey">Tutorial</div><h2>Connect the Fuel App to the simulator</h2><p>Link the app to a running truck simulator so it follows a simulated US drive — that's how US fuel stations show up while you test from anywhere.</p></div>
+  <div class="steps2">
+    <div class="s2"><div class="n">1</div><div>
+      <h4>Put both on one network</h4>
+      <p>The phone and the computer running the simulator must be on the <b>same Wi-Fi</b>. Easiest: turn on the <b>phone's hotspot</b> and join the computer to it.</p>
+    </div></div>
+    <div class="s2"><div class="n">2</div><div>
+      <h4>Start a drive in the simulator</h4>
+      <p>In the sim, set a US route (e.g. <kbd>Los Angeles, CA → San Diego, CA</kbd>) → <b>PLAN → DRIVE</b>. A green <b>FUEL LINK <span style="white-space:nowrap">&lt;ip&gt;:8723</span></b> pill appears at the bottom — note the <b>&lt;ip&gt;</b>.</p>
+    </div></div>
+    <div class="s2"><div class="n">3</div><div>
+      <h4>Link it in the Fuel App</h4>
+      <p>Open the app → <b>menu → Driver Simulation</b> → type that <b>&lt;ip&gt;</b> → <b>Link</b>. Tap <b>Allow</b> if it asks for local-network access.</p>
+    </div></div>
+    <div class="s2"><div class="n">4</div><div>
+      <h4>Follow the truck</h4>
+      <p>The map jumps to the truck's US location and follows it live, with a green <b>SIM</b> badge — and <b>fuel stations appear</b> around it as it drives.</p>
+      <div class="mini"><b>Gasoline shows only in California</b> — drive a CA route for gasoline; any US route works for diesel.</div>
+    </div></div>
+    <div class="s2"><div class="n">5</div><div>
+      <h4>Low fuel → refuel</h4>
+      <p>When the tank runs low the sim pops a prompt to open the Fuel App and find a station. After "arriving," top the tanks back up in the sim with <b>¼ / ½ / ¾ / Full</b>.</p>
     </div></div>
   </div>
 </section>
