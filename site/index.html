@@ -229,7 +229,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 
 <header class="nav"><div class="nav-in">
   <a class="logo" href="#top"><img class="mk" src="assets/logo.png" alt="Matrack"/>Matrack Sim</a>
-  <nav class="nlinks"><a href="#overview">Overview</a><a href="#setup">Setup</a><a href="#guide">Field guide</a><a href="#help">Help</a></nav>
+  <nav class="nlinks"><a href="#overview">Overview</a><a href="#setup">Setup</a><a href="#fuelapp">Fuel App</a><a href="#guide">Field guide</a><a href="#help">Help</a></nav>
   <div class="ncta"><span class="chip"><i></i>Test only</span>
     <a class="dl" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackTruckSim-mac.zip" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Get the app</a>
   </div>
@@ -312,6 +312,25 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <h4>Run it &amp; connect your phone</h4>
       <p>Open <kbd>MatrackSim.exe</kbd> — it shows <b>“Advertising as ELD-MA.”</b> On the phone, ELD app (test account) → Bluetooth → pick <kbd>ELD-MA</kbd>.</p>
       <div class="mini"><b>One phone at a time</b> per simulator.</div>
+    </div></div>
+  </div>
+</section>
+
+<!-- FUEL APP — tester builds -->
+<section id="fuelapp" class="sec">
+  <div class="shd"><div class="ey">Fuel App</div><h2>MaTrack FuelNearMe — tester builds</h2><p>The companion app testers pair with the simulator. In the app, open <b>menu → Driver Simulation</b> and link it to a running sim — the map then follows your simulated US drive, so US fuel stations show up wherever you're testing from.</p></div>
+  <div class="steps2">
+    <div class="s2"><div class="n"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px"><path d="M16.6 9.02l1.28-2.22a.4.4 0 00-.7-.4l-1.3 2.25A7.03 7.03 0 0012 7.9c-1.4 0-2.72.35-3.88.95l-1.3-2.25a.4.4 0 00-.7.4L7.4 9.02A6.9 6.9 0 004 14.6h16a6.9 6.9 0 00-3.4-5.58zM8.6 12.6a.9.9 0 110-1.8.9.9 0 010 1.8zm6.8 0a.9.9 0 110-1.8.9.9 0 010 1.8zM4 15.4v4.2c0 .77.63 1.4 1.4 1.4h.6v2.1a1.3 1.3 0 002.6 0V21h2.8v2.1a1.3 1.3 0 002.6 0V21h.6c.77 0 1.4-.63 1.4-1.4v-4.2H4z"/></svg></div><div>
+      <h4>Android · install the APK</h4>
+      <p>Download the signed <b>release</b> build and install it directly — version <kbd>1.0.2</kbd>.</p>
+      <a class="dl" style="margin-top:13px" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackFuelApp-android.apk" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download Android APK · v1.0.2</a>
+      <div class="mini">On the phone: allow <b>“Install unknown apps”</b> for your browser when prompted, then tap the file → <b>Install</b>. Signed by Matrack Inc.</div>
+    </div></div>
+    <div class="s2"><div class="n"><svg viewBox="0 0 24 24" fill="currentColor" style="width:19px;height:19px"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg></div><div>
+      <h4>iPhone · via TestFlight</h4>
+      <p>iOS test builds ship through Apple <b>TestFlight</b> (a raw <kbd>.ipa</kbd> can't be installed from a link). Install the free TestFlight app, then tap the invite link.</p>
+      <a class="dl" aria-disabled="true" style="margin-top:13px;opacity:.5;pointer-events:none" href="#fuelapp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>TestFlight invite — coming soon</a>
+      <div class="mini">The public TestFlight link will be added here once the iOS build is uploaded to App Store Connect.</div>
     </div></div>
   </div>
 </section>
