@@ -18,9 +18,11 @@ namespace MatrackSim.App.Controls
             new FrameworkPropertyMetadata(Colors.LimeGreen, FrameworkPropertyMetadataOptions.AffectsRender));
         public Color Tint { get => (Color)GetValue(TintProperty); set => SetValue(TintProperty, value); }
 
-        private static readonly Color Bg0 = (Color)ColorConverter.ConvertFromString("#08090B");
-        private static readonly Color Bg1 = (Color)ColorConverter.ConvertFromString("#101217");
-        private static readonly Color StrokeC = (Color)ColorConverter.ConvertFromString("#2A2E37");
+        // Empty-tank glass: lighter than the panel behind it so an empty vessel still reads as a tank
+        // (near-black glass used to vanish into the dark fuel panel), with a brighter rim to outline it.
+        private static readonly Color Bg0 = (Color)ColorConverter.ConvertFromString("#12151C");
+        private static readonly Color Bg1 = (Color)ColorConverter.ConvertFromString("#1E232D");
+        private static readonly Color StrokeC = (Color)ColorConverter.ConvertFromString("#474F5E");
 
         private double _phaseDeg;
         private readonly DispatcherTimer _timer;
@@ -45,8 +47,8 @@ namespace MatrackSim.App.Controls
 
             // glass body
             var body = new LinearGradientBrush(
-                Color.FromArgb(191, Bg1.R, Bg1.G, Bg1.B),
-                Color.FromArgb(153, Bg0.R, Bg0.G, Bg0.B), 90);
+                Color.FromArgb(235, Bg1.R, Bg1.G, Bg1.B),
+                Color.FromArgb(220, Bg0.R, Bg0.G, Bg0.B), 90);
             dc.DrawGeometry(body, null, shape);
 
             // liquid wave (clipped to the tank)

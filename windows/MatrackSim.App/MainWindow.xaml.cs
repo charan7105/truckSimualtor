@@ -197,6 +197,15 @@ namespace MatrackSim.App
         {
             if (e.PropertyName == nameof(TrackerPeripheral.ShowLowFuel))
             {
+                // ShowLowFuel is raised from the background sim tick (System.Threading.Timer → Step →
+                // DetectLowFuel), so this handler can arrive off the UI thread. Data bindings auto-marshal,
+                // but this manual handler touches WPF elements directly — marshal it or it crashes when
+                // fuel drops below the warning level.
+                if (!Dispatcher.CheckAccess())
+                {
+                    Dispatcher.BeginInvoke(new Action(() => Sim_PropertyChanged(sender, e)));
+                    return;
+                }
                 if (Sim.ShowLowFuel) ShowLowFuel(); else CloseLowFuel();
             }
         }

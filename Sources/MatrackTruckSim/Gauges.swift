@@ -227,8 +227,9 @@ struct FuelCylinder: View {
         let shape = RoundedRectangle(cornerRadius: width * 0.46, style: .continuous)
         VStack(spacing: 8) {
             ZStack {
-                // glass body
-                shape.fill(LinearGradient(colors: [Theme.bg1.opacity(0.75), Theme.bg0.opacity(0.6)],
+                // glass body — lighter than the panel behind it so an empty vessel still reads as a tank
+                // (near-black glass used to vanish into the dark fuel panel)
+                shape.fill(LinearGradient(colors: [Color(hex: 0x1E232D).opacity(0.92), Color(hex: 0x12151C).opacity(0.86)],
                                           startPoint: .top, endPoint: .bottom))
                 // liquid with a gentle moving surface
                 TimelineView(.periodic(from: .now, by: 0.06)) { ctx in
@@ -241,8 +242,8 @@ struct FuelCylinder: View {
                 // glass gloss
                 shape.fill(LinearGradient(colors: [Color.white.opacity(0.14), .clear], startPoint: .topLeading, endPoint: .center))
                     .allowsHitTesting(false)
-                // rim
-                shape.stroke(Theme.stroke, lineWidth: 1.5)
+                // rim — brighter than Theme.stroke so the empty tank outline stays visible
+                shape.stroke(Color(hex: 0x474F5E), lineWidth: 1.5)
             }
             .frame(width: width, height: height)
             VStack(spacing: 1) {
