@@ -349,7 +349,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         } else {
             info("📶 back in range — telemetry resumes")
             if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
-            else if connected { status = "iPhone connected"; statusColor = Theme.green }
+            else if connected { status = "Device connected"; statusColor = Theme.green }
         }
     }
 
@@ -823,8 +823,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
-        connected = true; status = "iPhone connected"; statusColor = Theme.green
-        info("✓ iPhone subscribed to data characteristic")
+        connected = true; status = "Device connected"; statusColor = Theme.green
+        info("✓ Device subscribed to data characteristic")
     }
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
@@ -832,7 +832,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
         dropTimer?.invalidate(); dropTimer = nil; linkDown = false; dropEndsAt = nil   // out-of-range ends when the link actually drops → reconnect resumes streaming
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber
-        info("iPhone disconnected")
+        info("Device disconnected")
     }
     func peripheralManager(_ p: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for req in requests {

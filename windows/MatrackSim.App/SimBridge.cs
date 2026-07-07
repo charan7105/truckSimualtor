@@ -36,7 +36,7 @@ namespace MatrackSim.App
         private bool _running;
         public bool Running { get => _running; private set { _running = value; Raise(); Raise(nameof(LinkText)); } }
 
-        public string LinkText => Running ? $"FUEL LINK {LinkIP}:{Port}" : "";
+        public string LinkText => Running ? $"FUEL LINK {LinkIP}" : "";   // IP only — that's all the Fuel App needs (Link to sim → paste)
 
         private TcpListener _listener;
         private System.Threading.Timer _ipTimer;

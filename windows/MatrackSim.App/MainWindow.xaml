@@ -772,11 +772,17 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <TextBlock Text="{Binding FooterStatusText}" FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
-                        <!-- Fuel-app link address (phone's Fuel App → Link to sim → enter this) -->
+                        <!-- Fuel-app link address (phone's Fuel App → Link to sim → paste this). Click to copy the IP. -->
                         <Border Margin="14,0,0,0" Padding="9,3" CornerRadius="11" Background="#1F32D74B" BorderBrush="#6632D74B" BorderThickness="1"
+                                Cursor="Hand" MouseLeftButtonUp="LinkPill_Copy"
+                                ToolTip="Tap to copy the address, then paste it into the phone's Fuel App → Link to sim"
                                 Visibility="{Binding Source={x:Static app:SimBridge.Shared}, Path=Running, Converter={StaticResource BoolVis}}">
-                            <TextBlock Text="{Binding Source={x:Static app:SimBridge.Shared}, Path=LinkText}" FontFamily="{StaticResource Mono}"
-                                       FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Green}" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Source={x:Static app:SimBridge.Shared}, Path=LinkText}" FontFamily="{StaticResource Mono}"
+                                           FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Green}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="LinkCopyGlyph" Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="{StaticResource Green}" Opacity="0.8"
+                                           Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
                         </Border>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

@@ -592,7 +592,7 @@ namespace MatrackSim.App
             {
                 Info("📶 back in range — telemetry resumes");
                 if (Connected && Streaming) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }
-                else if (Connected) { Status = "iPhone connected"; StatusColorValue = StatusColor.Green; }
+                else if (Connected) { Status = "Device connected"; StatusColorValue = StatusColor.Green; }
             }
         }
 
@@ -1332,8 +1332,8 @@ namespace MatrackSim.App
             subscriberCount = count;
             if (count > prev)   // a central subscribed to the data characteristic
             {
-                Connected = true; Status = "iPhone connected"; StatusColorValue = StatusColor.Green;
-                Info("✓ iPhone subscribed to data characteristic");
+                Connected = true; Status = "Device connected"; StatusColorValue = StatusColor.Green;
+                Info("✓ Device subscribed to data characteristic");
             }
             else if (count == 0)   // last central unsubscribed → disconnected
             {
@@ -1342,7 +1342,7 @@ namespace MatrackSim.App
                 if (runningScenario != null) StopScenario();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
                 dropTimer?.Dispose(); dropTimer = null; LinkDown = false; DropEndsAt = null;   // out-of-range ends when the link actually drops → reconnect resumes streaming
                 Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
-                Info("iPhone disconnected");
+                Info("Device disconnected");
             }
         }
     }

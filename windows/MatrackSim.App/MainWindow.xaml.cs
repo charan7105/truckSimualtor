@@ -229,6 +229,16 @@ namespace MatrackSim.App
             if (ReferenceEquals(e.OriginalSource, LowFuelOverlay)) CloseLowFuel();
         }
 
+        // Click the FUEL LINK pill to copy just the IP — that's all the Fuel App needs (Link to sim → paste).
+        private void LinkPill_Copy(object sender, MouseButtonEventArgs e)
+        {
+            try { Clipboard.SetText(SimBridge.Shared.LinkIP); } catch { /* clipboard can transiently fail */ }
+            LinkCopyGlyph.Text = "\uE73E";   // Segoe MDL2 CheckMark - copied feedback
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1400) };
+            t.Tick += (s, ev) => { LinkCopyGlyph.Text = "\uE8C8"; t.Stop(); };   // Segoe MDL2 Copy glyph restored
+            t.Start();
+        }
+
         // MARK: - CONNECTION / SIGNAL
         private void Signal_Click(object sender, RoutedEventArgs e)
         {
