@@ -580,6 +580,54 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         log.append(l); if log.count > 250 { log.removeFirst(log.count - 250) }
         let sym = l.kind == .out ? "→" : (l.kind == .inbound ? "←" : (l.kind == .drop ? "⨯" : "•"))
         print("[\(l.time)] \(sym) \(l.text)")
+        Self.appendToLogFile(time: l.time, sym: sym, text: l.text)
+    }
+
+    // Persistent on-disk log (mirror of TrackerPeripheral.cs). The in-UI list is capped at 250 lines and
+    // vanishes on exit, so every LogLine is also appended here to diagnose BLE/connection problems after
+    // the fact. Path is announced in the log on startup. All file I/O is best-effort — logging must never
+    // crash the app.
+    private static let logFileLock = NSLock()
+    private static var _logFilePath: String?
+    private static var logSessionStarted = false
+    private static let sessionStampFormatter: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"; return f }()
+    static var logFilePath: String {
+        if let p = _logFilePath { return p }
+        do {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let dir = base.appendingPathComponent("MatrackSim/logs", isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            _logFilePath = dir.appendingPathComponent("matracksim.log").path
+        } catch {
+            _logFilePath = ""   // unwritable → disable file logging
+        }
+        return _logFilePath!
+    }
+
+    private static func appendToLogFile(time: String, sym: String, text: String) {
+        let path = logFilePath
+        if path.isEmpty { return }
+        logFileLock.lock(); defer { logFileLock.unlock() }
+        if !logSessionStarted {
+            logSessionStarted = true
+            // Keep the file from growing without bound across many sessions.
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+               let size = attrs[.size] as? Int, size > 2_000_000 {
+                try? Data().write(to: URL(fileURLWithPath: path))
+            }
+            appendString("\n===== MatrackSim session started \(sessionStampFormatter.string(from: Date())) =====\n", to: path)
+        }
+        appendString("[\(time)] \(sym) \(text)\n", to: path)
+    }
+
+    private static func appendString(_ s: String, to path: String) {
+        guard let data = s.data(using: .utf8) else { return }
+        if let fh = FileHandle(forWritingAtPath: path) {
+            defer { try? fh.close() }
+            fh.seekToEndOfFile(); fh.write(data)   // append
+        } else {
+            try? data.write(to: URL(fileURLWithPath: path))   // file didn't exist yet → create it
+        }
     }
 
     /// Publish telemetry to the UI, but only the values that actually changed — otherwise the
@@ -807,6 +855,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             peripheral.add(service)
             ensureClock()
             info("Bluetooth on — publishing tracker service")
+            info("log file: \(Self.logFilePath)")
         case .poweredOff: status = "Bluetooth OFF"; statusColor = Theme.red; info("Bluetooth is OFF")
         case .unauthorized: status = "Bluetooth denied"; statusColor = Theme.red
             info("Bluetooth permission denied — allow it for Terminal in System Settings ▸ Privacy & Security ▸ Bluetooth")
