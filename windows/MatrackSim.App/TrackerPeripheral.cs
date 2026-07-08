@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -10,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
+using Windows.Devices.Radios;
 using Windows.Storage.Streams;
 using MatrackSim.Core;
 
@@ -838,11 +840,60 @@ namespace MatrackSim.App
         // MARK: - Logging
         private static string Stamp() => DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
         private void Info(string s) => Push(new LogLine(Stamp(), s, LogLine.Kind.Info));
+
+        // Persistent on-disk log. The in-UI list is capped at 250 lines and vanishes on exit, so every
+        // LogLine is also appended here to diagnose BLE/connection problems after the fact. Path is
+        // announced in the log on startup. All file I/O is best-effort — logging must never crash the app.
+        private static readonly object logFileLock = new object();
+        private static string _logFilePath;
+        private static bool _logSessionStarted;
+        internal static string LogFilePath
+        {
+            get
+            {
+                if (_logFilePath == null)
+                {
+                    try
+                    {
+                        var dir = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "MatrackSim", "logs");
+                        Directory.CreateDirectory(dir);
+                        _logFilePath = Path.Combine(dir, "matracksim.log");
+                    }
+                    catch { _logFilePath = ""; }   // unwritable → disable file logging
+                }
+                return _logFilePath;
+            }
+        }
+
+        private static void AppendToLogFile(string time, string sym, string text)
+        {
+            var path = LogFilePath;
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                lock (logFileLock)
+                {
+                    if (!_logSessionStarted)
+                    {
+                        _logSessionStarted = true;
+                        // Keep the file from growing without bound across many sessions.
+                        try { if (File.Exists(path) && new FileInfo(path).Length > 2_000_000) File.WriteAllText(path, ""); }
+                        catch { }
+                        File.AppendAllText(path, $"{Environment.NewLine}===== MatrackSim session started {DateTime.Now:yyyy-MM-dd HH:mm:ss} ====={Environment.NewLine}");
+                    }
+                    File.AppendAllText(path, $"[{time}] {sym} {text}{Environment.NewLine}");
+                }
+            }
+            catch { /* disk full / locked / permissions — never crash on logging */ }
+        }
+
         private void Push(LogLine l)
         {
             // Log is bound to the WPF ListBox; mutating it off the UI thread throws. The sim ticks on a
             // background Timer, so marshal collection changes onto the dispatcher (see PostToUi in the
-            // presentation partial). The console echo below can run on any thread.
+            // presentation partial). The console echo + file write below can run on any thread.
             PostToUi(() =>
             {
                 Log.Add(l);
@@ -853,6 +904,7 @@ namespace MatrackSim.App
                          (l.LineKind == LogLine.Kind.Inbound ? "←" :
                          (l.LineKind == LogLine.Kind.Drop ? "⨯" : "•"));
             Console.WriteLine($"[{l.Time}] {sym} {l.Text}");
+            AppendToLogFile(l.Time, sym, l.Text);
         }
 
         /// <summary>
@@ -1134,11 +1186,49 @@ namespace MatrackSim.App
             else if (c.StartsWith("$wdg") || c.StartsWith("wdg")) { lastWatchdog = DateTime.UtcNow; }   // keepalive: consume like a real tracker (no reply)
         }
 
+        // Ensure the Bluetooth radio is powered on before we try to create the GATT server.
+        // Returns true if the radio is on (or we can't tell — let GATT creation surface the real error);
+        // returns false only when the radio is off AND we could not turn it on, having already reported why.
+        private async Task<bool> EnsureRadioOnAsync(BluetoothAdapter adapter)
+        {
+            try
+            {
+                var radio = await adapter.GetRadioAsync();
+                if (radio == null) return true;                 // no radio handle — don't block; CreateAsync will report
+                if (radio.State == RadioState.On) return true;   // already on, nothing to do
+
+                // Radio is Off/Disabled — ask Windows for permission, then flip it on (the Settings toggle equivalent).
+                var access = await Radio.RequestAccessAsync();
+                if (access != RadioAccessStatus.Allowed)
+                {
+                    Status = "Bluetooth is off"; StatusColorValue = StatusColor.Red;
+                    Info($"✗ Bluetooth radio is {radio.State} and Windows denied access to turn it on ({access}) — enable it in Settings ▸ Devices ▸ Bluetooth, then relaunch");
+                    return false;
+                }
+                var setResult = await radio.SetStateAsync(RadioState.On);
+                if (setResult != RadioAccessStatus.Allowed)
+                {
+                    Status = "Bluetooth is off"; StatusColorValue = StatusColor.Red;
+                    Info($"✗ tried to turn Bluetooth on but Windows refused ({setResult}) — enable it in Settings ▸ Devices ▸ Bluetooth, then relaunch");
+                    return false;
+                }
+                Info("✓ Bluetooth radio was off — turned it on automatically");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: if we can't inspect/toggle the radio, fall through and let GATT creation report the real error.
+                Info($"⚠ could not check/enable the Bluetooth radio ({ex.Message}) — if advertising fails, turn Bluetooth on manually");
+                return true;
+            }
+        }
+
         // MARK: - WinRT GATT peripheral (CBPeripheralManagerDelegate equivalent)
         private async Task SetupBLEAsync()
         {
             try
             {
+                Info($"log file: {LogFilePath}");
                 // Windows BLE advertising REQUIRES the adapter to support the peripheral role. Many built-in /
                 // USB adapters are central-only: StartAdvertising() then silently no-ops — nothing is broadcast,
                 // no exception is thrown — which is exactly why a generic scanner (nRF) sees nothing while the app
@@ -1162,6 +1252,11 @@ namespace MatrackSim.App
                     Info("✗ this Bluetooth adapter does NOT support the peripheral (advertising) role — the ELD app and BLE scanners will never see it. Fix: use a peripheral-capable USB BLE dongle, or the ESP32 advertiser.");
                     return;
                 }
+
+                // The adapter can advertise, but GATT creation still needs the radio powered ON — otherwise
+                // CreateAsync fails with RadioNotAvailable. Turn it on for the user (same as the Settings
+                // ▸ Bluetooth toggle) instead of just reporting it off.
+                if (!await EnsureRadioOnAsync(adapter)) return;
 
                 var serviceUuid = Guid.Parse("7add0001-f286-4c78-adda-520c4ba3500c");
                 var result = await GattServiceProvider.CreateAsync(serviceUuid);
@@ -1229,7 +1324,7 @@ namespace MatrackSim.App
                             advertiseRetries++;
                             Status = $"Advert aborted — retrying ({advertiseRetries}/{MaxAdvertiseRetries})…";
                             StatusColorValue = StatusColor.Amber;
-                            Info($"⚠ advertisement aborted by the BT stack — retry {advertiseRetries}/{MaxAdvertiseRetries}");
+                            Info($"⚠ advertisement aborted by the BT stack (error: {e.Error}) — retry {advertiseRetries}/{MaxAdvertiseRetries}");
                             _ = RetryAdvertiseAsync(s);
                         }
                         else
@@ -1241,7 +1336,7 @@ namespace MatrackSim.App
                     else
                     {
                         Status = $"Not advertising ({e.Status})"; StatusColorValue = StatusColor.Red;
-                        Info($"⚠ advertisement is NOT on air (status: {e.Status}) — a scanner will see nothing");
+                        Info($"⚠ advertisement is NOT on air (status: {e.Status}, error: {e.Error}) — a scanner will see nothing");
                     }
                 });
 

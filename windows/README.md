@@ -55,7 +55,14 @@ Prereqs: **.NET 8 SDK** (or VS 2022 17.8+), Windows 10 build 19041+.
 
 1. **The Bluetooth adapter must support peripheral role.** Confirmed on the target PC
    (`IsPeripheralRoleSupported = True`). If a different PC returns False, add a USB BLE dongle that
-   supports peripheral mode.
+   supports peripheral mode. To check any PC, run the bundled diagnostic (from the `windows` folder):
+   ```
+   powershell -ExecutionPolicy Bypass -File .\check-adapter.ps1
+   ```
+   It reports adapter presence, peripheral-role support, radio power, and whether a real connectable
+   advertisement holds stable. Note: a `PASS` proves the adapter *advertises*; it still can't prove the
+   adapter *completes* an incoming connection — if a phone then times out (GATT 133 / status 8), the
+   adapter can't accept connections and you need a different adapter or the ESP32.
 2. **Rename the PC to start with `ELD-MA`** — Settings ▸ System ▸ About ▸ *Rename this PC* → e.g.
    `ELD-MA-PC`. Windows advertises the machine name and the ELD app routes by the `ELD-MA` prefix
    (same workaround as the Mac). Reboot, then the app will see it.

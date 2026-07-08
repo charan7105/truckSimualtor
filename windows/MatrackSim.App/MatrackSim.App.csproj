@@ -15,6 +15,10 @@
     <!-- Per-Monitor-V2 DPI awareness so the UI renders crisp at native resolution on high-DPI / 4K screens
          instead of being bitmap-stretched (the soft, low-res "720p" look that makes everything read cheap). -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Single-file publish (PublishSingleFile=true) MUST extract WPF's native helper DLLs at runtime.
+         Without this the app crashes immediately with System.DllNotFoundException in WindowsBase
+         (SetWindowLongPtrWndProc) the moment the first window opens. No effect on non-single-file builds. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MatrackSim.Core/MatrackSim.Core.csproj" />
