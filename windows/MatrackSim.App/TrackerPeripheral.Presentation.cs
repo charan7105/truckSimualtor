@@ -53,6 +53,7 @@ namespace MatrackSim.App
             Raise(nameof(ActiveSpeedStop)); Raise(nameof(ActiveSpeed60)); Raise(nameof(ActiveSpeed90)); Raise(nameof(ActiveSpeed110));
             Raise(nameof(ActiveT1)); Raise(nameof(ActiveT5)); Raise(nameof(ActiveT10)); Raise(nameof(ActiveT25)); Raise(nameof(ActiveT30));
             Raise(nameof(ActiveSigFull)); Raise(nameof(ActiveSigAuto)); Raise(nameof(ActiveSigPoor));
+            Raise(nameof(SignalSlider)); Raise(nameof(SignalDbmLabel));
         }
 
         /// <summary>Run an action on the UI thread (or inline if already there / no app present).</summary>
@@ -217,6 +218,16 @@ namespace MatrackSim.App
         public bool ActiveSigFull => !LinkDown && (int)Math.Round(Config.SignalPct) == 100;
         public bool ActiveSigAuto => AutoSignal;
         public bool ActiveSigPoor => !LinkDown && (int)Math.Round(Config.SignalPct) == 25;
+
+        // RSSI slider (0–100% → ESP32 real TX power). Two-way: dragging it turns AUTO off and drives the signal.
+        public double SignalSlider
+        {
+            get => Config.SignalPct;
+            set { AutoSignal = false; SetSignal(value); Raise(nameof(SignalSlider)); Raise(nameof(SignalDbmLabel)); }
+        }
+        public string SignalDbmLabel =>
+            Config.Link == SimConfig.Transport.Esp32Serial ? $"{Config.TxPowerDbm:+0;-0;0} dBm" : "n/a (BLE)";
+        public bool UseEsp32 => Config.Link == SimConfig.Transport.Esp32Serial;
 
         // ---- CONNECTION / SIGNAL (F1) -------------------------------------------------------------
         public string SignalState

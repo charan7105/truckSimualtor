@@ -696,6 +696,23 @@
                                             </Button.Style>
                                         </Button>
                                     </UniformGrid>
+                                    <!-- ESP32 (USB-serial) transport: pick the port + toggle BLE ⇄ ESP32. -->
+                                    <DockPanel Margin="0,0,0,6">
+                                        <TextBlock Text="ESP32" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <ToggleButton Content="LINK" DockPanel.Dock="Right" Width="50" Margin="6,0,0,0"
+                                                      Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
+                                                      IsChecked="{Binding UseEsp32, Mode=OneWay}" Click="Esp32Toggle_Click"
+                                                      ToolTip="Route telemetry through the ESP32 over USB serial (enables real RSSI)" />
+                                        <ComboBox x:Name="PortBox" DropDownOpened="PortBox_DropDownOpened" ToolTip="ESP32 serial port" />
+                                    </DockPanel>
+                                    <!-- RSSI = ESP32 real BLE TX power. 0% = out of range (-12 dBm), 100% = full (+9 dBm). -->
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="RSSI" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SignalDbmLabel}" Width="60" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0" Maximum="100" Value="{Binding SignalSlider, Mode=TwoWay}"
+                                                ToolTip="Bluetooth signal strength → ESP32 BLE TX power" />
+                                    </DockPanel>
                                     <StackPanel Visibility="{Binding LinkDownVisible, Converter={StaticResource BoolVis}}" Margin="0,0,0,6">
                                         <TextBlock Text="{Binding OutageCountdown}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Amber}" />
                                     </StackPanel>

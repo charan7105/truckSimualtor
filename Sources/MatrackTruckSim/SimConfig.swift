@@ -75,5 +75,21 @@ struct SimConfig: Codable, Equatable {
     // MARK: Identity (device info defaults live in DeviceInfo)
     var advertisedName: String = "ELD-MA"
 
+    // MARK: ESP32 serial transport (new)
+    enum Transport: String, Codable { case ble, esp32Serial }
+    /// Which radio the sim uses: built-in CoreBluetooth, or the ESP32 over USB serial.
+    var link: Transport = .ble
+    /// tty path of the ESP32 (e.g. "/dev/cu.usbserial-0001"). Chosen in the UI.
+    var serialPortName: String = ""
+    /// Currently-applied ESP32 TX power in dBm (echoed by "#txpower ok").
+    var txPowerDbm: Int = 9
+
+    // Signal% (0–100) → TX power (dBm). Linear across the C3 step range, snapped by the firmware.
+    //   100% → +9 (near/full) · 25% (POOR) → ~-6 · 0% → -12 (out of range).
+    static func signalPctToDbm(_ pct: Double) -> Int {
+        let dbm = -12 + (max(0, min(100, pct)) / 100.0) * 21.0    // -12..+9
+        return Int((dbm / 3.0).rounded()) * 3                     // snap to 3-dBm grid
+    }
+
     static let `default` = SimConfig()
 }

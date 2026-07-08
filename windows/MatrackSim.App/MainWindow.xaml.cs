@@ -29,6 +29,7 @@ namespace MatrackSim.App
             DataContext = new TrackerPeripheral();
             Sim.Log.CollectionChanged += Log_CollectionChanged;
             Sim.PropertyChanged += Sim_PropertyChanged;     // drive the low-fuel overlay off the controller flag
+            RefreshPorts();                                 // populate the ESP32 COM-port picker
 
             // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
             // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
@@ -248,6 +249,24 @@ namespace MatrackSim.App
         }
 
         private void AutoSignal_Click(object sender, RoutedEventArgs e) => Sim.SetAutoSignal(!Sim.AutoSignal);
+
+        // MARK: - ESP32 (USB-serial) transport
+        private void RefreshPorts()
+        {
+            string keep = PortBox.SelectedItem as string;
+            PortBox.ItemsSource = System.IO.Ports.SerialPort.GetPortNames();
+            if (keep != null) PortBox.SelectedItem = keep;
+            else if (PortBox.Items.Count > 0) PortBox.SelectedIndex = 0;
+        }
+
+        private void PortBox_DropDownOpened(object sender, EventArgs e) => RefreshPorts();
+
+        private void Esp32Toggle_Click(object sender, RoutedEventArgs e)
+        {
+            bool on = ((System.Windows.Controls.Primitives.ToggleButton)sender).IsChecked == true;
+            Sim.Config.SerialPortName = PortBox.SelectedItem as string ?? "";
+            Sim.SwitchTransport(on ? SimConfig.Transport.Esp32Serial : SimConfig.Transport.Ble);
+        }
 
         private void Drop_Click(object sender, RoutedEventArgs e)
         {

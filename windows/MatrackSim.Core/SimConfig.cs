@@ -1,3 +1,5 @@
+using System;
+
 namespace MatrackSim.Core
 {
     /// <summary>
@@ -86,6 +88,23 @@ namespace MatrackSim.Core
 
         // Identity (device info defaults live in DeviceInfo)
         public string AdvertisedName = "ELD-MA";
+
+        // ── ESP32 serial transport (new) ─────────────────────────────────────
+        public enum Transport { Ble, Esp32Serial }
+        /// <summary>Which radio the sim uses: built-in WinRT BLE, or the ESP32 over USB serial.</summary>
+        public Transport Link = Transport.Ble;
+        /// <summary>COM port (Windows) / tty path (macOS) of the ESP32. Chosen in the UI.</summary>
+        public string SerialPortName = "";
+        /// <summary>Currently-applied ESP32 TX power in dBm (echoed by "#txpower ok").</summary>
+        public int TxPowerDbm = 9;
+
+        // Signal% (0–100) → TX power (dBm). Linear across the C3 step range, snapped by the firmware.
+        //   100% → +9 (near/full) · 25% (POOR) → ~-6 · 0% → -12 (out of range).
+        public static int SignalPctToDbm(double pct)
+        {
+            double dbm = -12 + (Math.Max(0, Math.Min(100, pct)) / 100.0) * 21.0;   // -12..+9
+            return (int)Math.Round(dbm / 3.0, MidpointRounding.AwayFromZero) * 3;   // snap to 3-dBm grid
+        }
 
         public static SimConfig Default => new SimConfig();
     }

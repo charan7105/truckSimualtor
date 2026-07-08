@@ -102,6 +102,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var autoSignalCountdown = 0.0      // AUTO signal: seconds until the next random signal level
     private var autoSignalDipCountdown = Double.random(in: 300...600)   // AUTO signal: seconds until the next out-of-range dip (dead zone)
     private var dropTimer: Timer?             // F1: out-of-range outage timer
+    // ESP32 serial transport (alternative to CoreBluetooth — see startSerial)
+    private var serialFD: Int32 = -1
+    private var serialSource: DispatchSourceRead?
+    private var serialLineBuf = ""
     private var nextViolationAtMeters = 0.0   // F3: distance-triggered violation scheduler
     private var violationHoldSec = 0.0        // F3: remaining seconds of the active violation
     private var violationIsIdle = false       // F3: alternate speeding ↔ idle
@@ -122,8 +126,106 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     func startBLE() {
+        if config.link == .esp32Serial { startSerial(); return }
         guard manager == nil else { return }
         manager = CBPeripheralManager(delegate: self, queue: nil)
+    }
+
+    // MARK: - ESP32 serial transport (alternative to CoreBluetooth)
+    // The desktop sim still generates every byte; the ESP32 is just the radio, fed over USB serial.
+    // 1 framed line == 1 BLE notification (frames are ASCII with no newline — see MTPacket.frame).
+
+    /// tty devices that look like a USB-serial adapter (the ESP32 shows up as /dev/cu.usb…/cu.SLAB…/cu.wchusb…).
+    var availableSerialPorts: [String] {
+        let all = (try? FileManager.default.contentsOfDirectory(atPath: "/dev")) ?? []
+        return all.filter { $0.hasPrefix("cu.") }.map { "/dev/\($0)" }.sorted()
+    }
+
+    func startSerial() {
+        stopSerial()
+        guard !config.serialPortName.isEmpty else { status = "No serial port selected"; statusColor = Theme.red; return }
+        let fd = open(config.serialPortName, O_RDWR | O_NOCTTY | O_NONBLOCK)
+        guard fd >= 0 else {
+            status = "Serial open failed"; statusColor = Theme.red
+            info("✗ \(config.serialPortName): \(String(cString: strerror(errno)))")
+            return
+        }
+        // 115200 8N1, raw.
+        var tio = termios()
+        tcgetattr(fd, &tio)
+        cfmakeraw(&tio)
+        cfsetispeed(&tio, speed_t(B115200))
+        cfsetospeed(&tio, speed_t(B115200))
+        tio.c_cflag |= tcflag_t(CREAD | CLOCAL)
+        tcsetattr(fd, TCSANOW, &tio)
+        serialFD = fd
+        let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
+        src.setEventHandler { [weak self] in self?.serialReadable() }
+        src.setCancelHandler { close(fd) }
+        serialSource = src
+        src.resume()
+        status = "ESP32 on \(config.serialPortName)"; statusColor = Theme.amber
+        info("serial transport open on \(config.serialPortName) @115200")
+        setTxPower(config.txPowerDbm)                 // push the current signal level to the board
+    }
+
+    func stopSerial() {
+        serialSource?.cancel(); serialSource = nil    // cancel handler closes the fd
+        serialFD = -1
+        serialLineBuf = ""
+    }
+
+    private func serialReadable() {
+        guard serialFD >= 0 else { return }
+        var buf = [UInt8](repeating: 0, count: 1024)
+        let n = read(serialFD, &buf, buf.count)
+        guard n > 0 else { return }
+        serialLineBuf += String(decoding: buf[0..<n], as: UTF8.self)
+        while let nl = serialLineBuf.firstIndex(of: "\n") {
+            var line = String(serialLineBuf[serialLineBuf.startIndex..<nl])
+            serialLineBuf.removeSubrange(serialLineBuf.startIndex...nl)
+            if line.hasSuffix("\r") { line.removeLast() }
+            if !line.isEmpty { onSerialLine(line) }
+        }
+    }
+
+    // Map ESP32 events onto the SAME state the BLE path drives (connected/streaming, command responder).
+    private func onSerialLine(_ line: String) {
+        if line.hasPrefix("<") {                                             // a command the ELD app wrote
+            let c = String(line.dropFirst())
+            push(LogLine(time: stamp(), text: c, kind: .inbound)); handleTrackerCommand(c)
+        } else if line.hasPrefix("#connected") || line.hasPrefix("#subscribed") {
+            connected = true; status = "Device connected (ESP32)"; statusColor = Theme.green; info("✓ ELD app connected via ESP32")
+        } else if line.hasPrefix("#disconnected") {
+            connected = false; streaming = false; heldPacket = nil; pending.removeAll()
+            status = "Advertising as \(advertisedName) (ESP32)"; statusColor = Theme.amber; info("ELD app disconnected")
+        } else { info(line) }                                               // #txpower ok / #status / banner
+    }
+
+    private func serialWrite(_ s: String) {
+        guard serialFD >= 0 else { return }
+        let bytes = Array(s.utf8)
+        _ = bytes.withUnsafeBytes { write(serialFD, $0.baseAddress, bytes.count) }
+    }
+
+    /// Send a local control command to the ESP32 (no-op unless the serial port is open).
+    private func serialControl(_ cmd: String) {
+        guard config.link == .esp32Serial, serialFD >= 0 else { return }
+        serialWrite(cmd + "\n")
+    }
+
+    /// Command the ESP32's real BLE TX power (no-op in BLE mode — macOS has no TX-power API).
+    func setTxPower(_ dbm: Int) {
+        config.txPowerDbm = dbm
+        serialControl("#txpower \(dbm)")
+    }
+
+    /// Tear down the current transport and start the other (UI toggle: BLE ⇄ ESP32).
+    func switchTransport(_ t: SimConfig.Transport) {
+        guard config.link != t else { return }
+        if config.link == .ble { teardownBLE() } else { stopSerial() }
+        config.link = t
+        startBLE()   // routes to startSerial() when t == .esp32Serial
     }
 
     // MARK: - Cluster-derived display helpers (computed from existing state)
@@ -281,6 +383,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func latencyMsFor(_ pct: Double) -> Double { max(0, (100 - pct) * 9) }   // FULL 0ms · WEAK(70) ~270ms · POOR(40) ~540ms
     func setSignal(_ pct: Double) {
         config.signalPct = pct
+        setTxPower(SimConfig.signalPctToDbm(pct))       // ESP32 mode → real RSSI on the phone; BLE mode → no-op
         config.extraDelayMs = latencyMsFor(pct)         // weak signal → jittery latency via the emitNow() delay
         config.packetLossPct = 0                         // BLE does NOT drop app packets on weak signal — it retransmits
         if pct <= 0 { if !linkDown { dropLink(seconds: config.rangeOutageSec) } }   // idempotent: a slider drag to 0 arms once
@@ -320,9 +423,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         linkDown = true
         config.signalPct = 0
         status = "OUT OF RANGE — link dropped"; statusColor = Theme.red
-        info("⛔️ forced disconnect — BLE link torn down (app sees a real disconnect)")
+        info("⛔️ forced disconnect — link torn down (app sees a real disconnect)")
         dropEndsAt = Date().addingTimeInterval(max(1, seconds))
-        teardownBLE()
+        serialControl("#adv off")   // ESP32 mode: stop advertising so the phone truly loses the device
+        teardownBLE()               // BLE mode: drop the CB manager (no-op in ESP32 mode)
         dropTimer?.invalidate()
         dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
     }
@@ -343,7 +447,13 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         linkDown = false
         if config.signalPct < 1 { config.signalPct = preDropSignalPct }    // restore the pre-drop weak level (or 100)
         config.extraDelayMs = latencyMsFor(config.signalPct); config.packetLossPct = 0
-        if manager == nil {                                                // forced-disconnect teardown → bring the radio back
+        if config.link == .esp32Serial {                                   // ESP32: re-advertise on the board, don't reopen the port
+            serialControl("#adv on")                                       // recover if a forced disconnect stopped advertising
+            info("📶 back in range — telemetry resumes")
+            if connected && streaming { status = "Connected · streaming"; statusColor = Theme.green }
+            else if connected { status = "Device connected"; statusColor = Theme.green }
+            else { status = "Advertising as \(advertisedName) (ESP32)"; statusColor = Theme.amber }
+        } else if manager == nil {                                         // forced-disconnect teardown → bring the radio back
             info("📶 back in range — re-advertising for reconnect")
             startBLE()                                                     // recreates the peripheral → re-advertises → app rescans & reconnects
         } else {
@@ -695,6 +805,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func queue(_ data: Data) { pending.append(data); drain() }
 
     private func drain() {
+        if config.link == .esp32Serial {
+            guard serialFD >= 0 else { pending.removeAll(); return }
+            while let next = pending.first {
+                serialWrite(String(decoding: next, as: UTF8.self) + "\n")   // 1 frame = 1 line = 1 BLE notify
+                pending.removeFirst()
+            }
+            return
+        }
         guard manager != nil, dataChar != nil else { return }
         while let next = pending.first {
             if manager.updateValue(next, for: dataChar, onSubscribedCentrals: nil) { pending.removeFirst() } else { break }

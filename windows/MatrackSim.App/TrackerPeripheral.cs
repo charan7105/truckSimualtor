@@ -281,6 +281,11 @@ namespace MatrackSim.App
         // BLE bookkeeping: WinRT reports connected centrals via SubscribedClients, not a single bool.
         private int subscriberCount;
 
+        // ESP32 serial transport (alternative to WinRT BLE — see StartSerial)
+        private System.IO.Ports.SerialPort serialPort;
+        private System.Threading.Thread serialReader;
+        private volatile bool serialRunning;
+
         public TrackerPeripheral()
         {
             ApplyConfigToEngine();
@@ -292,10 +297,91 @@ namespace MatrackSim.App
 
         public void StartBLE()
         {
+            if (Config.Link == SimConfig.Transport.Esp32Serial) { StartSerial(); return; }
             if (serviceProvider != null) return;
             // WinRT GATT setup is async; fire-and-forget like Swift's CBPeripheralManager init (which
             // also completes asynchronously via peripheralManagerDidUpdateState).
             _ = SetupBLEAsync();
+        }
+
+        // MARK: - ESP32 serial transport (alternative to WinRT BLE)
+        // The desktop sim still generates every byte; the ESP32 is just the radio, fed over USB serial.
+        // 1 framed line == 1 BLE notification (frames are ASCII with no newline — see MTPacket.Frame).
+        public void StartSerial()
+        {
+            StopSerial();
+            if (string.IsNullOrWhiteSpace(Config.SerialPortName))
+            { Status = "No serial port selected"; StatusColorValue = StatusColor.Red; return; }
+            try
+            {
+                serialPort = new System.IO.Ports.SerialPort(Config.SerialPortName, 115200)
+                { NewLine = "\n", Encoding = Encoding.UTF8, DtrEnable = false, RtsEnable = false, WriteTimeout = 500 };
+                serialPort.Open();
+                serialRunning = true;
+                serialReader = new System.Threading.Thread(SerialReadLoop) { IsBackground = true };
+                serialReader.Start();
+                Status = $"ESP32 on {Config.SerialPortName}"; StatusColorValue = StatusColor.Amber;
+                Info($"serial transport open on {Config.SerialPortName} @115200");
+                SetTxPower(Config.TxPowerDbm);                 // push the current signal level to the board
+            }
+            catch (Exception ex)
+            { Status = "Serial open failed"; StatusColorValue = StatusColor.Red; Info($"✗ {Config.SerialPortName}: {ex.Message}"); }
+        }
+
+        public void StopSerial()
+        {
+            serialRunning = false;
+            try { serialPort?.Close(); } catch { }
+            serialPort = null;
+        }
+
+        private void SerialReadLoop()
+        {
+            while (serialRunning && serialPort != null)
+            {
+                string line;
+                try { line = serialPort.ReadLine(); } catch { break; }        // closed / unplugged
+                if (string.IsNullOrEmpty(line)) continue;
+                line = line.TrimEnd('\r');
+                PostToUi(() => OnSerialLine(line));                            // marshal to the sim/UI thread
+            }
+        }
+
+        // Map ESP32 events onto the SAME state the BLE path drives (Connected/Streaming, command responder).
+        private void OnSerialLine(string line)
+        {
+            if (line.StartsWith("<"))                                          // a command the ELD app wrote
+            { string c = line.Substring(1); Push(new LogLine(Stamp(), c, LogLine.Kind.Inbound)); HandleTrackerCommand(c); }
+            else if (line.StartsWith("#connected") || line.StartsWith("#subscribed"))
+            { Connected = true; Status = "Device connected (ESP32)"; StatusColorValue = StatusColor.Green; Info("✓ ELD app connected via ESP32"); }
+            else if (line.StartsWith("#disconnected"))
+            { Connected = false; Streaming = false; heldPacket = null; lock (pending) pending.Clear(); Status = $"Advertising as {AdvertisedName} (ESP32)"; StatusColorValue = StatusColor.Amber; Info("ELD app disconnected"); }
+            else { Info(line); }                                              // #txpower ok / #status / banner
+        }
+
+        /// <summary>Send a local control command to the ESP32 (no-op unless the serial port is open).</summary>
+        private void SerialControl(string cmd)
+        {
+            var sp = serialPort;
+            if (Config.Link == SimConfig.Transport.Esp32Serial && sp != null && sp.IsOpen)
+            { try { sp.Write(cmd + "\n"); } catch { /* port may have vanished */ } }
+        }
+
+        /// <summary>Command the ESP32's real BLE TX power (no-op in BLE mode — Windows has no TX-power API).</summary>
+        public void SetTxPower(int dbm)
+        {
+            Config.TxPowerDbm = dbm;
+            SerialControl($"#txpower {dbm}");
+        }
+
+        /// <summary>Tear down the current transport and start the other (UI toggle: BLE ⇄ ESP32).</summary>
+        public void SwitchTransport(SimConfig.Transport t)
+        {
+            if (Config.Link == t) return;
+            if (Config.Link == SimConfig.Transport.Ble) TeardownBLE(); else StopSerial();
+            Config.Link = t;
+            StartBLE();   // routes to StartSerial() when t == Esp32Serial (see the guard above)
+            Raise(nameof(SignalDbmLabel));
         }
 
         // MARK: - Cluster-derived display helpers (computed from existing state)
@@ -511,6 +597,7 @@ namespace MatrackSim.App
         public void SetSignal(double pct)
         {
             Config.SignalPct = pct;
+            SetTxPower(SimConfig.SignalPctToDbm(pct));            // ESP32 mode → real RSSI on the phone; BLE mode → no-op
             Config.ExtraDelayMs = LatencyMsFor(pct);              // weak signal → jittery latency via the EmitNow() delay
             Config.PacketLossPct = 0;                             // BLE does NOT drop app packets on weak signal — it retransmits
             if (pct <= 0) { if (!LinkDown) DropLink(Config.RangeOutageSec); }   // idempotent: a slider drag to 0 arms once
@@ -546,9 +633,10 @@ namespace MatrackSim.App
             LinkDown = true;
             Config.SignalPct = 0;
             Status = "OUT OF RANGE — link dropped"; StatusColorValue = StatusColor.Red;
-            Info("⛔️ forced disconnect — BLE link torn down (app sees a real disconnect)");
+            Info("⛔️ forced disconnect — link torn down (app sees a real disconnect)");
             DropEndsAt = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));
-            TeardownBLE();
+            SerialControl("#adv off");   // ESP32 mode: stop advertising so the phone truly loses the device
+            TeardownBLE();               // BLE mode: drop the GATT provider (no-op in ESP32 mode)
             dropTimer?.Dispose();
             dropTimer = new Timer(_ => ResumeLink(), null, (long)(Math.Max(1, seconds) * 1000), Timeout.Infinite);
         }
@@ -585,7 +673,15 @@ namespace MatrackSim.App
             LinkDown = false;
             if (Config.SignalPct < 1) Config.SignalPct = preDropSignalPct;    // restore the pre-drop weak level (or 100)
             Config.ExtraDelayMs = LatencyMsFor(Config.SignalPct); Config.PacketLossPct = 0;
-            if (serviceProvider == null)                                       // forced-disconnect teardown → bring the radio back
+            if (Config.Link == SimConfig.Transport.Esp32Serial)               // ESP32: just re-advertise on the board, don't reopen the port
+            {
+                SerialControl("#adv on");                                      // recover if a forced disconnect stopped advertising
+                Info("📶 back in range — telemetry resumes");
+                if (Connected && Streaming) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }
+                else if (Connected) { Status = "Device connected"; StatusColorValue = StatusColor.Green; }
+                else { Status = $"Advertising as {AdvertisedName} (ESP32)"; StatusColorValue = StatusColor.Amber; }
+            }
+            else if (serviceProvider == null)                                  // forced-disconnect teardown → bring the radio back
             {
                 Info("📶 back in range — re-advertising for reconnect");
                 StartBLE();                                                    // recreates the peripheral → re-advertises → app rescans & reconnects
@@ -986,6 +1082,16 @@ namespace MatrackSim.App
 
         private void Drain()
         {
+            if (Config.Link == SimConfig.Transport.Esp32Serial)
+            {
+                var sp = serialPort;
+                if (sp == null || !sp.IsOpen) { lock (pending) pending.Clear(); return; }
+                List<byte[]> toSendSerial;
+                lock (pending) { if (pending.Count == 0) return; toSendSerial = new List<byte[]>(pending); pending.Clear(); }
+                foreach (var frame in toSendSerial)
+                { try { sp.Write(Encoding.UTF8.GetString(frame) + "\n"); } catch { } }   // 1 frame = 1 line = 1 BLE notify
+                return;
+            }
             var ch = dataChar;
             if (serviceProvider == null || ch == null) return;
             // WinRT NotifyValueAsync delivers to all subscribed clients (CB updateValue onSubscribedCentrals:nil).

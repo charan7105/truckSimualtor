@@ -350,6 +350,30 @@ struct NetworkPanel: View {
 
                     Divider().overlay(Theme.stroke)
 
+                    // ESP32 (USB-serial) transport: pick the port + toggle BLE ⇄ ESP32 (enables real RSSI).
+                    HStack(spacing: 6) {
+                        Text("ESP32").sectionLabel()
+                        Spacer()
+                        Text(sim.config.link == .esp32Serial ? "\(sim.config.txPowerDbm >= 0 ? "+" : "")\(sim.config.txPowerDbm) dBm" : "n/a (BLE)")
+                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice)
+                    }
+                    HStack(spacing: 6) {
+                        Picker("", selection: Binding(get: { sim.config.serialPortName }, set: { sim.config.serialPortName = $0 })) {
+                            Text("Select port…").tag("")
+                            ForEach(sim.availableSerialPorts, id: \.self) { p in
+                                Text(portShort(p)).tag(p)
+                            }
+                        }
+                        .labelsHidden().pickerStyle(.menu).tint(Theme.ice)
+                        NeonButton(title: "LINK", tint: Theme.ice, filled: sim.config.link == .esp32Serial) {
+                            sim.switchTransport(sim.config.link == .esp32Serial ? .ble : .esp32Serial)
+                        }
+                    }
+                    // RSSI = ESP32 real BLE TX power. 0% out of range (-12 dBm) … 100% full (+9 dBm).
+                    rssiSlider
+
+                    Divider().overlay(Theme.stroke)
+
                     // Raw transport effects (advanced). Weak signal adds latency (driven by SIGNAL / AUTO), not loss.
                     Text("RAW EFFECTS").sectionLabel()
                     cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
@@ -403,6 +427,20 @@ struct NetworkPanel: View {
         // (The colour meaning lives in the FULL/WEAK/POOR state label above.)
         let active = !sim.linkDown && !sim.autoSignal && Int(sim.config.signalPct.rounded()) == Int(pct)
         return NeonButton(title: title, tint: Theme.ice, filled: active) { sim.autoSignal = false; sim.setSignal(pct) }
+    }
+
+    // Short tty name for the picker menu (drop the "/dev/cu." prefix so it fits).
+    private func portShort(_ path: String) -> String {
+        path.replacingOccurrences(of: "/dev/cu.", with: "").replacingOccurrences(of: "/dev/", with: "")
+    }
+
+    // RSSI = emulated signal %, which in ESP32 mode drives the board's real BLE TX power.
+    private var rssiSlider: some View {
+        HStack(spacing: 8) {
+            Text("RSSI").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
+            Slider(value: Binding(get: { sim.config.signalPct }, set: { sim.autoSignal = false; sim.setSignal($0) }), in: 0...100).tint(Theme.ice)
+            Text("\(Int(sim.config.signalPct.rounded()))%").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
+        }
     }
 
     private var countSlider: some View {
