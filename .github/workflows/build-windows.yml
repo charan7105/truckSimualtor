@@ -45,6 +45,9 @@ jobs:
           path: MatrackSim-win-x64.zip
 
       - name: Attach to the v1.0.0 Release
+        # Only publish to the public release from main. On feature branches this job still
+        # builds + self-tests + uploads a downloadable artifact, but must NOT clobber the release.
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
