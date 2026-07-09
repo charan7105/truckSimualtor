@@ -703,7 +703,7 @@ namespace MatrackSim.App
                 // Windows routing: OpenStreetMap (Nominatim geocode + OSRM road route, no API key), with a
                 // built-in city table + synthetic-line fallback when offline. Replaces the Mac's MapKit
                 // Directions (Core's stub throws NotImplementedOnThisPlatform). See WindowsRouting.
-                var pts = await WindowsRouting.RouteAsync(from, to);
+                var pts = await WindowsRouting.RouteAsync(from, to, Info);   // Info logs which server served it / any fallback
                 Route.SetRoute(pts);
                 RouteCoords = pts;
                 DrivingRoute = false;            // freshly planned route returns to overview; press DRIVE to go

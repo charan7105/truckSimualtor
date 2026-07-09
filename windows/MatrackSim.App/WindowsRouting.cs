@@ -19,7 +19,7 @@ namespace MatrackSim.App
         private static readonly HttpClient Http = CreateClient();
         private static HttpClient CreateClient()
         {
-            var c = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            var c = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             // Nominatim's usage policy requires an identifying User-Agent.
             c.DefaultRequestHeaders.Add("User-Agent", "MatrackTruckSim/1.0 (windows simulator)");
             return c;
@@ -56,29 +56,54 @@ namespace MatrackSim.App
             ["Omaha, NE"] = new Coordinate(41.2565, -95.9345),
         };
 
-        public static async Task<List<Coordinate>> RouteAsync(string from, string to)
+        // Public keyless road-routing endpoints, tried in order. Both speak the same OSRM API. The FOSSGIS
+        // instance (run by the OSM Foundation) is far more reliable than router.project-osrm.org, which is a
+        // *demo* server ("no guarantees", aggressively rate-limited) — so it's the primary, demo is the backup.
+        private static readonly string[] OsrmHosts =
+        {
+            "https://routing.openstreetmap.de/routed-car",   // FOSSGIS — primary (reliable)
+            "https://router.project-osrm.org",               // demo — fallback
+        };
+
+        /// <param name="log">Optional sink for status (which server served the route, or why it fell back).</param>
+        public static async Task<List<Coordinate>> RouteAsync(string from, string to, Action<string> log = null)
         {
             Coordinate a = await GeocodeAsync(from);
             Coordinate b = await GeocodeAsync(to);
 
-            // Try a real road route from OSRM; if it fails, synthesize a smooth line.
+            // Try each real road-routing server in turn; the first that answers with a road route wins.
+            foreach (var host in OsrmHosts)
+            {
+                var pts = await TryOsrmAsync(host, a, b);
+                if (pts != null) { log?.Invoke($"road route via {HostLabel(host)} · {pts.Count} pts"); return pts; }
+            }
+
+            // Every road server failed → straight-ish line. Surface it so it never looks like a silent "flight path".
+            log?.Invoke("⚠ road routing unavailable — drawing a direct line (check internet / firewall to the routing servers)");
+            return Synthesize(a, b);
+        }
+
+        /// <summary>Fetch a road route from one OSRM host; returns null on any failure so the caller tries the next.</summary>
+        private static async Task<List<Coordinate>> TryOsrmAsync(string host, Coordinate a, Coordinate b)
+        {
             try
             {
-                string url = "https://router.project-osrm.org/route/v1/driving/" +
+                string url = $"{host}/route/v1/driving/" +
                     $"{a.Longitude.ToString("F6", CultureInfo.InvariantCulture)},{a.Latitude.ToString("F6", CultureInfo.InvariantCulture)};" +
                     $"{b.Longitude.ToString("F6", CultureInfo.InvariantCulture)},{b.Latitude.ToString("F6", CultureInfo.InvariantCulture)}" +
                     "?overview=full&geometries=geojson";
                 using var doc = JsonDocument.Parse(await Http.GetStringAsync(url));
+                if (doc.RootElement.GetProperty("code").GetString() != "Ok") return null;   // e.g. "NoRoute"
                 var coords = doc.RootElement.GetProperty("routes")[0].GetProperty("geometry").GetProperty("coordinates");
                 var pts = new List<Coordinate>(coords.GetArrayLength());
                 foreach (var p in coords.EnumerateArray())
                     pts.Add(new Coordinate(p[1].GetDouble(), p[0].GetDouble()));   // GeoJSON is [lon,lat]
-                if (pts.Count >= 2) return pts;
+                return pts.Count >= 2 ? pts : null;
             }
-            catch { /* offline / OSRM down — fall through to synthetic */ }
-
-            return Synthesize(a, b);
+            catch { return null; }   // offline / rate-limited / timeout — caller falls back to the next host
         }
+
+        private static string HostLabel(string host) => host.Contains("openstreetmap.de") ? "FOSSGIS OSRM" : "OSRM demo";
 
         private static async Task<Coordinate> GeocodeAsync(string query)
         {
