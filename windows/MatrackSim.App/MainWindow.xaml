@@ -706,12 +706,20 @@
                                         <ComboBox x:Name="PortBox" DropDownOpened="PortBox_DropDownOpened" ToolTip="ESP32 serial port" />
                                     </DockPanel>
                                     <!-- RSSI = ESP32 real BLE TX power. 0% = out of range (-12 dBm), 100% = full (+9 dBm). -->
-                                    <DockPanel Margin="0,0,0,8">
+                                    <DockPanel Margin="0,0,0,6">
                                         <TextBlock Text="RSSI" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding SignalDbmLabel}" Width="60" DockPanel.Dock="Right" HorizontalAlignment="Right"
                                                    FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
                                         <Slider Minimum="0" Maximum="100" Value="{Binding SignalSlider, Mode=TwoWay}"
                                                 ToolTip="Bluetooth signal strength → ESP32 BLE TX power" />
+                                    </DockPanel>
+                                    <!-- FLICKER: edge-of-range wobble — signal flaps weak⇄almost-gone so the phone's link flickers. -->
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Flicker" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <ToggleButton Content="FLICKER" Width="90" HorizontalAlignment="Left"
+                                                      Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}"
+                                                      IsChecked="{Binding FlickerOn, Mode=OneWay}" Click="Flicker_Click"
+                                                      ToolTip="Wobble the signal at the edge of range — the phone's connection flickers like a real weak spot" />
                                     </DockPanel>
                                     <StackPanel Visibility="{Binding LinkDownVisible, Converter={StaticResource BoolVis}}" Margin="0,0,0,6">
                                         <TextBlock Text="{Binding OutageCountdown}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Amber}" />

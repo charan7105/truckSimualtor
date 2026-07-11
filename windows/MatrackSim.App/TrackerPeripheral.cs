@@ -374,6 +374,42 @@ namespace MatrackSim.App
             SerialControl($"#txpower {dbm}");
         }
 
+        // FLICKER: emulate sitting at the very edge of range — the signal rapidly wobbles between
+        // "barely there" and "almost gone", so the phone sees a flapping connection (the classic
+        // weak-spot / doorway-of-the-truck behavior). ESP32 mode wobbles the REAL TX power
+        // (-12 ⇄ -3 dBm every 1.5s); BLE mode wobbles the emulated latency instead.
+        private Timer flickerTimer;
+        private bool flickerLow;
+        private bool _flickerOn;
+        public bool FlickerOn { get => _flickerOn; set => Set(ref _flickerOn, value); }
+
+        public void SetFlicker(bool on)
+        {
+            FlickerOn = on;
+            flickerTimer?.Dispose(); flickerTimer = null;
+            if (on)
+            {
+                AutoSignal = false;                       // manual effect takes over from AUTO (same rule as presets)
+                Info("〰 flicker on — signal wobbling at the edge of range");
+                flickerTimer = new Timer(_ =>
+                {
+                    flickerLow = !flickerLow;
+                    if (Config.Link == SimConfig.Transport.Esp32Serial)
+                        SetTxPower(flickerLow ? -12 : -3);            // real RSSI flaps at the edge
+                    else
+                    {
+                        Config.SignalPct = flickerLow ? 5 : 25;       // BLE mode: latency flaps (no real RSSI)
+                        Config.ExtraDelayMs = LatencyMsFor(Config.SignalPct);
+                    }
+                }, null, 0, 1500);
+            }
+            else
+            {
+                Info("〰 flicker off — signal restored");
+                SetSignal(100);                            // settle back to full, like AUTO-off does
+            }
+        }
+
         /// <summary>Tear down the current transport and start the other (UI toggle: BLE ⇄ ESP32).</summary>
         public void SwitchTransport(SimConfig.Transport t)
         {

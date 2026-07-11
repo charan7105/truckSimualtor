@@ -371,6 +371,10 @@ struct NetworkPanel: View {
                     }
                     // RSSI = ESP32 real BLE TX power. 0% out of range (-12 dBm) … 100% full (+9 dBm).
                     rssiSlider
+                    // FLICKER: edge-of-range wobble — signal flaps weak⇄almost-gone so the phone's link flickers.
+                    NeonButton(title: "〰 FLICKER", tint: Theme.amber, filled: sim.flickerOn) {
+                        sim.setFlicker(!sim.flickerOn)
+                    }
 
                     Divider().overlay(Theme.stroke)
 

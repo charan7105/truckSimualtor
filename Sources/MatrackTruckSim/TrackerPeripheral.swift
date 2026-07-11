@@ -102,6 +102,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var autoSignalCountdown = 0.0      // AUTO signal: seconds until the next random signal level
     private var autoSignalDipCountdown = Double.random(in: 300...600)   // AUTO signal: seconds until the next out-of-range dip (dead zone)
     private var dropTimer: Timer?             // F1: out-of-range outage timer
+    @Published var flickerOn = false          // edge-of-range signal wobble (see setFlicker)
+    private var flickerTimer: Timer?
+    private var flickerLow = false
     // ESP32 serial transport (alternative to CoreBluetooth — see startSerial)
     private var serialFD: Int32 = -1
     private var serialSource: DispatchSourceRead?
@@ -218,6 +221,33 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func setTxPower(_ dbm: Int) {
         config.txPowerDbm = dbm
         serialControl("#txpower \(dbm)")
+    }
+
+    // FLICKER: emulate sitting at the very edge of range — the signal rapidly wobbles between
+    // "barely there" and "almost gone", so the phone sees a flapping connection (the classic
+    // weak-spot / doorway-of-the-truck behavior). ESP32 mode wobbles the REAL TX power
+    // (-12 ⇄ -3 dBm every 1.5s); BLE mode wobbles the emulated latency instead.
+    func setFlicker(_ on: Bool) {
+        flickerOn = on
+        flickerTimer?.invalidate(); flickerTimer = nil
+        if on {
+            autoSignal = false                        // manual effect takes over from AUTO (same rule as presets)
+            info("〰 flicker on — signal wobbling at the edge of range")
+            flickerTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.flickerLow.toggle()
+                if self.config.link == .esp32Serial {
+                    self.setTxPower(self.flickerLow ? -12 : -3)       // real RSSI flaps at the edge
+                } else {
+                    self.config.signalPct = self.flickerLow ? 5 : 25  // BLE mode: latency flaps (no real RSSI)
+                    self.config.extraDelayMs = self.latencyMsFor(self.config.signalPct)
+                }
+            }
+            flickerTimer?.fire()
+        } else {
+            info("〰 flicker off — signal restored")
+            setSignal(100)                             // settle back to full, like AUTO-off does
+        }
     }
 
     /// Tear down the current transport and start the other (UI toggle: BLE ⇄ ESP32).

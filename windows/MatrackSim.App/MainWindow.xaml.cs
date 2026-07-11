@@ -261,6 +261,8 @@ namespace MatrackSim.App
 
         private void PortBox_DropDownOpened(object sender, EventArgs e) => RefreshPorts();
 
+        private void Flicker_Click(object sender, RoutedEventArgs e) => Sim.SetFlicker(!Sim.FlickerOn);
+
         private void Esp32Toggle_Click(object sender, RoutedEventArgs e)
         {
             bool on = ((System.Windows.Controls.Primitives.ToggleButton)sender).IsChecked == true;
