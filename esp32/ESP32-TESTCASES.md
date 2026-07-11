@@ -16,7 +16,10 @@ phone with ELD app, **test account only** · nRF Connect (scanner) installed on 
 3. **Presets** — Click FULL, then POOR. → Scanner RSSI strong (~+9 dBm) vs weak (~−6 dBm).
 4. **Connect through the board** — Open the ELD app, connect to ELD-MA. → App connects; sim says "Device connected (ESP32)". iOS banner turns orange (engine off).
 5. **Real out-of-range** — Click **DROP**. → ELD-MA vanishes from the scanner; ELD app disconnects (says/speaks "Bluetooth Disconnected"). Click **BACK** → app reconnects by itself.
-6. **Walk-away test** — Take the phone far from the board / behind walls. → Connection degrades and drops like a real tracker; comes back when close.
+6. **Walk-away vs slider — must behave the SAME** (the key equivalence test):
+   - **6a. Real walk** — Slider at 100. Walk the phone away / behind a wall until the app disconnects. Walk back → it reconnects. Note what the app did (weak → disconnect → auto-reconnect, time it took).
+   - **6b. Buttons only** — Phone next to the board. Drag the slider 100 → 25 → 0, wait for the disconnect, then slide back to 100 (or DROP → BACK).
+   - **Pass:** the app behaves the **same** in 6a and 6b — same disconnect, same auto-reconnect, same stored-data replay after. That proves we can reproduce "driver walked away from the truck" with clicks, no walking.
 
 ## B. Engine & driving (duty status)
 
