@@ -87,6 +87,23 @@ Sim scenario 11 (malformed packet).
 Connected + streaming for 30+ minutes.
 ✅ No random drops, no lock-up, board not hot.
 
+**18. Overnight at the weak point** (start before leaving, check in the morning)
+Set the slider just above the drop point you found in case 11 (barely-alive signal). Leave it connected and streaming overnight. The sim writes everything to its log file automatically.
+✅ Morning check: still connected (or cleanly reconnected), board responsive, not hot.
+📋 Then look at the log (`%LocalAppData%\MatrackSim\logs\matracksim.log`) and count: how many disconnects, did every reconnect succeed, any hour-long gaps.
+
+**19. Overnight FLICKER**
+Second night (or another board): leave **FLICKER** on overnight — thousands of weak⇄almost-gone swings.
+✅ Morning: board still alive and controllable (`#status` replies), app reconnects, no stuck advertising.
+
+### What these two nights catch (the problems we're hunting)
+- **Memory leaks / heap creep** on the board → it dies or stops advertising after hours.
+- **Reconnect-storm handling** — hundreds of drop/reconnect cycles → does anything get stuck (board, Windows serial, phone app).
+- **Serial buffer overflow** on the PC↔board link during long streaming.
+- **Stored-data pileup** — every disconnect buffers packets; overnight = a big backlog. Does the morning replay work or choke.
+- **Board overheating / brownout** on cheap USB power.
+- **Phone-side battery/doze** — Android may kill the app's BLE at night; note if the gap is phone-caused, not board-caused.
+
 ---
 
 ## App experience (optional — can be added later)
