@@ -51,7 +51,7 @@ Check: ELD-MA gone from scanner, phone disconnects.
 **13.** Do: BACK.
 Check: phone reconnects by itself.
 
-**14.** Do: pull the board's USB mid-drive, 10s, plug back.
+**14.** Do: pull the board's USB mid-drive, 10s, plug back, click **LINK** again.
 Check: phone reconnects once ELD-MA returns.
 
 ## Stress
@@ -76,10 +76,10 @@ Check morning: board still answers, app reconnects.
 **20. Morning walk-up** — Do: slider 0, raise slowly to 100, engine ON.
 Check: phone connects by itself "as he walks up".
 
-**21. Fuel stop** — Do: STOP the truck, slider to 0, wait 15 min, slider to 100.
+**21. Fuel stop** — Do: STOP the truck, slider to **5** (not 0 — 0 auto-returns after the Auto-return timer), wait 15 min, slider to 100.
 Check: reconnects itself, idle time all there.
 
-**22. Tunnel** — Do: driving at 65, DROP, 2 min, BACK.
+**22. Tunnel** — Do: set **Auto-return to 120s**, drive at 65, click DROP, let it come back on its own.
 Check: miles replay in, no hole in the trip.
 
 **23. Bad phone spot** (the #1 complaint) — Do: FLICKER on, drive a 30-min route.
@@ -94,7 +94,7 @@ Check morning: connected, no phantom driving events.
 **26. Phone reboot** — Do: mid-drive, phone Bluetooth off 5 min, on.
 Check: reconnects, missed miles replay.
 
-**27. No phone** — Do: drive 10 min with no phone connected, then connect.
+**27. No phone** — Do: run sim **scenario 12** (it scripts this: log out → sim drives → log back in).
 Check: drive arrives as **Unassigned Driving** to claim.
 
 ---

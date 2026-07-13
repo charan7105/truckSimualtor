@@ -650,6 +650,10 @@ namespace MatrackSim.App
             preDropSignalPct = Config.SignalPct >= 1 ? Config.SignalPct : 100;   // remember weak level to restore on return
             LinkDown = true;
             Config.SignalPct = 0;
+            // ESP32 mode: real out-of-range = not discoverable at all, so stop the board advertising too
+            // (the board keeps its BLE identity, so the phone reconnects fine on #adv on — the Windows
+            // identity concern below only applies to the built-in WinRT provider).
+            SerialControl("#adv off");
             Status = $"OUT OF RANGE — silent {(int)seconds}s"; StatusColorValue = StatusColor.Red;
             Info($"📵 out of range: telemetry suppressed for {(int)seconds}s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)");
             DropEndsAt = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));

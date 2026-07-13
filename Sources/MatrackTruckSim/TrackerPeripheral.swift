@@ -437,6 +437,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         preDropSignalPct = config.signalPct >= 1 ? config.signalPct : 100   // remember weak level to restore on return
         linkDown = true
         config.signalPct = 0
+        // ESP32 mode: real out-of-range = not discoverable at all, so stop the board advertising too
+        // (the board keeps its BLE identity, so the phone reconnects fine on #adv on).
+        serialControl("#adv off")
         status = "OUT OF RANGE — silent \(Int(seconds))s"; statusColor = Theme.red
         info("📵 out of range: telemetry suppressed for \(Int(seconds))s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)")
         dropEndsAt = Date().addingTimeInterval(max(1, seconds))
