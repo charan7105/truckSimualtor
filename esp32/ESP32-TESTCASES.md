@@ -1,153 +1,102 @@
-# ESP32 tracker test cases
+# ESP32 test cases
 
-All cases are at the **tracker level** — does the board behave like a real MT tracker on the radio.
-The phone/app is only used as the measuring tool. Do the step → check the ✅.
+Format: **Do** this → **Check** this happens. Mark ✅ or ❌.
 
-**Setup:** ESP32 plugged into the PC · sim running → pick port → **LINK** · phone with **nRF Connect**
-(free BLE scanner) · ELD app (test account) for the connection cases.
+Setup: board on USB · sim → pick port → **LINK** · phone with ELD app (test account) + **nRF Connect** (scanner).
 
 ---
 
-## A. Advertising & identity
+## Board
 
-**1. Advertises**
-Power the board.
-✅ nRF Connect shows **ELD-MA** with service `7add0001…`.
+**1.** Do: power the board.
+Check: scanner shows **ELD-MA**.
 
-**2. Survives a power cycle**
-Unplug the board, wait 10s, plug back.
-✅ ELD-MA is advertising again by itself, no PC action needed.
+**2.** Do: unplug board 10s, plug back.
+Check: ELD-MA advertising again by itself.
 
-**3. Re-advertises after a disconnect**
-Connect a phone, then turn phone Bluetooth off.
-✅ Board goes back to advertising (visible in scanner again) so the next connect works.
+**3.** Do: connect the ELD app.
+Check: connects; sim says "Device connected (ESP32)".
 
-## B. Connection
+**4.** Do: watch the sim log while connected.
+Check: data goes out, phone commands (`readdata`, `$wdg`) come back.
 
-**4. Phone connects**
-Connect the ELD app (iPhone and Android if possible).
-✅ Connects; sim shows "Device connected (ESP32)".
+**5.** Do: DROP → BACK, 5 times.
+Check: reconnects every time.
 
-**5. Two-way traffic**
-Watch the sim's packet log while connected.
-✅ Telemetry goes out; the phone's commands (`readdata`, `$wdg` ~every 20s) come back in. Both directions through the board.
+## Signal
 
-**6. Reconnect loop**
-Connect → DROP → BACK, 5 times in a row.
-✅ Reconnects every time, no stuck state, no board reset needed.
+**6.** Do: RSSI slider 100 → 0 → 100.
+Check: scanner signal drops ~20 dB, comes back.
 
-## C. Signal / TX power (the reason this board exists)
+**7.** Do: slider slowly 0 → 100.
+Check: signal climbs in steps (−12…+9 dBm).
 
-**7. Signal control works**
-RSSI slider 100 → 0 → 100.
-✅ Scanner shows the signal drop ~20 dB and recover.
+**8.** Do: slider at 15%, stream 2 min.
+Check: weak but nothing lost.
 
-**8. Every power step**
-Slider slowly 0 → 100.
-✅ Signal climbs in steps: −12, −9, −6, −3, 0, +3, +6, +9 dBm. Note the scanner reading at each.
+**9.** Do: a) walk away till it disconnects, walk back. b) same with slider only.
+Check: app behaves the **same** both times.
 
-**9. Weak but connected = no data loss**
-Slider at 10–20%, stay connected, stream 2 minutes.
-✅ Every packet still arrives (BLE retries itself). Nothing lost, just slower.
+**10.** Do: lower one step at a time, 1 min each.
+Check: write down the dBm where the phone drops.
 
-**10. Walking away = moving the slider**
-a) Slider 100, walk the phone away until it disconnects, walk back → reconnects.
-b) Stand still, do it with the slider only: 100 → 0 → 100.
-✅ Same behavior both times. Clicks replace walking.
+**11.** Do: click **FLICKER**, leave 5 min.
+Check: signal jumps in scanner, connection flaps, nothing crashes.
 
-**11. Find the drop point**
-Lower one step at a time, ~1 min each.
-✅ Note the dBm where the phone actually disconnects (we need it to tune the presets).
+## Recovery
 
-**12. Flicker (weak spot)**
-Click **FLICKER** — the signal wobbles by itself every ~1.5s at the weak edge.
-✅ Scanner shows the signal jumping; the connection flaps (drops/returns); board never locks up. Click again to stop.
+**12.** Do: DROP.
+Check: ELD-MA gone from scanner, phone disconnects.
 
-## D. Out of range & recovery
+**13.** Do: BACK.
+Check: phone reconnects by itself.
 
-**13. DROP / BACK**
-DROP → ✅ ELD-MA vanishes from the scanner, phone disconnects.
-BACK → ✅ board advertises again, phone reconnects by itself.
+**14.** Do: pull the board's USB mid-drive, 10s, plug back.
+Check: phone reconnects once ELD-MA returns.
 
-**14. Board reboot mid-use**
-While connected and streaming, pull the board's USB, 10s, plug back (re-LINK if needed).
-✅ Phone drops, then reconnects once ELD-MA returns — like a tracker power-cycling in the truck.
+## Stress
 
-## E. Data & stress through the board
+**15.** Do: scenario 8 (300 stored packets), then DUMP STORED at 0.5s.
+Check: all arrive, no freeze.
 
-**15. Big stored dump**
-Sim scenario 8 (300 saved packets), then DUMP STORED at 0.5s cadence.
-✅ All packets make it through the serial→BLE path, no freeze, no garbled frames.
+**16.** Do: scenario 11 (garbage packet).
+Check: app ignores it, keeps running.
 
-**16. Garbage packet**
-Sim scenario 11 (malformed packet).
-✅ Passed through untouched; nothing on the board breaks.
+**17.** Do: leave connected + driving 30 min.
+Check: no drops, board not hot.
 
-**17. Soak**
-Connected + streaming for 30+ minutes.
-✅ No random drops, no lock-up, board not hot.
+**18.** Do: slider just above the drop point (from #10), leave overnight.
+Check morning: still connected (or cleanly reconnected), board alive; sim log shows how many drops.
 
-**18. Overnight at the weak point** (start before leaving, check in the morning)
-Set the slider just above the drop point you found in case 11 (barely-alive signal). Leave it connected and streaming overnight. The sim writes everything to its log file automatically.
-✅ Morning check: still connected (or cleanly reconnected), board responsive, not hot.
-📋 Then look at the log (`%LocalAppData%\MatrackSim\logs\matracksim.log`) and count: how many disconnects, did every reconnect succeed, any hour-long gaps.
+**19.** Do: FLICKER on, leave overnight.
+Check morning: board still answers, app reconnects.
 
-**19. Overnight FLICKER**
-Second night (or another board): leave **FLICKER** on overnight — thousands of weak⇄almost-gone swings.
-✅ Morning: board still alive and controllable (`#status` replies), app reconnects, no stuck advertising.
+## Driver scenes
 
-### What these two nights catch (the problems we're hunting)
-- **Memory leaks / heap creep** on the board → it dies or stops advertising after hours.
-- **Reconnect-storm handling** — hundreds of drop/reconnect cycles → does anything get stuck (board, Windows serial, phone app).
-- **Serial buffer overflow** on the PC↔board link during long streaming.
-- **Stored-data pileup** — every disconnect buffers packets; overnight = a big backlog. Does the morning replay work or choke.
-- **Board overheating / brownout** on cheap USB power.
-- **Phone-side battery/doze** — Android may kill the app's BLE at night; note if the gap is phone-caused, not board-caused.
+**20. Morning walk-up** — Do: slider 0, raise slowly to 100, engine ON.
+Check: phone connects by itself "as he walks up".
+
+**21. Fuel stop** — Do: STOP the truck, slider to 0, wait 15 min, slider to 100.
+Check: reconnects itself, idle time all there.
+
+**22. Tunnel** — Do: driving at 65, DROP, 2 min, BACK.
+Check: miles replay in, no hole in the trip.
+
+**23. Bad phone spot** (the #1 complaint) — Do: FLICKER on, drive a 30-min route.
+Check: connection flaps all along, but final log complete — no lost or doubled miles.
+
+**24. Pre-trip** — Do: ENGINE on/off 5 times, 1 min apart.
+Check: every on/off logged, none missed or doubled.
+
+**25. Sleeper night** — Do: engine off, slider 40, overnight.
+Check morning: connected, no phantom driving events.
+
+**26. Phone reboot** — Do: mid-drive, phone Bluetooth off 5 min, on.
+Check: reconnects, missed miles replay.
+
+**27. No phone** — Do: drive 10 min with no phone connected, then connect.
+Check: drive arrives as **Unassigned Driving** to claim.
 
 ---
 
-## F. Real driver scenes — what customers actually live through
-
-Each one is a real field situation, reproduced with clicks. These are the cases that matter.
-
-**20. Morning walk-up**
-Driver walks toward the truck, phone in pocket. → Slider at 0, engine off. Raise the slider slowly 0 → 100 (approaching), then ENGINE on.
-✅ Phone auto-connects on its own as "he gets close" — before he ever opens the app — and logs the power-up.
-
-**21. Fuel-stop walk-away**
-Driver parks, takes the phone, walks into the truck stop for 15 min. → Drive, STOP, slider slowly 100 → 0. Wait 15 min (sim keeps engine idling). Slider back → 100.
-✅ Phone reconnects by itself; the idle time is all there; no gap, no crash.
-
-**22. Tunnel / dead zone at 65 mph**
-Signal vanishes instantly mid-drive (not slowly like walking). → While driving at highway speed, click **DROP**, wait 2 min, **BACK**.
-✅ Reconnects; the 2 minutes of driven miles replay in; the trip line has no hole.
-
-**23. Phone on the dash edge — bad spot all day**
-The classic "my app keeps disconnecting" complaint: phone lives in a weak spot. → **FLICKER** on, drive a full route (30–60 min).
-✅ Connection flaps the whole time, but at the end the log is complete — every mile accounted for, no duplicate miles, app never crashed. **This is the #1 customer complaint scene.**
-
-**24. Pre-trip inspection**
-Driver cycles the engine several times checking things. → ENGINE on/off 5 times, ~1 min apart, phone connected.
-✅ Every power-up/shutdown is logged, in order, none missed, no double events.
-
-**25. Sleeper-cab night**
-Engine off, phone charging in the cab a few feet from the tracker, all night. → Engine off, slider ~40 (cab distance), leave overnight (= case 18 but the way a driver actually lives it).
-✅ Morning: still (or re-)connected, no phantom driving events appeared overnight.
-
-**26. Two-driver swap / phone reboot**
-Driver's phone dies or reboots mid-day. → While connected and driving, turn the phone's Bluetooth off 5 min, then on.
-✅ Reconnects without touching the sim; missed miles replay in.
-
-**27. Left the phone at home**
-Truck drives with no phone connected at all. → No phone connected, run a 10-min drive, THEN connect the phone.
-✅ On connect, the whole drive arrives as stored data → shows up as Unassigned Driving to claim. (Nothing silently lost.)
-
----
-
-## App experience (optional — can be added later)
-If he wants to also watch the app side while running the above: auto-**Driving** kicks in past 5 mph (case 5 data),
-disconnect mid-drive replays the missed miles (case 13/14), and driving while logged out creates an
-**Unassigned Driving** entry to claim. Not required for the hardware sign-off.
-
-## Ship-if
-**1, 4, 5, 7, 9, 10, 13, 14, 17** pass → the board is a valid tracker stand-in and we merge.
+**Ship-if:** 1, 3, 4, 6, 8, 9, 12, 13, 17 pass.
