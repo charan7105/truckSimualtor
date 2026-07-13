@@ -106,6 +106,44 @@ Second night (or another board): leave **FLICKER** on overnight — thousands of
 
 ---
 
+## F. Real driver scenes — what customers actually live through
+
+Each one is a real field situation, reproduced with clicks. These are the cases that matter.
+
+**20. Morning walk-up**
+Driver walks toward the truck, phone in pocket. → Slider at 0, engine off. Raise the slider slowly 0 → 100 (approaching), then ENGINE on.
+✅ Phone auto-connects on its own as "he gets close" — before he ever opens the app — and logs the power-up.
+
+**21. Fuel-stop walk-away**
+Driver parks, takes the phone, walks into the truck stop for 15 min. → Drive, STOP, slider slowly 100 → 0. Wait 15 min (sim keeps engine idling). Slider back → 100.
+✅ Phone reconnects by itself; the idle time is all there; no gap, no crash.
+
+**22. Tunnel / dead zone at 65 mph**
+Signal vanishes instantly mid-drive (not slowly like walking). → While driving at highway speed, click **DROP**, wait 2 min, **BACK**.
+✅ Reconnects; the 2 minutes of driven miles replay in; the trip line has no hole.
+
+**23. Phone on the dash edge — bad spot all day**
+The classic "my app keeps disconnecting" complaint: phone lives in a weak spot. → **FLICKER** on, drive a full route (30–60 min).
+✅ Connection flaps the whole time, but at the end the log is complete — every mile accounted for, no duplicate miles, app never crashed. **This is the #1 customer complaint scene.**
+
+**24. Pre-trip inspection**
+Driver cycles the engine several times checking things. → ENGINE on/off 5 times, ~1 min apart, phone connected.
+✅ Every power-up/shutdown is logged, in order, none missed, no double events.
+
+**25. Sleeper-cab night**
+Engine off, phone charging in the cab a few feet from the tracker, all night. → Engine off, slider ~40 (cab distance), leave overnight (= case 18 but the way a driver actually lives it).
+✅ Morning: still (or re-)connected, no phantom driving events appeared overnight.
+
+**26. Two-driver swap / phone reboot**
+Driver's phone dies or reboots mid-day. → While connected and driving, turn the phone's Bluetooth off 5 min, then on.
+✅ Reconnects without touching the sim; missed miles replay in.
+
+**27. Left the phone at home**
+Truck drives with no phone connected at all. → No phone connected, run a 10-min drive, THEN connect the phone.
+✅ On connect, the whole drive arrives as stored data → shows up as Unassigned Driving to claim. (Nothing silently lost.)
+
+---
+
 ## App experience (optional — can be added later)
 If he wants to also watch the app side while running the above: auto-**Driving** kicks in past 5 mph (case 5 data),
 disconnect mid-drive replays the missed miles (case 13/14), and driving while logged out creates an
