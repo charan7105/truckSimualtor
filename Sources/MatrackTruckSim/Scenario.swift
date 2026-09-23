@@ -146,6 +146,27 @@ enum ScenarioRunner {
         Date(timeIntervalSinceNow: -Double(count - i) * dt)
     }
 
+    /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
+    /// Used by the self-test to prove stored packets are stamped inside the outage window.
+    static func utcOf(_ wire: String) -> Date? {
+        let f = wire.components(separatedBy: ",")
+        guard f.count > 11, f[10].count == 6, f[11].count == 6 else { return nil }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HHmmss ddMMyy"
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        return fmt.date(from: "\(f[10]) \(f[11])")
+    }
+
+    /// Stamp for a stored packet recorded DURING an outage that began at `start`.
+    ///
+    /// The old behaviour backdated every packet into the minutes immediately BEFORE the disconnect,
+    /// which is exactly the span the ELD app has already attributed to the logged-in driver — so all
+    /// of them were classified as assigned and no Unassigned Driving Period was ever produced. Anchor
+    /// the recorded drive to the start of the outage instead, where nothing is attributed to anyone.
+    static func recorded(_ i: Int, _ dt: Double, from start: Date) -> Date {
+        start.addingTimeInterval(Double(i) * dt)
+    }
+
     /// F2: the exact wire sequence a real `readstr` dump produces — N stored 'S' packets + footers.
     /// Played back at a configurable cadence to reproduce the fast-dump disconnect (≈0.5s breaks, 1s is fine).
     static func storedDump(count: Int, config: SimConfig) -> [Emitted] {
@@ -173,7 +194,9 @@ enum ScenarioRunner {
     /// handler appends LAST_STORED_PACKET + the count AFTER the app reconnects, because that post-reconnect
     /// readstr is the only state in which both apps run stored replay (and UDP/unassigned classification).
     /// Timestamps are backdated so they fall outside the logged-in driver's duty windows → flagged UDP.
-    static func storedReplay(for s: Scenario, config: SimConfig) -> [Emitted] {
+    /// `from` is the instant the BLE link drops; the recorded drive is stamped forward from there.
+    /// Defaults to the legacy pre-disconnect backdating so the headless self-test keeps its shape.
+    static func storedReplay(for s: Scenario, config: SimConfig, from start: Date? = nil) -> [Emitted] {
         let e = EngineState()
         e.odometerMiles = config.startOdometerMiles
         e.engineHours = config.startEngineHours
@@ -188,7 +211,8 @@ enum ScenarioRunner {
             e.ignitionOn = true
             for i in 0..<max(0, count) {
                 e.advance(dt: dt)
-                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(i, count, dt))), kind: .stored))
+                let at = start.map { recorded(i, dt, from: $0) } ?? backdated(i, count, dt)
+                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: at)), kind: .stored))
             }
             return out
         }
@@ -203,7 +227,8 @@ enum ScenarioRunner {
                 e.ignitionOn = phase.ignition
                 rampSpeed(e, toward: phase.targetSpeedMph, config: config)
                 e.advance(dt: dt)
-                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(idx, total, dt))), kind: .stored))
+                let at = start.map { recorded(idx, dt, from: $0) } ?? backdated(idx, total, dt)
+                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: at)), kind: .stored))
                 idx += 1
             }
         }
@@ -257,15 +282,15 @@ enum Scenarios {
                  phases: [Phase(seconds: 30, targetSpeedMph: 55, ignition: true)],
                  transport: .parseFailure(atTick: 10),
                  appSteps: ["Tap RUN", "A malformed packet is sent → app rejects it and keeps running (no crash)"]),
-        Scenario(id: 12, name: "Unassigned Driving (log out first)",
+        Scenario(id: 12, name: "Unassigned Driving (~7 min)",
                  expect: "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
                  phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),
                           Phase(seconds: 300, targetSpeedMph: 60, ignition: true)],
                  appSteps: [
-                    "On the phone, log OUT of the ELD app (keep Bluetooth on) so this drive belongs to no driver.",
-                    "Tap Run it — the simulator records a drive with nobody logged in, then drops the Bluetooth link.",
-                    "Recorded. Now log BACK IN on the phone and let it reconnect to ELD-MA.",
-                    "Reconnected — the drive is sent automatically. Open Unidentified / Unassigned Driving and claim or reject the period.",
+                    "Stay logged IN and leave Bluetooth on — no log-out needed. Tap Run it.",
+                    "The link drops and the truck 'drives' offline. This takes ~7 minutes of real time: the app needs 5 minutes of no movement plus a grace period to close your Driving event before the recorded drive can belong to nobody. It cannot be sped up.",
+                    "Wait for the app to reconnect to ELD-MA on its own — the drive is sent automatically.",
+                    "Open Unidentified / Unassigned Driving and claim or reject the period.",
                  ]),
     ]
 }

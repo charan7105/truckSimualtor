@@ -282,6 +282,37 @@ namespace MatrackSim.Core
             return "S" + live.Substring(1);
         }
 
+        /// <summary>
+        /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
+        /// Used by the self-test to prove stored packets are stamped inside the outage window.
+        /// </summary>
+        public static DateTime? UtcOf(string wire)
+        {
+            if (string.IsNullOrEmpty(wire)) return null;
+            var f = wire.Split(',');
+            if (f.Length <= 11 || f[10].Length != 6 || f[11].Length != 6) return null;
+            if (DateTime.TryParseExact(f[10] + " " + f[11], "HHmmss ddMMyy",
+                                       System.Globalization.CultureInfo.InvariantCulture,
+                                       System.Globalization.DateTimeStyles.AssumeUniversal
+                                     | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                                       out DateTime parsed))
+                return parsed;
+            return null;
+        }
+
+        /// <summary>
+        /// Stamp for a stored packet recorded DURING an outage that began at `start`.
+        ///
+        /// The old behaviour backdated every packet into the minutes immediately BEFORE the disconnect,
+        /// which is exactly the span the ELD app has already attributed to the logged-in driver — so all
+        /// of them were classified as assigned and no Unassigned Driving Period was ever produced. Anchor
+        /// the recorded drive to the start of the outage instead, where nothing is attributed to anyone.
+        /// </summary>
+        public static DateTime Recorded(int i, double dt, DateTime start)
+        {
+            return start.AddSeconds(i * dt);
+        }
+
         public static DateTime Backdated(int i, int count, double dt)
         {
             return DateTime.UtcNow.AddSeconds(-(double)(count - i) * dt);
@@ -317,7 +348,11 @@ namespace MatrackSim.Core
         // Backdated stored 'S' packets for a stored-replay / unassigned-driving scenario. NO footer here:
         // the readstr handler appends LAST_STORED_PACKET + the count AFTER the app reconnects, because that
         // post-reconnect readstr is the only state in which both apps run stored replay (and UDP) classification.
-        public static List<Emitted> StoredReplay(Scenario s, SimConfig config)
+        /// <summary>
+        /// `start` is the instant the BLE link drops; the recorded drive is stamped forward from there.
+        /// Null keeps the legacy pre-disconnect backdating so the headless self-test keeps its shape.
+        /// </summary>
+        public static List<Emitted> StoredReplay(Scenario s, SimConfig config, DateTime? start = null)
         {
             var e = new EngineState();
             e.OdometerMiles = config.StartOdometerMiles;
@@ -335,7 +370,8 @@ namespace MatrackSim.Core
                 for (int i = 0; i < count; i++)
                 {
                     e.Advance(dt);
-                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, Backdated(i, count, dt))), Emitted.Kind.Stored));
+                    var at = start.HasValue ? Recorded(i, dt, start.Value) : Backdated(i, count, dt);
+                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, at)), Emitted.Kind.Stored));
                 }
                 return output;
             }
@@ -350,7 +386,8 @@ namespace MatrackSim.Core
                     e.IgnitionOn = phase.Ignition;
                     RampSpeed(e, phase.TargetSpeedMph, config);
                     e.Advance(dt);
-                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, Backdated(idx, total, dt))), Emitted.Kind.Stored));
+                    var at = start.HasValue ? Recorded(idx, dt, start.Value) : Backdated(idx, total, dt);
+                    output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, at)), Emitted.Kind.Stored));
                     idx++;
                 }
             }

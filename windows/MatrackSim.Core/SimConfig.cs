@@ -75,6 +75,22 @@ namespace MatrackSim.Core
         /// silence (15s+30s+30s retry escalation), so ≥80 = a real disconnect+reconnect; 15–75 = a stall demo.
         /// </summary>
         public double RangeOutageSec = 80;
+
+        // ---- Stored replay (Unassigned Driving) -------------------------------------------------
+        /// <summary>Lead-in after the disconnect before the recorded drive starts.</summary>
+        public double StoredReplayLeadInSec = 10;
+        /// <summary>
+        /// The outage must OUTLAST the app's Driving→On-Duty close — 300s of zero speed plus a 65s
+        /// grace — so the open driving event ends at the disconnect, before the recorded drive begins.
+        /// Shorter and the event stays open and swallows the dump. Wall-clock; not compressible.
+        /// </summary>
+        public double StoredReplayMinOutageSec = 395;
+        /// <summary>
+        /// Flash depth for the offline recorder. A real MT tracker logs to flash whenever no phone is
+        /// connected and hands the backlog over on the next `readstr`; without a recorder the sim loses
+        /// every mile driven offline and answers "SAVED PACKET COUNT:0". ~83 min at 1s/packet.
+        /// </summary>
+        public int StoredFlashCapacity = 5_000;
         /// <summary>F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.</summary>
         public int StoredDumpCount = 80;
         public double StoredDumpCadenceSec = 0.5;

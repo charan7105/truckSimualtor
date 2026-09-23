@@ -179,6 +179,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         engine.idleRpmConfig = config.idleRpm
         engine.rpmPerMphConfig = config.rpmPerMph
         engine.fuelBurnPctPerMile = config.fuelBurnPctPerMile
+        // A restart must look like a power cycle, not a factory reset. Carry the odometer, engine
+        // hours, position and fuel across launches — see SimPersistedState for why the app cares.
+        if let saved = SimPersistedState.load() { engine.restore(saved) }
         mirror()
     }
 
@@ -411,6 +414,19 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     func stopRouteDrive() { drivingRoute = false; dayDriving = false; engine.speedMph = 0; mirror(); info("route drive stopped") }
 
+    /// No route loaded but the truck is moving (manual speed / quick-set): advance the GPS along the
+    /// current heading. Without this the sim reports speed > 0 with a frozen lat/lon forever — a
+    /// combination no real tracker can produce, and the reason the truck never moved on the app's map.
+    private func deadReckon(dt: Double) {
+        guard engine.speedMph > 0, dt > 0 else { return }
+        let meters = engine.speedMph * 0.44704 * dt
+        let rad = Double(engine.headingDeg) * .pi / 180
+        engine.latitude += meters * cos(rad) / 111_320.0
+        // Guard the cos(lat) term so a near-polar latitude can't divide by ~0.
+        let scale = max(0.05, cos(engine.latitude * .pi / 180))
+        engine.longitude += meters * sin(rad) / (111_320.0 * scale)
+    }
+
     // MARK: - F3: DRIVE MY DAY (one-click full-day, state-crossing, with event violations)
     /// Curated long interstate pairs so the day crosses a state line (IFTA is per-jurisdiction mileage).
     private let dayRoutes: [(String, String)] = [
@@ -469,7 +485,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - Live scenario playback (plays a scenario's exact packet sequence over BLE)
     private var scenarioTimer: Timer?
     private var scenarioQueue: [Emitted] = []
-    private var pendingStored: [Emitted] = []     // backdated stored packets, dumped on the app's next readstr (post-reconnect)
+    private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
+    private var sinceLastStored: Double = 0       // offline flash recorder cadence
+    private var flashFullWarned = false
+    private var pendingStored: [Emitted] = []     // stored packets, dumped on the app's next readstr (post-reconnect)
     private var pendingStoredCadence: Double = 1.0
     @Published var runningScenario: String?
 
@@ -501,9 +520,16 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         // both apps run stored replay (and UDP classification) ONLY right after the readstr they send on
         // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
         if Self.isStoredReplay(s) {
-            let stored = ScenarioRunner.storedReplay(for: s, config: config)
-            info("▶ scenario '\(s.name)' — \(stored.count) stored packets queued; dropping the link so the app reconnects & re-requests them")
-            replayStored(stored, cadenceSec: max(0.05, config.packetIntervalSec))
+            // The drive is recorded INSIDE the outage, and the outage outlasts the app's
+            // Driving→On-Duty close, so the app's open driving event ends before the recording
+            // starts. Both halves are required — see SimConfig.storedReplayMinOutageSec.
+            let dt = max(0.05, config.packetIntervalSec)
+            let start = Date().addingTimeInterval(config.storedReplayLeadInSec)
+            let stored = ScenarioRunner.storedReplay(for: s, config: config, from: start)
+            let span = config.storedReplayLeadInSec + Double(stored.count) * dt
+            let outage = max(config.storedReplayMinOutageSec, span + 20)
+            info("▶ scenario '\(s.name)' — recording \(stored.count) stored packets during a \(Int(outage))s offline window; the app must stay logged in and reconnect on its own")
+            replayStored(stored, cadenceSec: dt, outageSec: outage)
             return
         }
         scenarioQueue = ScenarioRunner.run(s, config: config)
@@ -530,7 +556,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard !stored.isEmpty else { return }
         pendingStored = stored
         pendingStoredCadence = cadenceSec
-        banner("Recorded \(stored.count) packets — dropping the link so the app reconnects…", .working, nil)
+        banner("Recording \(stored.count) packets offline for \(Int(outageSec))s — the app reconnects and claims them…", .working, nil)
         forceDisconnect(seconds: outageSec)
     }
 
@@ -762,9 +788,31 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         } else {
             if engine.outOfFuel { engine.speedMph = 0 }     // stalled: can't move on empty tanks
             engine.advance(dt: dt * config.timeMultiplier)
+            deadReckon(dt: dt * config.timeMultiplier)      // no route loaded: still move the GPS
         }
+        stateSaveCountdown -= dt                            // persist so a restart resumes, not resets
+        if stateSaveCountdown <= 0 { stateSaveCountdown = 5; engine.persisted.save() }
         mirror()
         detectLowFuel()                                     // raise the "open the Fuel App / refuel" prompt when low
+
+        // Offline flash recorder. A real tracker keeps logging while no phone is connected and hands
+        // the backlog to the app on its next readstr. Without this, driving the sim with the app
+        // disconnected produced NOTHING — the app asked, got "SAVED PACKET COUNT:0", and the whole
+        // offline drive never existed (no miles, no Unassigned Driving Period).
+        if (!streaming || linkDown) && engine.ignitionOn {
+            sinceLastStored += dt
+            if sinceLastStored >= config.packetIntervalSec {
+                sinceLastStored = 0
+                if pendingStored.count < config.storedFlashCapacity {
+                    pendingStored.append(Emitted(wire: ScenarioRunner.toStored(MTPacket.livePosition(engine)), kind: .stored))
+                } else if !flashFullWarned {
+                    flashFullWarned = true
+                    info("⚠ stored flash full (\(config.storedFlashCapacity) packets) — older offline miles stop being recorded")
+                }
+            }
+        } else {
+            sinceLastStored = 0
+        }
 
         sinceLastPacket += dt
         // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
@@ -820,13 +868,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 q.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
                 q.append(Emitted(wire: "SAVED PACKET COUNT:\(n)", kind: .raw))
                 pendingStored = []
+                flashFullWarned = false
                 scenarioQueue = q
                 scenarioTotal = q.count
                 runningScenario = "Stored replay (\(n))"
                 banner("Reconnected — sending the recorded trip to the app…", .working, 0)
                 scenarioTimer?.invalidate()
                 scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, pendingStoredCadence), repeats: true) { [weak self] _ in self?.popScenario() }
-                info("▶ app reconnected & sent readstr → dumping \(n) stored packets (replay/UDP fires now)")
+                info("▶ app sent readstr → dumping \(n) stored packets recorded while offline (replay/UDP fires now)")
             } else {
                 sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0")
             }
