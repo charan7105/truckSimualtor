@@ -234,3 +234,50 @@ struct TelemetryDock: View {
     }
     private func fmt(_ v: Double, _ d: Int) -> String { String(format: "%.\(d)f", v) }
 }
+
+/// Inline numeric entry used by the drawer's TEST SETUP fields. Shows the live value until you tap
+/// it, then commits on Return / focus loss. The commit closure decides whether the value is accepted
+/// (the odometer and engine hours refuse to go backwards while the app is connected), so the field
+/// re-reads the live value afterwards rather than assuming its own text won.
+struct NumberEntry: View {
+    let label: String
+    let value: Double
+    let unit: String
+    let dec: Int
+    let commit: (Double) -> Void
+
+    @State private var editing = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label).font(.system(size: 11, design: .rounded))
+                .foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
+            if editing {
+                TextField("", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.text)
+                    .focused($focused)
+                    .onSubmit { apply() }
+                    .onChange(of: focused) { if !$0 { apply() } }
+            } else {
+                Text(String(format: "%.\(dec)f", value) + " " + unit)
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice)
+                Spacer()
+                Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(Theme.dim)
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            text = String(format: "%.\(dec)f", value)
+            editing = true; focused = true
+        }
+    }
+
+    private func apply() {
+        if let v = Double(text.trimmingCharacters(in: .whitespaces)) { commit(v) }
+        editing = false
+    }
+}

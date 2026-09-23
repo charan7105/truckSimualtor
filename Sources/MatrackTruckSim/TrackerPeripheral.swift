@@ -317,6 +317,47 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         mirror()
     }
 
+    // MARK: - Test setup: dial the truck to a starting state
+
+    /// Set the odometer directly — park the truck just short of a threshold instead of driving to it.
+    ///
+    /// FORWARD ONLY while the app is streaming. A live rewind is the exact transition that freezes
+    /// mileage accrual in the ELD app: it only accrues while the live odometer exceeds the current
+    /// event's start odometer, so a lower reading silently stops the active event from gaining miles
+    /// until the truck re-covers the lost distance. With no app subscribed there is nothing to
+    /// confuse, so any value is allowed.
+    @discardableResult
+    func setOdometer(_ miles: Double) -> Bool {
+        let v = max(0, miles)
+        if streaming && v < engine.odometerMiles {
+            info("⚠ odometer can't go backwards while the app is connected — \(Int(engine.odometerMiles)) → \(Int(v)) rejected (disconnect first)")
+            return false
+        }
+        engine.odometerMiles = v
+        engine.persisted.save(); mirror(); info("odometer set to \(String(format: "%.1f", v)) mi")
+        return true
+    }
+
+    /// Engine hours, same forward-only rule and for the same reason.
+    @discardableResult
+    func setEngineHours(_ hours: Double) -> Bool {
+        let v = max(0, hours)
+        if streaming && v < engine.engineHours {
+            info("⚠ engine hours can't go backwards while the app is connected — \(String(format: "%.2f", engine.engineHours)) → \(String(format: "%.2f", v)) rejected (disconnect first)")
+            return false
+        }
+        engine.engineHours = v
+        engine.persisted.save(); mirror(); info("engine hours set to \(String(format: "%.2f", v)) h")
+        return true
+    }
+
+    /// Fuel levels. Unlike odometer/hours these legitimately move both ways — refuelling is normal.
+    func setFuel(tank1: Double? = nil, tank2: Double? = nil) {
+        if let t1 = tank1 { engine.fuelLevelPct = min(100, max(0, t1)) }
+        if let t2 = tank2 { engine.fuelLevel2Pct = min(100, max(0, t2)) }
+        engine.persisted.save(); mirror()
+    }
+
     // MARK: - Manual controls
     func setEngine(_ on: Bool) {
         if runningScenario != nil { stopScenario() }

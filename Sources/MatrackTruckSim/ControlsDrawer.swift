@@ -379,6 +379,10 @@ struct NetworkPanel: View {
                     Divider().overlay(Theme.stroke)
 
                     // Raw transport effects (advanced). Weak signal adds latency (driven by SIGNAL / AUTO), not loss.
+                    setupFields
+
+                    Divider().overlay(Theme.stroke)
+
                     Text("RAW EFFECTS").sectionLabel()
                     cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
                     cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
@@ -439,12 +443,35 @@ struct NetworkPanel: View {
     }
 
     // RSSI = emulated signal %, which in ESP32 mode drives the board's real BLE TX power.
+    /// In ESP32 mode this really is RSSI — it drives the board's BLE TX power, so the phone reads a
+    /// different dBm. In BLE mode there is no TX-power API, so the same slider only shapes the emulated
+    /// link (latency, and out-of-range at 0). Labelling it "RSSI" there would promise something the
+    /// laptop cannot do, so the label follows the transport.
     private var rssiSlider: some View {
         HStack(spacing: 8) {
-            Text("RSSI").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
+            Text(sim.config.link == .esp32Serial ? "RSSI" : "SIGNAL")
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
             Slider(value: Binding(get: { sim.config.signalPct }, set: { sim.autoSignal = false; sim.setSignal($0) }), in: 0...100).tint(Theme.ice)
             Text("\(Int(sim.config.signalPct.rounded()))%").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
         }
+    }
+
+    /// Editable odometer / engine hours: dial the truck to a starting state instead of driving to it.
+    /// Both are forward-only while the app is connected — see TrackerPeripheral.setOdometer.
+    private var setupFields: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("TEST SETUP").sectionLabel()
+            numberField("Odo", value: sim.odometerMiles, unit: "mi", dec: 1) { sim.setOdometer($0) }
+            numberField("Eng hrs", value: sim.engineHours, unit: "h", dec: 2) { sim.setEngineHours($0) }
+            Text(sim.streaming ? "forward only while the app is connected" : "any value — no app connected")
+                .font(.system(size: 9, design: .rounded))
+                .foregroundStyle(sim.streaming ? Theme.amber : Theme.dim)
+        }
+    }
+
+    private func numberField(_ label: String, value: Double, unit: String, dec: Int,
+                             commit: @escaping (Double) -> Void) -> some View {
+        NumberEntry(label: label, value: value, unit: unit, dec: dec, commit: commit)
     }
 
     private var countSlider: some View {

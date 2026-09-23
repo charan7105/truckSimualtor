@@ -707,7 +707,7 @@
                                     </DockPanel>
                                     <!-- RSSI = ESP32 real BLE TX power. 0% = out of range (-12 dBm), 100% = full (+9 dBm). -->
                                     <DockPanel Margin="0,0,0,6">
-                                        <TextBlock Text="RSSI" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SignalSliderLabel}" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding SignalDbmLabel}" Width="60" DockPanel.Dock="Right" HorizontalAlignment="Right"
                                                    FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
                                         <Slider Minimum="0" Maximum="100" Value="{Binding SignalSlider, Mode=TwoWay}"
@@ -731,6 +731,28 @@
                                         <Slider Minimum="15" Maximum="180" Value="{Binding RangeOutageSec, Mode=TwoWay}" />
                                     </DockPanel>
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+                                    <!-- TEST SETUP: dial the truck to a starting state instead of driving to it.
+                                         Forward-only while the app is connected (see SetOdometer). -->
+                                    <TextBlock Text="TEST SETUP" Style="{StaticResource Sec}" Margin="0,0,0,6" />
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Odo" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="mi" Width="24" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                        <TextBox Text="{Binding OdometerInput}" Background="Transparent" BorderThickness="0"
+                                                 Foreground="{StaticResource Ice}" FontFamily="{StaticResource Mono}" FontSize="11"
+                                                 VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Eng hrs" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="h" Width="24" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Dim}" VerticalAlignment="Center" />
+                                        <TextBox Text="{Binding EngineHoursInput}" Background="Transparent" BorderThickness="0"
+                                                 Foreground="{StaticResource Ice}" FontFamily="{StaticResource Mono}" FontSize="11"
+                                                 VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding SetupHint}" Foreground="{StaticResource Dim}" FontSize="9" Margin="0,0,0,6" />
+                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+
                                     <TextBlock Text="RAW EFFECTS" Style="{StaticResource Sec}" Margin="0,0,0,6" />
                                     <!-- Weak signal adds latency (driven by SIGNAL/AUTO), not loss. -->
                                     <DockPanel Margin="0,0,0,4">

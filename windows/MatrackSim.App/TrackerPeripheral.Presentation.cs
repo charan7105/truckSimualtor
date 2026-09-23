@@ -115,8 +115,9 @@ namespace MatrackSim.App
                     Raise(nameof(SelectedScenarioTitle)); Raise(nameof(SelectedScenarioExpect)); Raise(nameof(SelectedScenarioSteps));
                     Raise(nameof(WhatHowText));
                     break;
-                case nameof(OdometerMiles): Raise(nameof(OdometerText)); Raise(nameof(TripText)); break;
-                case nameof(EngineHours): Raise(nameof(EngineHoursText)); break;
+                case nameof(OdometerMiles): Raise(nameof(OdometerText)); Raise(nameof(TripText)); Raise(nameof(OdometerInput)); break;
+                case nameof(EngineHours): Raise(nameof(EngineHoursText)); Raise(nameof(EngineHoursInput)); break;
+                case nameof(Streaming): Raise(nameof(SetupHint)); break;
                 case nameof(FuelPct): Raise(nameof(FuelTintColor)); Raise(nameof(FuelBrush)); Raise(nameof(FuelPctText)); Raise(nameof(FuelSlider)); break;
                 case nameof(Fuel2Pct): Raise(nameof(Fuel2TintColor)); Raise(nameof(Fuel2Brush)); Raise(nameof(Fuel2PctText)); Raise(nameof(Fuel2Slider)); break;
                 case nameof(Satellites): Raise(nameof(SatellitesText)); Raise(nameof(SatsBrush)); break;
@@ -269,6 +270,41 @@ namespace MatrackSim.App
             set { Config.RangeOutageSec = value; Raise(nameof(RangeOutageSec)); Raise(nameof(RangeOutageText)); }
         }
         public string RangeOutageText => $"{(int)Math.Round(Config.RangeOutageSec)}s";
+
+        // ---- TEST SETUP: editable odometer / engine hours -----------------------------------------
+        // Dial the truck to a starting state instead of driving to it. Both are FORWARD ONLY while the
+        // app is connected (SetOdometer/SetEngineHours enforce it and log the refusal), so the getter
+        // re-reads the live value rather than echoing whatever was typed.
+        public string OdometerInput
+        {
+            get => OdometerMiles.ToString("F1", CultureInfo.InvariantCulture);
+            set
+            {
+                if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) SetOdometer(v);
+                Raise(nameof(OdometerInput));
+            }
+        }
+
+        public string EngineHoursInput
+        {
+            get => EngineHours.ToString("F2", CultureInfo.InvariantCulture);
+            set
+            {
+                if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) SetEngineHours(v);
+                Raise(nameof(EngineHoursInput));
+            }
+        }
+
+        public string SetupHint => Streaming
+            ? "forward only while the app is connected"
+            : "any value — no app connected";
+
+        /// <summary>
+        /// In ESP32 mode the slider really is RSSI — it drives the board's BLE TX power, so the phone
+        /// reads a different dBm. In BLE mode there is no TX-power API, so it only shapes the emulated
+        /// link (latency, and out-of-range at 0); calling it RSSI there would promise what the PC cannot do.
+        /// </summary>
+        public string SignalSliderLabel => Config.Link == SimConfig.Transport.Esp32Serial ? "RSSI" : "SIGNAL";
 
         // ---- STORED DUMP (F2) ---------------------------------------------------------------------
         public int StoredDumpCount

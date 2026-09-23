@@ -494,6 +494,51 @@ namespace MatrackSim.App
             Mirror();
         }
 
+        // MARK: - Test setup: dial the truck to a starting state
+
+        /// <summary>
+        /// Set the odometer directly — park the truck just short of a threshold instead of driving to it.
+        ///
+        /// FORWARD ONLY while the app is streaming. A live rewind is the exact transition that freezes
+        /// mileage accrual in the ELD app: it only accrues while the live odometer exceeds the current
+        /// event's start odometer, so a lower reading silently stops the active event from gaining miles
+        /// until the truck re-covers the lost distance. With no app subscribed, any value is allowed.
+        /// </summary>
+        public bool SetOdometer(double miles)
+        {
+            double v = Math.Max(0, miles);
+            if (Streaming && v < engine.OdometerMiles)
+            {
+                Info($"⚠ odometer can't go backwards while the app is connected — {(int)engine.OdometerMiles} → {(int)v} rejected (disconnect first)");
+                return false;
+            }
+            engine.OdometerMiles = v;
+            engine.Persisted.Save(); Mirror(); Info($"odometer set to {v:F1} mi");
+            return true;
+        }
+
+        /// <summary>Engine hours, same forward-only rule and for the same reason.</summary>
+        public bool SetEngineHours(double hours)
+        {
+            double v = Math.Max(0, hours);
+            if (Streaming && v < engine.EngineHours)
+            {
+                Info($"⚠ engine hours can't go backwards while the app is connected — {engine.EngineHours:F2} → {v:F2} rejected (disconnect first)");
+                return false;
+            }
+            engine.EngineHours = v;
+            engine.Persisted.Save(); Mirror(); Info($"engine hours set to {v:F2} h");
+            return true;
+        }
+
+        /// <summary>Fuel levels. Unlike odometer/hours these legitimately move both ways — refuelling is normal.</summary>
+        public void SetFuel(double? tank1 = null, double? tank2 = null)
+        {
+            if (tank1.HasValue) engine.FuelLevelPct = Math.Min(100, Math.Max(0, tank1.Value));
+            if (tank2.HasValue) engine.FuelLevel2Pct = Math.Min(100, Math.Max(0, tank2.Value));
+            engine.Persisted.Save(); Mirror();
+        }
+
         // MARK: - Manual controls
         public void SetEngine(bool on)
         {
