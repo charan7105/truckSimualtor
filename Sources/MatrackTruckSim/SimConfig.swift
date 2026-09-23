@@ -63,6 +63,22 @@ struct SimConfig: Codable, Equatable {
     /// F1 out-of-range outage: how long to go silent. The ELD app only DISCONNECTS after ~75s of
     /// silence (15s+30s+30s retry escalation), so ≥80 = a real disconnect+reconnect; 15–75 = a stall demo.
     var rangeOutageSec: Double = 80
+
+    // MARK: Stored replay (Unassigned Driving)
+    /// Stored-replay scenarios record a drive that happened while the tracker was OFFLINE, so the
+    /// packets must be stamped INSIDE the BLE outage — not in the minutes before it. Anything stamped
+    /// before the disconnect still falls inside the driving event the app has open for the logged-in
+    /// driver (the app keeps pushing that event's end time to the latest live packet), so every packet
+    /// is classified as already-assigned and no Unassigned Driving Period is ever created.
+    var storedReplayLeadInSec: Double = 10
+    /// The outage must also OUTLAST the app's Driving→On-Duty close — 300s of zero speed plus a 65s
+    /// grace — so the open driving event ends at the disconnect, before the recorded drive begins.
+    /// Shorter and the event stays open and swallows the dump. This is wall-clock and not compressible.
+    var storedReplayMinOutageSec: Double = 395
+    /// Flash depth for the offline recorder. A real MT tracker logs to flash whenever no phone is
+    /// connected and hands the backlog over on the next `readstr`; without a recorder the sim simply
+    /// loses every mile driven offline and answers "SAVED PACKET COUNT:0". ~83 min at 1s/packet.
+    var storedFlashCapacity: Int = 5_000
     /// F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.
     var storedDumpCount: Int = 80
     var storedDumpCadenceSec: Double = 0.5

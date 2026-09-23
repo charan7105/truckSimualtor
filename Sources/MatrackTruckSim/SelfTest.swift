@@ -65,7 +65,57 @@ enum SelfTest {
             if s.id == 7 && n != 30 { ok = false }
             if s.id == 8 && n != 300 { ok = false }
             if !ok { allPass = false }
-            print("  [\(ok ? "OK" : "FAIL")] S\(s.id) \(s.name): \(n) backdated stored packets")
+            print("  [\(ok ? "OK" : "FAIL")] S\(s.id) \(s.name): \(n) stored packets")
+        }
+
+        // The Unassigned-Driving fix: stored packets must be stamped INSIDE the outage window, i.e.
+        // at/after the disconnect. Stamped before it, they land inside the driving event the app still
+        // has open for the logged-in driver and are silently classified as already-assigned.
+        print("Stored-replay timestamps land inside the outage (Unassigned Driving):")
+        for s in Scenarios.all {
+            let isStored: Bool
+            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
+            if !isStored { continue }
+            let start = Date().addingTimeInterval(10)
+            let sr = ScenarioRunner.storedReplay(for: s, config: .default, from: start)
+            let stamps = sr.compactMap { ScenarioRunner.utcOf($0.wire) }
+            let ok = stamps.count == sr.count && !stamps.isEmpty
+                && stamps.allSatisfy { $0 >= start.addingTimeInterval(-1) }
+            if !ok { allPass = false }
+            print("  [\(ok ? "OK" : "FAIL")] S\(s.id): \(stamps.count)/\(sr.count) stamps at/after the disconnect")
+        }
+
+        // Restart persistence: odometer and engine hours must survive a relaunch and must never move
+        // backwards. A rewind is the transition that freezes mileage accrual in the ELD app.
+        print("Restart persistence (odometer / engine hours never rewind):")
+        do {
+            let before = EngineState()
+            before.odometerMiles = 25_312.5
+            before.engineHours = 4_401.25
+            before.latitude = 25.943368
+            before.longitude = -80.224136
+            before.fuelLevelPct = 47.1
+            before.persisted.save()
+
+            let after = EngineState()                       // a fresh launch starts at the defaults
+            let roundTripped = SimPersistedState.load()
+            if let saved = roundTripped { after.restore(saved) }
+            let carried = abs(after.odometerMiles - 25_312.5) < 0.01
+                && abs(after.engineHours - 4_401.25) < 0.01
+                && abs(after.latitude - 25.943368) < 0.000001
+            print("  [\(carried ? "OK" : "FAIL")] odo/hours/position carried across a restart")
+            if !carried { allPass = false }
+
+            // A stale file holding LOWER values must not drag the odometer back.
+            let ahead = EngineState()
+            ahead.odometerMiles = 26_000; ahead.engineHours = 4_500
+            ahead.restore(SimPersistedState(odometerMiles: 100, engineHours: 1, latitude: 0, longitude: 0,
+                                            headingDeg: 0, fuelLevelPct: 50, fuelLevel2Pct: 50))
+            let monotonic = ahead.odometerMiles == 26_000 && ahead.engineHours == 4_500
+            print("  [\(monotonic ? "OK" : "FAIL")] a stale lower reading cannot rewind the odometer")
+            if !monotonic { allPass = false }
+
+            if let url = SimPersistedState.fileURL { try? FileManager.default.removeItem(at: url) }
         }
 
         print("────────────────────────────────────────────────────────────")

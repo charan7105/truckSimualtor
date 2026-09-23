@@ -10,9 +10,10 @@ using MatrackSim.Core;
 namespace MatrackSim.App.Controls
 {
     /// <summary>
-    /// Pure-WPF slippy map rendering CARTO "Voyager" raster tiles — a light, colourful Google/Apple-style
-    /// basemap (the Windows stand-in for MapKit's ClusterMap). Being a normal WPF element (not a WebView2
-    /// HwndHost), it scales correctly inside the cluster's scale-to-fit Viewbox. Draws a white-cased blue
+    /// Pure-WPF slippy map rendering Esri "Dark Gray Canvas" raster tiles — a dark Google/Apple-style
+    /// basemap of base + transparent place-label layers (the Windows stand-in for MapKit's
+    /// ClusterMap). Being a normal WPF element (not a WebView2 HwndHost), it scales correctly
+    /// inside the cluster's scale-to-fit Viewbox. Draws a white-cased blue
     /// route polyline + an eased truck marker, fits the route when idle and follows the truck while driving,
     /// exactly like the Swift Coordinator. No API key required.
     /// </summary>
@@ -34,7 +35,7 @@ namespace MatrackSim.App.Controls
         private bool _have;
         private static readonly Color RouteBlue = (Color)ColorConverter.ConvertFromString("#2D7DF6"); // Google/Apple route blue
         private static readonly Color Red = (Color)ColorConverter.ConvertFromString("#E2122B");
-        // Dark loading backdrop matching the CARTO dark tiles (shown only until tiles arrive).
+        // Dark loading backdrop matching the dark basemap tiles (shown only until tiles arrive).
         private static readonly Brush Bg = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0C0E13"));
 
         public OsmTileMap()
@@ -106,10 +107,12 @@ namespace MatrackSim.App.Controls
                 {
                     int wx = ((tx % n) + n) % n;   // wrap longitude
                     if (ty < 0 || ty >= n) continue;
-                    var img = GetTile(zoom, wx, ty);
-                    if (img == null) continue;
                     double px = tx * TileSize - topX, py = ty * TileSize - topY;
-                    dc.DrawImage(img, new Rect(px, py, TileSize, TileSize));
+                    var rect = new Rect(px, py, TileSize, TileSize);
+                    var img = GetTile(zoom, wx, ty, false);
+                    if (img != null) dc.DrawImage(img, rect);
+                    var lbl = GetTile(zoom, wx, ty, true);   // place names ride on top of the basemap
+                    if (lbl != null) dc.DrawImage(lbl, rect);
                 }
 
             // route polyline
@@ -154,18 +157,20 @@ namespace MatrackSim.App.Controls
             return 3;
         }
 
-        private ImageSource GetTile(int z, int x, int y)
+        private ImageSource GetTile(int z, int x, int y, bool labels)
         {
-            string key = $"{z}/{x}/{y}";
+            string key = $"{(labels ? "r" : "b")}/{z}/{x}/{y}";
             if (_cache.TryGetValue(key, out var img)) return img;
-            if (!_loading.Contains(key)) { _loading.Add(key); _ = FetchTile(z, x, y, key); }
+            if (!_loading.Contains(key)) { _loading.Add(key); _ = FetchTile(z, x, y, key, labels); }
             return null;
         }
 
-        private async System.Threading.Tasks.Task FetchTile(int z, int x, int y, string key)
+        private async System.Threading.Tasks.Task FetchTile(int z, int x, int y, string key, bool labels)
         {
-            char sub = "abc"[(x + y) % 3];
-            string url = $"https://{sub}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";   // dark tiles → match the Mac dark map
+            // CARTO now stamps "API KEY REQUIRED" across its keyless dark_all tiles; Esri's dark canvas is
+            // the same look and still needs no key. Esri orders the path {z}/{y}/{x}, not {z}/{x}/{y}.
+            string layer = labels ? "World_Dark_Gray_Reference" : "World_Dark_Gray_Base";
+            string url = $"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/{layer}/MapServer/tile/{z}/{y}/{x}";   // dark tiles → match the Mac dark map
             try
             {
                 byte[] bytes = await Http.GetByteArrayAsync(url);

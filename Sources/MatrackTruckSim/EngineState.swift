@@ -60,3 +60,57 @@ final class EngineState {
         fuelLevel2Pct = max(0, fuelLevel2Pct - milesThisTick * fuelBurnPctPerMile * 0.85)
     }
 }
+
+/// Tracker state that MUST survive a process restart.
+///
+/// A physical tracker's odometer and engine hours are monotonic and its last position is retained
+/// across a power cycle. A simulator restart that rewinds them emits a transition no real device can
+/// produce, and the ELD app reacts badly: `ProcessAction2` only accrues miles while the live odometer
+/// exceeds the current event's start odometer, so a rewind freezes the active event's mileage until
+/// the truck re-covers the lost distance.
+struct SimPersistedState: Codable {
+    var odometerMiles: Double
+    var engineHours: Double
+    var latitude: Double
+    var longitude: Double
+    var headingDeg: Int
+    var fuelLevelPct: Double
+    var fuelLevel2Pct: Double
+
+    static var fileURL: URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appendingPathComponent("MatrackSim", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("state.json")
+    }
+
+    static func load() -> SimPersistedState? {
+        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SimPersistedState.self, from: data)
+    }
+
+    func save() {
+        guard let url = SimPersistedState.fileURL, let data = try? JSONEncoder().encode(self) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+}
+
+extension EngineState {
+    var persisted: SimPersistedState {
+        SimPersistedState(odometerMiles: odometerMiles, engineHours: engineHours,
+                          latitude: latitude, longitude: longitude, headingDeg: headingDeg,
+                          fuelLevelPct: fuelLevelPct, fuelLevel2Pct: fuelLevel2Pct)
+    }
+
+    /// Restore a previous session. Odometer and engine hours move FORWARD only — a stale file holding
+    /// a lower value than the configured floor keeps the floor, so the wire value can never regress.
+    func restore(_ s: SimPersistedState) {
+        odometerMiles = max(odometerMiles, s.odometerMiles)
+        engineHours = max(engineHours, s.engineHours)
+        latitude = s.latitude
+        longitude = s.longitude
+        headingDeg = s.headingDeg
+        fuelLevelPct = s.fuelLevelPct
+        fuelLevel2Pct = s.fuelLevel2Pct
+    }
+}

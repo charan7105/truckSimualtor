@@ -86,6 +86,59 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + " " + s.Name + ": " + n + " backdated stored packets");
             }
 
+            // The Unassigned-Driving fix: stored packets must be stamped INSIDE the outage window, i.e.
+            // at/after the disconnect. Stamped before it, they land inside the driving event the app still
+            // has open for the logged-in driver and are silently classified as already-assigned.
+            Console.WriteLine("Stored-replay timestamps land inside the outage (Unassigned Driving):");
+            foreach (var s in Scenarios.All)
+            {
+                bool isStored = s.Transport.TKind == Transport.TransportKind.Disconnect
+                             || s.Transport.TKind == Transport.TransportKind.StoredBacklog
+                             || s.Id == 12;
+                if (!isStored) continue;
+                var start = DateTime.UtcNow.AddSeconds(10);
+                var sr = ScenarioRunner.StoredReplay(s, SimConfig.Default, start);
+                int stamped = 0;
+                foreach (var em in sr)
+                {
+                    var utc = ScenarioRunner.UtcOf(em.Wire);
+                    if (utc.HasValue && utc.Value >= start.AddSeconds(-1)) stamped++;
+                }
+                bool ok = sr.Count > 0 && stamped == sr.Count;
+                if (!ok) allPass = false;
+                Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + ": " + stamped + "/" + sr.Count + " stamps at/after the disconnect");
+            }
+
+            // Restart persistence: odometer and engine hours must survive a relaunch and never move
+            // backwards. A rewind is the transition that freezes mileage accrual in the ELD app.
+            Console.WriteLine("Restart persistence (odometer / engine hours never rewind):");
+            {
+                var before = new EngineState
+                {
+                    OdometerMiles = 25_312.5, EngineHours = 4_401.25,
+                    Latitude = 25.943368, Longitude = -80.224136, FuelLevelPct = 47.1,
+                };
+                before.Persisted.Save();
+
+                var after = new EngineState();                   // a fresh launch starts at the defaults
+                var roundTripped = SimPersistedState.Load();
+                if (roundTripped != null) after.Restore(roundTripped);
+                bool carried = Math.Abs(after.OdometerMiles - 25_312.5) < 0.01
+                            && Math.Abs(after.EngineHours - 4_401.25) < 0.01
+                            && Math.Abs(after.Latitude - 25.943368) < 0.000001;
+                Console.WriteLine("  [" + (carried ? "OK" : "FAIL") + "] odo/hours/position carried across a restart");
+                if (!carried) allPass = false;
+
+                // A stale file holding LOWER values must not drag the odometer back.
+                var ahead = new EngineState { OdometerMiles = 26_000, EngineHours = 4_500 };
+                ahead.Restore(new SimPersistedState { OdometerMiles = 100, EngineHours = 1, FuelLevelPct = 50, FuelLevel2Pct = 50 });
+                bool monotonic = ahead.OdometerMiles == 26_000 && ahead.EngineHours == 4_500;
+                Console.WriteLine("  [" + (monotonic ? "OK" : "FAIL") + "] a stale lower reading cannot rewind the odometer");
+                if (!monotonic) allPass = false;
+
+                try { System.IO.File.Delete(SimPersistedState.FilePath); } catch { }
+            }
+
             Console.WriteLine("────────────────────────────────────────────────────────────");
             Console.WriteLine(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗");
             return allPass ? 0 : 1;

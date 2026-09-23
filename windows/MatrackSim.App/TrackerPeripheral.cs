@@ -487,6 +487,10 @@ namespace MatrackSim.App
             engine.IdleRpmConfig = Config.IdleRpm;
             engine.RpmPerMphConfig = Config.RpmPerMph;
             engine.FuelBurnPctPerMile = Config.FuelBurnPctPerMile;
+            // A restart must look like a power cycle, not a factory reset. Carry the odometer, engine
+            // hours, position and fuel across launches — see SimPersistedState for why the app cares.
+            var saved = SimPersistedState.Load();
+            if (saved != null) engine.Restore(saved);
             Mirror();
         }
 
@@ -806,6 +810,22 @@ namespace MatrackSim.App
 
         public void StopRouteDrive() { DrivingRoute = false; DayDriving = false; engine.SpeedMph = 0; Mirror(); Info("route drive stopped"); }
 
+        /// <summary>
+        /// No route loaded but the truck is moving (manual speed / quick-set): advance the GPS along the
+        /// current heading. Without this the sim reports speed > 0 with a frozen lat/lon forever — a
+        /// combination no real tracker can produce, and the reason the truck never moved on the app's map.
+        /// </summary>
+        private void DeadReckon(double dt)
+        {
+            if (engine.SpeedMph <= 0 || dt <= 0) return;
+            double meters = engine.SpeedMph * 0.44704 * dt;
+            double rad = engine.HeadingDeg * Math.PI / 180.0;
+            engine.Latitude += meters * Math.Cos(rad) / 111_320.0;
+            // Guard the cos(lat) term so a near-polar latitude can't divide by ~0.
+            double scale = Math.Max(0.05, Math.Cos(engine.Latitude * Math.PI / 180.0));
+            engine.Longitude += meters * Math.Sin(rad) / (111_320.0 * scale);
+        }
+
         // MARK: - F3: DRIVE MY DAY (one-click full-day, state-crossing, with event violations)
         /// <summary>Curated long interstate pairs so the day crosses a state line (IFTA is per-jurisdiction mileage).</summary>
         private readonly (string, string)[] dayRoutes = new (string, string)[]
@@ -877,6 +897,9 @@ namespace MatrackSim.App
         private readonly object scenarioGate = new object();
         private List<Emitted> pendingStored = new List<Emitted>();   // backdated stored packets, dumped on the app's next readstr (post-reconnect)
         private double pendingStoredCadence = 1.0;
+        private double stateSaveCountdown = 0;                       // periodic persist (SimPersistedState)
+        private double sinceLastStored = 0;                          // offline flash recorder cadence
+        private bool flashFullWarned = false;
 
         private string _runningScenario;
         public string RunningScenario { get => _runningScenario; set => Set(ref _runningScenario, value); }
@@ -891,9 +914,16 @@ namespace MatrackSim.App
             // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
             if (IsStoredReplay(s))
             {
-                var stored = ScenarioRunner.StoredReplay(s, Config);
-                Info($"▶ scenario '{s.Name}' — {stored.Count} stored packets queued; dropping the link so the app reconnects & re-requests them");
-                ReplayStored(stored, Math.Max(0.05, Config.PacketIntervalSec));
+                // The drive is recorded INSIDE the outage, and the outage outlasts the app's
+                // Driving→On-Duty close, so the app's open driving event ends before the recording
+                // starts. Both halves are required — see SimConfig.StoredReplayMinOutageSec.
+                double dtS = Math.Max(0.05, Config.PacketIntervalSec);
+                var start = DateTime.UtcNow.AddSeconds(Config.StoredReplayLeadInSec);
+                var stored = ScenarioRunner.StoredReplay(s, Config, start);
+                double span = Config.StoredReplayLeadInSec + stored.Count * dtS;
+                double outage = Math.Max(Config.StoredReplayMinOutageSec, span + 20);
+                Info($"▶ scenario '{s.Name}' — recording {stored.Count} stored packets during a {(int)outage}s offline window; the app must stay logged in and reconnect on its own");
+                ReplayStored(stored, dtS, outage);
                 return;
             }
             scenarioQueue = ScenarioRunner.Run(s, Config);
@@ -1237,9 +1267,33 @@ namespace MatrackSim.App
             {
                 if (engine.OutOfFuel) engine.SpeedMph = 0;          // stalled: can't move on empty tanks
                 engine.Advance(dt * Config.TimeMultiplier);
+                DeadReckon(dt * Config.TimeMultiplier);             // no route loaded: still move the GPS
             }
+            stateSaveCountdown -= dt;                               // persist so a restart resumes, not resets
+            if (stateSaveCountdown <= 0) { stateSaveCountdown = 5; engine.Persisted.Save(); }
             Mirror();
             DetectLowFuel();                                        // raise the "open the Fuel App / refuel" prompt when low
+
+            // Offline flash recorder. A real tracker keeps logging while no phone is connected and hands
+            // the backlog to the app on its next readstr. Without this, driving the sim with the app
+            // disconnected produced NOTHING — the app asked, got "SAVED PACKET COUNT:0", and the whole
+            // offline drive never existed (no miles, no Unassigned Driving Period).
+            if ((!Streaming || LinkDown) && engine.IgnitionOn)
+            {
+                sinceLastStored += dt;
+                if (sinceLastStored >= Config.PacketIntervalSec)
+                {
+                    sinceLastStored = 0;
+                    if (pendingStored.Count < Config.StoredFlashCapacity)
+                        pendingStored.Add(new Emitted(ScenarioRunner.ToStored(MTPacket.LivePosition(engine)), Emitted.Kind.Stored));
+                    else if (!flashFullWarned)
+                    {
+                        flashFullWarned = true;
+                        Info($"⚠ stored flash full ({Config.StoredFlashCapacity} packets) — older offline miles stop being recorded");
+                    }
+                }
+            }
+            else sinceLastStored = 0;
 
             sinceLastPacket += dt;
             // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
@@ -1308,6 +1362,7 @@ namespace MatrackSim.App
                     q.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
                     q.Add(new Emitted("SAVED PACKET COUNT:" + n.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
                     pendingStored = new List<Emitted>();
+                    flashFullWarned = false;
                     scenarioQueue = q;
                     runningScenario = $"Stored replay ({n})";
                     scenarioTimer?.Dispose();

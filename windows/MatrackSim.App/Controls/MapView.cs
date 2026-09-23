@@ -11,7 +11,7 @@ namespace MatrackSim.App.Controls
 {
     /// <summary>
     /// Real navigation map using OpenStreetMap tiles via Leaflet inside a WebView2 — the Windows
-    /// equivalent of the MapKit ClusterMap. No API key required (CARTO dark basemap + OSM data).
+    /// equivalent of the MapKit ClusterMap. No API key required (Esri dark canvas basemap + labels).
     /// The route polyline and live truck position are pushed in from the view-model, mirroring the
     /// Swift Coordinator's render loop. Falls back silently if the WebView2 runtime is unavailable.
     /// </summary>
@@ -99,7 +99,9 @@ namespace MatrackSim.App.Controls
 </head><body><div id='map'></div>
 <script>
 var map=L.map('map',{zoomControl:false,attributionControl:false}).setView([37.7869,-121.9777],6);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
+var esri='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_{L}/MapServer/tile/{z}/{y}/{x}';
+L.tileLayer(esri.replace('{L}','Base'),{maxZoom:16}).addTo(map);
+L.tileLayer(esri.replace('{L}','Reference'),{maxZoom:16}).addTo(map);
 var poly=null, marker=null, glow=null;
 function setRoute(c){ if(poly){map.removeLayer(poly);poly=null;} if(c&&c.length>1){ poly=L.polyline(c,{color:'#6FD3FF',weight:5,opacity:0.95}).addTo(map); map.fitBounds(poly.getBounds(),{padding:[34,34]}); } }
 function setTruck(lat,lon,follow){ var ll=[lat,lon]; if(!marker){ glow=L.circleMarker(ll,{radius:13,stroke:false,fillColor:'#E2122B',fillOpacity:0.35}).addTo(map); marker=L.circleMarker(ll,{radius:7,color:'#fff',weight:2,fillColor:'#E2122B',fillOpacity:1}).addTo(map);} else { marker.setLatLng(ll); glow.setLatLng(ll);} if(follow){ map.panTo(ll,{animate:false}); } }
