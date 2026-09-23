@@ -993,10 +993,15 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         // offline drive never existed (no miles, no Unassigned Driving Period).
         if (!streaming || linkDown) && engine.ignitionOn {
             sinceLastStored += dt
-            if sinceLastStored >= config.packetIntervalSec {
+            if sinceLastStored >= config.storedRecordIntervalSec {
                 sinceLastStored = 0
                 if pendingStored.count < config.storedFlashCapacity {
                     pendingStored.append(Emitted(wire: ScenarioRunner.toStored(MTPacket.livePosition(engine)), kind: .stored))
+                    // Tell the operator it is recording — otherwise an offline drive looks like the sim
+                    // is doing nothing, which is exactly how the missing recorder went unnoticed.
+                    if pendingStored.count % 20 == 0 {
+                        info("⏺ recording offline — \(pendingStored.count) packets buffered (sent on the app's next readstr)")
+                    }
                 } else if !flashFullWarned {
                     flashFullWarned = true
                     info("⚠ stored flash full (\(config.storedFlashCapacity) packets) — older offline miles stop being recorded")

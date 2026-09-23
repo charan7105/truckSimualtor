@@ -93,6 +93,15 @@ namespace MatrackSim.Core
         /// every mile driven offline and answers "SAVED PACKET COUNT:0". ~83 min at 1s/packet.
         /// </summary>
         public int StoredFlashCapacity = 5_000;
+        /// <summary>
+        /// How often the offline recorder writes a flash record. Deliberately COARSER than the 1s live
+        /// cadence: at 1s a 10-minute offline drive is 600 packets, and the dump goes out at ~1 packet/s
+        /// (the app breaks at ~0.5s — that is the F2 repro), so uploading it would take another 10
+        /// minutes of real time. At 30s the same drive is 20 packets and lands in ~20s.
+        /// ponytail: 30s is a plausible tracker logging interval, not a measured one — confirm against
+        /// real MT flash and retune if the hardware logs at a different rate.
+        /// </summary>
+        public double StoredRecordIntervalSec = 30;
         /// <summary>F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.</summary>
         public int StoredDumpCount = 80;
         public double StoredDumpCadenceSec = 0.5;

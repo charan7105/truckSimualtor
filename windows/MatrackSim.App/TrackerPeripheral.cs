@@ -1326,11 +1326,17 @@ namespace MatrackSim.App
             if ((!Streaming || LinkDown) && engine.IgnitionOn)
             {
                 sinceLastStored += dt;
-                if (sinceLastStored >= Config.PacketIntervalSec)
+                if (sinceLastStored >= Config.StoredRecordIntervalSec)
                 {
                     sinceLastStored = 0;
                     if (pendingStored.Count < Config.StoredFlashCapacity)
+                    {
                         pendingStored.Add(new Emitted(ScenarioRunner.ToStored(MTPacket.LivePosition(engine)), Emitted.Kind.Stored));
+                        // Tell the operator it is recording — otherwise an offline drive looks like the sim
+                        // is doing nothing, which is exactly how the missing recorder went unnoticed.
+                        if (pendingStored.Count % 20 == 0)
+                            Info($"⏺ recording offline — {pendingStored.Count} packets buffered (sent on the app's next readstr)");
+                    }
                     else if (!flashFullWarned)
                     {
                         flashFullWarned = true;

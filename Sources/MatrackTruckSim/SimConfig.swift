@@ -79,6 +79,13 @@ struct SimConfig: Codable, Equatable {
     /// connected and hands the backlog over on the next `readstr`; without a recorder the sim simply
     /// loses every mile driven offline and answers "SAVED PACKET COUNT:0". ~83 min at 1s/packet.
     var storedFlashCapacity: Int = 5_000
+    /// How often the offline recorder writes a flash record. Deliberately COARSER than the 1s live
+    /// cadence: at 1s a 10-minute offline drive is 600 packets, and the dump goes out at ~1 packet/s
+    /// (the app breaks at ~0.5s — that is the F2 repro), so uploading it would take another 10
+    /// minutes of real time. At 30s the same drive is 20 packets and lands in ~20s.
+    /// ponytail: 30s is a plausible tracker logging interval, not a measured one — confirm against
+    /// real MT flash and retune if the hardware logs at a different rate.
+    var storedRecordIntervalSec: Double = 30
     /// F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.
     var storedDumpCount: Int = 80
     var storedDumpCadenceSec: Double = 0.5
