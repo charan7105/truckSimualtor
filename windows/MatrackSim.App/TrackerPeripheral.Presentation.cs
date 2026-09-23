@@ -53,7 +53,7 @@ namespace MatrackSim.App
             Raise(nameof(ActiveSpeedStop)); Raise(nameof(ActiveSpeed60)); Raise(nameof(ActiveSpeed90)); Raise(nameof(ActiveSpeed110));
             Raise(nameof(ActiveT1)); Raise(nameof(ActiveT5)); Raise(nameof(ActiveT10)); Raise(nameof(ActiveT25)); Raise(nameof(ActiveT30));
             Raise(nameof(ActiveSigFull)); Raise(nameof(ActiveSigAuto)); Raise(nameof(ActiveSigPoor));
-            Raise(nameof(SignalSlider)); Raise(nameof(SignalDbmLabel));
+            Raise(nameof(SignalSlider)); Raise(nameof(SignalDbmLabel)); Raise(nameof(SignalSliderLabel));
         }
 
         /// <summary>Run an action on the UI thread (or inline if already there / no app present).</summary>
@@ -93,6 +93,7 @@ namespace MatrackSim.App
                     Raise(nameof(ModeText)); Raise(nameof(ModeBrush)); Raise(nameof(IsDumping)); Raise(nameof(FooterStatusText));
                     Raise(nameof(GearValue)); Raise(nameof(ScenarioRunning));
                     Raise(nameof(ScenarioButtonText)); Raise(nameof(ScenarioButtonBrush));
+                    Raise(nameof(SetupHint));   // TEST SETUP hint flips with the connection
                     break;
                 case nameof(LinkDown):
                 case nameof(DropEndsAt):
@@ -117,7 +118,6 @@ namespace MatrackSim.App
                     break;
                 case nameof(OdometerMiles): Raise(nameof(OdometerText)); Raise(nameof(TripText)); Raise(nameof(OdometerInput)); break;
                 case nameof(EngineHours): Raise(nameof(EngineHoursText)); Raise(nameof(EngineHoursInput)); break;
-                case nameof(Streaming): Raise(nameof(SetupHint)); break;
                 case nameof(FuelPct): Raise(nameof(FuelTintColor)); Raise(nameof(FuelBrush)); Raise(nameof(FuelPctText)); Raise(nameof(FuelSlider)); break;
                 case nameof(Fuel2Pct): Raise(nameof(Fuel2TintColor)); Raise(nameof(Fuel2Brush)); Raise(nameof(Fuel2PctText)); Raise(nameof(Fuel2Slider)); break;
                 case nameof(Satellites): Raise(nameof(SatellitesText)); Raise(nameof(SatsBrush)); break;
