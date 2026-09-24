@@ -72,6 +72,8 @@ One-time PC setup + publish-to-exe steps: **`HANDOFF.md`** and **`windows/README
 
 - **`HANDOFF.md`** — developer task list + one-time Windows setup + publish command.
 - **`windows/README.md`** — Windows port status, project table, peripheral-role check, build/run.
+- **`FAULT_INJECTION.md`** — the BAD DATA panel: what each control sends, where to look in the phone
+  app, and which faults the app provably ignores.
 - **`SIMULATOR_FIDELITY_AUDIT.md`** — 5-repo audit vs the real tracker / iOS / Android: confirmed
   mismatches, what's fixed ($ACK/$ERR flow control, hex framing), and what needs hardware (RSSI → ESP32).
 - `ARCHITECTURE.md`, `CONNECTION_AND_DISCONNECT_BEHAVIOR.md`, `PARITY-AUDIT.md` — deeper dives.

@@ -47,3 +47,11 @@ Verify packet encoders without Bluetooth: `swift run MatrackTruckSim selftest`
 ## Notes / to confirm with a real-packet capture
 - The chunk-header "reserved" byte + padding are best-guess from code; a capture via the device-tester locks them byte-exact.
 - Fuel %, GPS-speed unit, and a few DTC subfields are inferred from the parser; confirm against a real `LP`/`LV`/`LD` capture.
+
+## Injecting faults
+
+The **BAD DATA** button in the footer sends deliberately bad telemetry — wrong clock, missing GPS
+lock, two conflicting ECU odometers, junk VIN, power-cycle storms. Controls are grouped by what the
+phone app will actually do about it, and the ones it provably ignores are labelled as such.
+
+See **`FAULT_INJECTION.md`**.

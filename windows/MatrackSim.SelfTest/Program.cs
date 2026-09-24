@@ -290,6 +290,73 @@ namespace MatrackSim.SelfTest
                 if (!xoOk) allPass = false;
             }
 
+            // Every requested fault, end to end: arm it exactly as the UI does, build a real packet,
+            // and assert the wire carries it. This is the test that fails if a control becomes
+            // theatre — a button that looks armed while the packet leaves unchanged.
+            Console.WriteLine("Each requested fault reaches the wire:");
+            {
+                Func<int, string, string> field = (i, wire) =>
+                { var f = wire.Split(','); return i < f.Length ? f[i] : "<missing>"; };
+                Func<Action<EngineState>, string> armed = apply =>
+                {
+                    var e = new EngineState { IgnitionOn = true, SpeedMph = 60, OdometerMiles = 25_000, EngineHours = 4_352.5 };
+                    apply(e);
+                    return MTPacket.LivePosition(e);
+                };
+                var cfg = SimConfig.Default;
+                var cases = new List<Tuple<string, bool>>();
+
+                string low = armed(e => e.WireFaults[4] = new WireFault(cfg.OdoSeriesLowRaw));
+                string high = armed(e => e.WireFaults[4] = new WireFault(cfg.OdoSeriesHighRaw));
+                cases.Add(Tuple.Create("two ECU odometer series differ on the wire",
+                    field(4, low) != field(4, high) && field(4, low) == cfg.OdoSeriesLowRaw));
+
+                cases.Add(Tuple.Create("invalid time reaches field 10",
+                    field(10, armed(e => e.WireFaults[10] = new WireFault("999999"))) == "999999"));
+                cases.Add(Tuple.Create("default date reaches field 11",
+                    field(11, armed(e => e.WireFaults[11] = new WireFault("010100"))) == "010100"));
+                cases.Add(Tuple.Create("default odometer sentinel reaches field 4",
+                    field(4, armed(e => e.WireFaults[4] = new WireFault(SimConfig.OdometerUnavailableSentinel)))
+                        == SimConfig.OdometerUnavailableSentinel));
+                cases.Add(Tuple.Create("GPS lock drops to 0 on the wire",
+                    field(8, armed(e => e.WireFaults[8] = new WireFault("0", 1, true))) == "0"));
+                cases.Add(Tuple.Create("a clean packet still reports GPS locked",
+                    field(8, armed(e => { })) == "3"));
+                cases.Add(Tuple.Create("ECM flag drops to 0 on the wire",
+                    field(12, armed(e => e.WireFaults[12] = new WireFault("0"))) == "0"));
+                string missing = armed(e => { e.WireFaults[4] = new WireFault("0"); e.WireFaults[5] = new WireFault("0"); });
+                cases.Add(Tuple.Create("odometer and hours both report 0",
+                    field(4, missing) == "0" && field(5, missing) == "0"));
+                cases.Add(Tuple.Create("power-cycle packets alternate ignition",
+                    field(1, MTPacket.Ignition(new EngineState(), true)) == "1"
+                    && field(1, MTPacket.Ignition(new EngineState(), false)) == "0"));
+                var zeroVin = new DeviceInfo(); zeroVin.Vin = "00000000000000000";
+                var shortVin = new DeviceInfo(); shortVin.Vin = "292058";
+                cases.Add(Tuple.Create("both bad VINs ride the LV packet verbatim",
+                    MTPacket.Version(zeroVin).Split(',')[1] == zeroVin.Vin
+                    && MTPacket.Version(shortVin).Split(',')[1] == shortVin.Vin));
+                cases.Add(Tuple.Create("odometer-source packet is well formed",
+                    MTPacket.OdoSource(true, 1).EndsWith("$$")));
+
+                foreach (var c in cases)
+                {
+                    Console.WriteLine("  [" + (c.Item2 ? "OK" : "FAIL") + "] " + c.Item1);
+                    if (!c.Item2) allPass = false;
+                }
+
+                // The intermittent rate must actually be intermittent — not always-on, not never.
+                // Real randomness, bounds wide enough never to flake.
+                var r = new EngineState { IgnitionOn = true, SpeedMph = 60 };
+                r.WireFaults[10] = new WireFault("999999", 0.2);
+                int hit = 0;
+                for (int i = 0; i < 2000; i++)
+                    if (MTPacket.LivePosition(r).Split(',')[10] == "999999") hit++;
+                double rate = hit / 2000.0;
+                bool plausible = rate > 0.10 && rate < 0.32;
+                Console.WriteLine("  [" + (plausible ? "OK" : "FAIL") + "] a 20% fault fired on " + (int)(rate * 100) + "% of 2000 real packets");
+                if (!plausible) allPass = false;
+            }
+
             Console.WriteLine("────────────────────────────────────────────────────────────");
             Console.WriteLine(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗");
             return allPass ? 0 : 1;

@@ -202,3 +202,32 @@ sets `storedEventsProcessed = true` regardless (`:1064-1065`), and `isReadstrInP
 cleared at the end of the function that never ran (`:936`) — so the 300 s readstr retry (`:1046`) is
 dead for the rest of the session too. Nothing surfaces to the user. **Always confirm the test account
 has a vehicle assigned before investigating a "stored packets did nothing" report.**
+
+### A4 — the Positioning Compliance malfunction can never fire
+`Utils.swift:2106-2146` accumulates unlocked-GPS minutes by reading location-log rows back from
+SQLite. The rows are written with `Date.description` (`LatestDB_New.swift:8767`) but parsed with the
+format `"yyyy-MM-dd HH:mm:ss +zzzz"` (`UtilDate.swift:442-452`), which returns nil for that input. So
+every pair `continue`s, `mins` stays 0, and the detector at `ProcessAction2.swift:3325-3345` never
+trips. Malfunction 'L' is unreachable on every install. The simulator's `GPS LOCK LOST` control emits
+correct bad data; there is nothing on the app side to receive it.
+
+### A5 — there is no odometer-fluctuation check, despite appearances
+`Util.aculatedmilescheck` (`Utils.swift:4971-4987`) compares digit counts and looks like a
+plausibility guard. It is **dead code**: both branches (`ProcessAction2.swift:1821` and `:1825`) call
+`UpdateAccumulatedMiles`, which **discards** its `milesInevent` argument and recomputes it in SQL
+(`LatestDB_New.swift:8790-8794`). Setting `acculatedMiles = 0` before the call changes nothing. An
+odometer jump is booked as driven miles in full. A downward jump is silently dropped by the
+`odoInception > eventStartOdo` guard (`:1812`), freezing the event's mileage with no diagnostic.
+
+**This is the answer to "when the odometer fluctuates, shouldn't the app alert?" — it does not, and
+no code exists that could.** Demonstrate with the simulator's `TWO ECU ODOMETERS` control.
+
+### A6 — the odometer-source channel is parsed and then discarded
+The MT `xO,…$$` packet is dispatched at `BleClass.swift:3272`, parsed by
+`OdoSource.swift:63-117` (including a `virtualEnabled` flag), stored into
+`GlobalVar.shared.mtOdoPacket` and announced via `NSNotification.Name("MTOdoPacketReceived")`.
+`mtOdoPacket` is **written in three places and read in none**. The notification has **zero
+observers**. `eventedit.odosource` is the hardcoded literal `"ECM"` (`ProcessAction2.swift:5047`,
+`:5211`), and the server recomputes it from the event's `origin` regardless. A virtual↔ECU source
+switch is therefore invisible to the app by construction.
+

@@ -305,6 +305,89 @@ enum SelfTest {
             if !xoOk { allPass = false }
         }
 
+        // Every requested fault, end to end: arm it exactly as the UI does, build a real packet, and
+        // assert the wire actually carries it. This is the test that fails if a control becomes
+        // theatre — a button that looks armed while the packet leaves unchanged.
+        print("Each requested fault reaches the wire:")
+        do {
+            func field(_ i: Int, _ wire: String) -> String {
+                let f = wire.components(separatedBy: ",")
+                return i < f.count ? f[i] : "<missing>"
+            }
+            func armed(_ apply: (EngineState) -> Void) -> String {
+                let e = EngineState(); e.ignitionOn = true; e.speedMph = 60
+                e.odometerMiles = 25_000; e.engineHours = 4_352.5
+                apply(e)
+                return MTPacket.livePosition(e)
+            }
+            var cases: [(String, Bool)] = []
+
+            // 2 — two ECU odometer series
+            let low = armed { $0.wireFaults[4] = WireFault(value: SimConfig.default.odoSeriesLowRaw) }
+            let high = armed { $0.wireFaults[4] = WireFault(value: SimConfig.default.odoSeriesHighRaw) }
+            cases.append(("two ECU odometer series differ on the wire",
+                          field(4, low) != field(4, high)
+                          && field(4, low) == SimConfig.default.odoSeriesLowRaw))
+
+            // 5 — invalid time
+            cases.append(("invalid time reaches field 10",
+                          field(10, armed { $0.wireFaults[10] = WireFault(value: "999999") }) == "999999"))
+
+            // 6 — default date
+            cases.append(("default date reaches field 11",
+                          field(11, armed { $0.wireFaults[11] = WireFault(value: "010100") }) == "010100"))
+
+            // 7 — device default odometer
+            cases.append(("default odometer sentinel reaches field 4",
+                          field(4, armed { $0.wireFaults[4] = WireFault(value: SimConfig.odometerUnavailableSentinel) })
+                            == SimConfig.odometerUnavailableSentinel))
+
+            // 9 — no GPS lock while moving (and the default stays locked)
+            cases.append(("GPS lock drops to 0 on the wire",
+                          field(8, armed { $0.wireFaults[8] = WireFault(value: "0", requiresMotion: true) }) == "0"))
+            cases.append(("a clean packet still reports GPS locked",
+                          field(8, armed { _ in }) == "3"))
+
+            // ECM loss + missing odo/hours (the two fastest real diagnostics)
+            cases.append(("ECM flag drops to 0 on the wire",
+                          field(12, armed { $0.wireFaults[12] = WireFault(value: "0") }) == "0"))
+            let missing = armed { $0.wireFaults[4] = WireFault(value: "0"); $0.wireFaults[5] = WireFault(value: "0") }
+            cases.append(("odometer and hours both report 0", field(4, missing) == "0" && field(5, missing) == "0"))
+
+            // 8 — power-cycle burst alternates ignition
+            let onPkt = MTPacket.ignition(EngineState(), on: true)
+            let offPkt = MTPacket.ignition(EngineState(), on: false)
+            cases.append(("power-cycle packets alternate ignition",
+                          field(1, onPkt) == "1" && field(1, offPkt) == "0"))
+
+            // 3/4 — VIN variants ride the LV packet untouched
+            var zeroVin = DeviceInfo(); zeroVin.vin = "00000000000000000"
+            var shortVin = DeviceInfo(); shortVin.vin = "292058"
+            cases.append(("both bad VINs ride the LV packet verbatim",
+                          MTPacket.version(zeroVin).components(separatedBy: ",")[1] == zeroVin.vin
+                          && MTPacket.version(shortVin).components(separatedBy: ",")[1] == shortVin.vin))
+
+            // 1 — odometer-source packet
+            cases.append(("odometer-source packet is well formed",
+                          MTPacket.odoSource(virtualEnabled: true, activeSource: 1).hasSuffix("$$")))
+
+            for (name, ok) in cases {
+                print("  [\(ok ? "OK" : "FAIL")] \(name)")
+                if !ok { allPass = false }
+            }
+
+            // The intermittent rate must actually be intermittent — not always-on, not never.
+            // Uses real randomness, so the bounds are wide enough never to flake.
+            let r = EngineState(); r.ignitionOn = true; r.speedMph = 60
+            r.wireFaults[10] = WireFault(value: "999999", probability: 0.2)
+            var hit = 0
+            for _ in 0..<2000 where MTPacket.livePosition(r).components(separatedBy: ",")[10] == "999999" { hit += 1 }
+            let rate = Double(hit) / 2000
+            let plausible = rate > 0.10 && rate < 0.32
+            print("  [\(plausible ? "OK" : "FAIL")] a 20% fault fired on \(Int(rate * 100))% of 2000 real packets")
+            if !plausible { allPass = false }
+        }
+
         print("────────────────────────────────────────────────────────────")
         print(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗")
         return allPass ? 0 : 1
