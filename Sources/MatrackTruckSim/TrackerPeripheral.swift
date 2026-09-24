@@ -491,6 +491,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         } else if engine.wireFaults.removeValue(forKey: field) != nil {
             info("✓ \(name) back to the real value")
         }
+        faultRevision += 1
         mirror()
     }
 
@@ -509,6 +510,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         engine.wireFaults.removeAll()
         config.timeSkewSec = 0
         odoAlternating = false
+        faultRevision += 1
         mirror()
         info(n > 0 ? "✓ wire is clean again — \(n) fault\(n == 1 ? "" : "s") cleared" : "wire was already clean")
     }
@@ -528,6 +530,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             engine.wireFaults.removeValue(forKey: 4)
             info("✓ odometer back to one series")
         }
+        faultRevision += 1
         mirror()
     }
 
@@ -788,6 +791,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
     private var powerBurstTimer: Timer?           // fault injection: rapid ignition storm
     @Published var odoAlternating = false         // fault injection: two ECU odometer series
+    /// Bumped whenever a fault is armed or cleared. `engine` is not an ObservableObject, so mutating
+    /// `engine.wireFaults` publishes nothing on its own — with the truck parked, `mirror()` finds no
+    /// changed telemetry and the button would not light up until something else moved. This is the
+    /// "looks armed but isn't" failure the panel exists to prevent, so it gets its own signal.
+    @Published private(set) var faultRevision = 0
     private var odoSeriesHigh = false
     private var outageStartedAt: Date?            // when the current offline window began (see step())
     private var undeliveredStored: [Emitted] = [] // backlog handed to the dump but not yet fully sent

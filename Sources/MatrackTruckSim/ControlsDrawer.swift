@@ -569,6 +569,8 @@ struct FaultPanel: View {
     }
 
     var body: some View {
+        // Reading faultRevision is what ties this view to arm/clear events — see its doc comment.
+        let _ = sim.faultRevision
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header

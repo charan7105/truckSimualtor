@@ -289,6 +289,9 @@ struct ContentView: View {
                 DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
             }
             Button { showFaults.toggle() } label: {
+                // faultRevision is read so the badge repaints the moment a fault is armed, not on
+                // the next telemetry tick — see TrackerPeripheral.faultRevision.
+                let _ = sim.faultRevision
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                     Text(sim.faultsArmed ? "BAD DATA ▸ SENDING" : "BAD DATA").font(.system(size: 11, weight: .bold, design: .rounded))
