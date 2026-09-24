@@ -146,6 +146,25 @@ enum ScenarioRunner {
         Date(timeIntervalSinceNow: -Double(count - i) * dt)
     }
 
+    /// Split a flash backlog into what the app can actually use and what it would silently discard.
+    ///
+    /// The app does NOT treat the disconnect as the boundary: it keeps the driver's Driving event open
+    /// for `appDrivingCloseSec` after the link drops, then stamps the closing On-Duty event at the
+    /// moment that grace expires, and reports the Driving window as ending THERE. Records stamped
+    /// inside that window are classified as already assigned to the logged-in driver and produce
+    /// nothing — no Unassigned Driving Period, no error, no UI.
+    ///
+    /// Unparseable records are kept, never silently dropped.
+    static func deliverableStored(_ records: [Emitted], outageStart: Date,
+                                  appDrivingCloseSec: Double) -> (keep: [Emitted], dropped: Int) {
+        let cutoff = outageStart.addingTimeInterval(appDrivingCloseSec)
+        let keep = records.filter { em in
+            guard let utc = utcOf(em.wire) else { return true }
+            return utc >= cutoff
+        }
+        return (keep, records.count - keep.count)
+    }
+
     /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
     /// Used by the self-test to prove stored packets are stamped inside the outage window.
     static func utcOf(_ wire: String) -> Date? {
@@ -196,6 +215,8 @@ enum ScenarioRunner {
     /// Timestamps are backdated so they fall outside the logged-in driver's duty windows → flagged UDP.
     /// `from` is the instant the BLE link drops; the recorded drive is stamped forward from there.
     /// Defaults to the legacy pre-disconnect backdating so the headless self-test keeps its shape.
+    /// Recorded drives are FLASH records, so they use `storedRecordIntervalSec`, not the 1s live
+    /// cadence. At 1s a 5-minute scenario was 305 packets that then took 5 minutes to dump back.
     static func storedReplay(for s: Scenario, config: SimConfig, from start: Date? = nil) -> [Emitted] {
         let e = EngineState()
         e.odometerMiles = config.startOdometerMiles
@@ -204,7 +225,7 @@ enum ScenarioRunner {
         e.idleRpmConfig = config.idleRpm
         e.rpmPerMphConfig = config.rpmPerMph
         e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
-        let dt = config.packetIntervalSec
+        let dt = max(1, config.storedRecordIntervalSec)
         var out: [Emitted] = []
         // pre-existing backlog (scenarios 11/12): N backdated stored positions
         if case .storedBacklog(let count) = s.transport {

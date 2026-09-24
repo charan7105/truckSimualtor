@@ -463,9 +463,11 @@ struct NetworkPanel: View {
             Text("TEST SETUP").sectionLabel()
             numberField("Odo", value: sim.odometerMiles, unit: "mi", dec: 1) { sim.setOdometer($0) }
             numberField("Eng hrs", value: sim.engineHours, unit: "h", dec: 2) { sim.setEngineHours($0) }
-            Text(sim.streaming ? "forward only while the app is connected" : "any value — no app connected")
+            // Must track the same flag the setter gates on (`connected`), or the caption promises
+            // "any value" during a watchdog lapse while the app is still attached.
+            Text(sim.connected ? "forward only while the app is connected" : "any value — no app connected")
                 .font(.system(size: 9, design: .rounded))
-                .foregroundStyle(sim.streaming ? Theme.amber : Theme.dim)
+                .foregroundStyle(sim.connected ? Theme.amber : Theme.dim)
         }
     }
 

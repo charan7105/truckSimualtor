@@ -506,28 +506,42 @@ namespace MatrackSim.App
         /// </summary>
         public bool SetOdometer(double miles)
         {
-            double v = Math.Max(0, miles);
-            if (Streaming && v < engine.OdometerMiles)
+            // A non-finite or absurd value is fatal, not cosmetic: MTPacket converts miles to the raw
+            // x10-km int, and because the value is persisted on the same call it would come back on
+            // every launch. Reject before it can be stored.
+            if (!SimConfig.IsValidOdometer(miles))
             {
-                Info($"⚠ odometer can't go backwards while the app is connected — {(int)engine.OdometerMiles} → {(int)v} rejected (disconnect first)");
+                Info($"⚠ odometer must be 0…{(int)SimConfig.MaxOdometerMiles} mi — \"{miles}\" rejected");
                 return false;
             }
-            engine.OdometerMiles = v;
-            engine.Persisted.Save(); Mirror(); Info($"odometer set to {v:F1} mi");
+            // Forward-only while the app is ATTACHED. Gate on Connected, not Streaming: streaming also
+            // goes false on a watchdog lapse and between stopdata/readdata while the GATT link is alive
+            // and the app still holds an open duty event whose eventStartOdo it restores from its DB.
+            if (Connected && miles < engine.OdometerMiles)
+            {
+                Info($"⚠ odometer can't go backwards while the app is connected — {(int)engine.OdometerMiles} → {(int)miles} rejected (disconnect first)");
+                return false;
+            }
+            engine.OdometerMiles = miles;
+            engine.Persisted.Save(); Mirror(); Info($"odometer set to {miles:F1} mi");
             return true;
         }
 
         /// <summary>Engine hours, same forward-only rule and for the same reason.</summary>
         public bool SetEngineHours(double hours)
         {
-            double v = Math.Max(0, hours);
-            if (Streaming && v < engine.EngineHours)
+            if (!SimConfig.IsValidEngineHours(hours))
             {
-                Info($"⚠ engine hours can't go backwards while the app is connected — {engine.EngineHours:F2} → {v:F2} rejected (disconnect first)");
+                Info($"⚠ engine hours must be 0…{(int)SimConfig.MaxEngineHours} h — \"{hours}\" rejected");
                 return false;
             }
-            engine.EngineHours = v;
-            engine.Persisted.Save(); Mirror(); Info($"engine hours set to {v:F2} h");
+            if (Connected && hours < engine.EngineHours)
+            {
+                Info($"⚠ engine hours can't go backwards while the app is connected — {engine.EngineHours:F2} → {hours:F2} rejected (disconnect first)");
+                return false;
+            }
+            engine.EngineHours = hours;
+            engine.Persisted.Save(); Mirror(); Info($"engine hours set to {hours:F2} h");
             return true;
         }
 
@@ -944,6 +958,7 @@ namespace MatrackSim.App
         private double pendingStoredCadence = 1.0;
         private double stateSaveCountdown = 0;                       // periodic persist (SimPersistedState)
         private double sinceLastStored = 0;                          // offline flash recorder cadence
+        private DateTime? outageStartedAt = null;                    // when the current offline window began
         private bool flashFullWarned = false;
 
         private string _runningScenario;
@@ -996,6 +1011,29 @@ namespace MatrackSim.App
             pendingStored = stored;
             pendingStoredCadence = cadenceSec;
             ForceDisconnect(outageSec);
+        }
+
+        /// <summary>
+        /// Split the flash backlog into what is worth sending and what the app would silently discard.
+        /// The app keeps the driver's Driving event open for AppDrivingCloseSec after the link drops and
+        /// reports the window as ending there, so anything stamped earlier is filed as already assigned
+        /// and produces nothing at all. Sending it anyway is what made the old build look like it worked.
+        /// </summary>
+        private (List<Emitted> Keep, int Dropped) StoredRecordsWorthSending()
+        {
+            if (pendingStored.Count == 0) return (new List<Emitted>(), 0);
+            if (!outageStartedAt.HasValue) return (pendingStored, 0);   // scenario-armed batch: already anchored
+            var split = ScenarioRunner.DeliverableStored(pendingStored, outageStartedAt.Value, Config.AppDrivingCloseSec);
+            if (split.Keep.Count == 0)
+            {
+                int gap = (int)(DateTime.UtcNow - outageStartedAt.Value).TotalSeconds;
+                Info($"⚠ offline gap {gap}s is under {(int)Config.AppDrivingCloseSec}s — the app still has the driver's Driving event open and would file every one of these against it. Nothing to send; drive offline longer for an Unassigned Driving Period.");
+            }
+            else if (split.Dropped > 0)
+            {
+                Info($"⚠ withholding {split.Dropped} packets from the first {(int)Config.AppDrivingCloseSec}s of the outage — the app's Driving event was still open then, so it would classify them as already assigned");
+            }
+            return split;
         }
 
         public void StopScenario()
@@ -1323,8 +1361,13 @@ namespace MatrackSim.App
             // the backlog to the app on its next readstr. Without this, driving the sim with the app
             // disconnected produced NOTHING — the app asked, got "SAVED PACKET COUNT:0", and the whole
             // offline drive never existed (no miles, no Unassigned Driving Period).
-            if ((!Streaming || LinkDown) && engine.IgnitionOn)
+            // Gate on Connected, not Streaming: streaming also goes false on a 90s watchdog lapse and
+            // between stopdata/readdata while the GATT link is alive. In those windows the app is still
+            // attached but will never re-issue readstr, so anything buffered would sit in flash forever
+            // with both sides thinking they were fine.
+            if ((!Connected || LinkDown) && engine.IgnitionOn)
             {
+                if (!outageStartedAt.HasValue) outageStartedAt = DateTime.UtcNow;
                 sinceLastStored += dt;
                 if (sinceLastStored >= Config.StoredRecordIntervalSec)
                 {
@@ -1344,7 +1387,7 @@ namespace MatrackSim.App
                     }
                 }
             }
-            else sinceLastStored = 0;
+            else { sinceLastStored = 0; outageStartedAt = null; }
 
             sinceLastPacket += dt;
             // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
@@ -1406,23 +1449,29 @@ namespace MatrackSim.App
                 // storedEventsProcessed flag to false right before it — so THIS is the moment to deliver a
                 // backlog. If a stored-replay/UDP scenario armed one (ReplayStored → ForceDisconnect), dump
                 // it now so the app actually runs replay/UDP classification. Otherwise reply empty.
-                if (pendingStored.Count > 0)
+                var split = StoredRecordsWorthSending();
+                if (split.Keep.Count > 0)
                 {
-                    int n = pendingStored.Count;
-                    var q = new List<Emitted>(pendingStored);
+                    int n = split.Keep.Count;
+                    var q = new List<Emitted>(split.Keep);
                     q.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
                     q.Add(new Emitted("SAVED PACKET COUNT:" + n.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
                     pendingStored = new List<Emitted>();
                     flashFullWarned = false;
+                    pendingStoredCadence = Math.Max(1.0, pendingStoredCadence);   // never dump faster than the app tolerates
                     scenarioQueue = q;
                     runningScenario = $"Stored replay ({n})";
                     scenarioTimer?.Dispose();
-                    long period = (long)(Math.Max(0.05, pendingStoredCadence) * 1000);
+                    long period = (long)(pendingStoredCadence * 1000);
                     scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
-                    Info($"▶ app reconnected & sent readstr → dumping {n} stored packets (replay/UDP fires now)");
+                    // Don't assert an outcome the sim cannot observe: the app still has to have a vehicle
+                    // assigned, and it alone decides whether these become an Unassigned Driving Period.
+                    Info($"▶ app sent readstr → dumping {n} stored packets recorded while offline (the app decides if a UDP is filed; it needs a vehicle assigned)");
+                    if (split.Dropped > 0) Info($"   ({split.Dropped} earlier packets withheld — see the note above)");
                 }
                 else
                 {
+                    pendingStored = new List<Emitted>();
                     SendRaw("LAST_STORED_PACKET"); SendRaw("SAVED PACKET COUNT:0");
                 }
             }

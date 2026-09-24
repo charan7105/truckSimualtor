@@ -80,7 +80,17 @@ namespace MatrackSim.Core
 
         // ---- Stored replay (Unassigned Driving) -------------------------------------------------
         /// <summary>Lead-in after the disconnect before the recorded drive starts.</summary>
-        public double StoredReplayLeadInSec = 10;
+        /// <summary>
+        /// How long after the link drops the app finally CLOSES the driver's open Driving event.
+        /// Verified in the iOS app: 300s of zero speed + a 65s grace + the 1s monitor tick. This is the
+        /// number that matters, not the disconnect — the app stamps the closing On-Duty event when the
+        /// grace expires and reports the Driving window as ending THERE. Stored packets stamped before
+        /// it are classified as already assigned to the logged-in driver and produce nothing at all.
+        /// ponytail: measured from app source, not a device run; re-check if the app's timers change.
+        /// </summary>
+        public double AppDrivingCloseSec = 370;
+        /// <summary>Lead-in before a recorded drive begins. Must clear <see cref="AppDrivingCloseSec"/>.</summary>
+        public double StoredReplayLeadInSec = 420;
         /// <summary>
         /// The outage must OUTLAST the app's Driving→On-Duty close — 300s of zero speed plus a 65s
         /// grace — so the open driving event ends at the disconnect, before the recorded drive begins.
@@ -102,6 +112,21 @@ namespace MatrackSim.Core
         /// real MT flash and retune if the hardware logs at a different rate.
         /// </summary>
         public double StoredRecordIntervalSec = 30;
+
+        // ---- Hard limits on operator-entered telemetry -----------------------------------------
+        /// <summary>
+        /// Ceilings for the TEST SETUP fields. MTPacket converts miles to a raw x10-km int, so a
+        /// non-finite or astronomically large value breaks the packet builder — and the value is
+        /// persisted, so it would repeat on every launch. These also match the widths the app's FMCSA
+        /// output file allows, so the sim can never set a number the output silently rewrites.
+        /// </summary>
+        public const double MaxOdometerMiles = 9_999_999;
+        public const double MaxEngineHours = 99_999.9;
+
+        public static bool IsValidOdometer(double miles) =>
+            !double.IsNaN(miles) && !double.IsInfinity(miles) && miles >= 0 && miles <= MaxOdometerMiles;
+        public static bool IsValidEngineHours(double hours) =>
+            !double.IsNaN(hours) && !double.IsInfinity(hours) && hours >= 0 && hours <= MaxEngineHours;
         /// <summary>F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.</summary>
         public int StoredDumpCount = 80;
         public double StoredDumpCadenceSec = 0.5;

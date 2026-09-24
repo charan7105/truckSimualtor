@@ -283,6 +283,28 @@ namespace MatrackSim.Core
         }
 
         /// <summary>
+        /// Split a flash backlog into what the app can actually use and what it would silently discard.
+        ///
+        /// The app does NOT treat the disconnect as the boundary: it keeps the driver's Driving event
+        /// open for appDrivingCloseSec after the link drops, then stamps the closing On-Duty event when
+        /// that grace expires and reports the Driving window as ending THERE. Records stamped inside
+        /// that window are classified as already assigned and produce nothing — no Unassigned Driving
+        /// Period, no error, no UI. Unparseable records are kept, never silently dropped.
+        /// </summary>
+        public static (List<Emitted> Keep, int Dropped) DeliverableStored(
+            List<Emitted> records, DateTime outageStart, double appDrivingCloseSec)
+        {
+            var cutoff = outageStart.AddSeconds(appDrivingCloseSec);
+            var keep = new List<Emitted>();
+            foreach (var em in records)
+            {
+                var utc = UtcOf(em.Wire);
+                if (!utc.HasValue || utc.Value >= cutoff) keep.Add(em);
+            }
+            return (keep, records.Count - keep.Count);
+        }
+
+        /// <summary>
         /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
         /// Used by the self-test to prove stored packets are stamped inside the outage window.
         /// </summary>
@@ -361,7 +383,7 @@ namespace MatrackSim.Core
             e.IdleRpmConfig = config.IdleRpm;
             e.RpmPerMphConfig = config.RpmPerMph;
             e.FuelBurnPctPerMile = config.FuelBurnPctPerMile;
-            double dt = config.PacketIntervalSec;
+            double dt = Math.Max(1, config.StoredRecordIntervalSec);
             var output = new List<Emitted>();
             if (s.Transport.TKind == Transport.TransportKind.StoredBacklog)
             {

@@ -119,15 +119,22 @@ namespace MatrackSim.Core
         public double FuelLevelPct { get; set; }
         public double FuelLevel2Pct { get; set; }
 
-        public static string FilePath
+        public static string FilePath => PathIn(null);
+
+        /// <summary>
+        /// `directory` exists so tests can point somewhere disposable — the self-test used to save and
+        /// then DELETE the live file, wiping a real session's odometer.
+        /// </summary>
+        public static string PathIn(string directory)
         {
-            get
+            string dir = directory;
+            if (string.IsNullOrEmpty(dir))
             {
                 string baseDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData);
-                string dir = System.IO.Path.Combine(baseDir, "MatrackSim");
-                try { System.IO.Directory.CreateDirectory(dir); } catch { }
-                return System.IO.Path.Combine(dir, "state.json");
+                dir = System.IO.Path.Combine(baseDir, "MatrackSim");
             }
+            try { System.IO.Directory.CreateDirectory(dir); } catch { }
+            return System.IO.Path.Combine(dir, "state.json");
         }
 
         // netstandard2.0 has no System.Text.Json, and the payload is seven numbers — hand-rolled so the
@@ -154,11 +161,19 @@ namespace MatrackSim.Core
             if (!TryNumber(json, "engineHours", out double hrs)) return null;
             st.OdometerMiles = odo;
             st.EngineHours = hrs;
-            st.Latitude = TryNumber(json, "latitude", out double la) ? la : 0;
-            st.Longitude = TryNumber(json, "longitude", out double lo) ? lo : 0;
-            st.HeadingDeg = TryNumber(json, "headingDeg", out double hd) ? (int)hd : 0;
-            st.FuelLevelPct = TryNumber(json, "fuelLevelPct", out double f1) ? f1 : 0;
-            st.FuelLevel2Pct = TryNumber(json, "fuelLevel2Pct", out double f2) ? f2 : 0;
+            // Every field is required. Defaulting a missing one to 0 is worse than rejecting the file:
+            // a truncated write (the save runs every 5s) would put the truck at (0,0) with both tanks
+            // empty, which makes OutOfFuel true — DRIVE is then accepted and silently does nothing.
+            if (!TryNumber(json, "latitude", out double la)) return null;
+            if (!TryNumber(json, "longitude", out double lo)) return null;
+            if (!TryNumber(json, "headingDeg", out double hd)) return null;
+            if (!TryNumber(json, "fuelLevelPct", out double f1)) return null;
+            if (!TryNumber(json, "fuelLevel2Pct", out double f2)) return null;
+            st.Latitude = la;
+            st.Longitude = lo;
+            st.HeadingDeg = (int)hd;
+            st.FuelLevelPct = f1;
+            st.FuelLevel2Pct = f2;
             return st;
         }
 
@@ -177,20 +192,29 @@ namespace MatrackSim.Core
                                    System.Globalization.CultureInfo.InvariantCulture, out value);
         }
 
-        public static SimPersistedState Load()
+        public static SimPersistedState Load(string directory = null)
         {
             try
             {
-                string path = FilePath;
+                string path = PathIn(directory);
                 if (!System.IO.File.Exists(path)) return null;
                 return FromJson(System.IO.File.ReadAllText(path));
             }
             catch { return null; }
         }
 
-        public void Save()
+        /// <summary>Write via a temp file so a kill mid-write can never leave a half-written state.</summary>
+        public void Save(string directory = null)
         {
-            try { System.IO.File.WriteAllText(FilePath, ToJson()); } catch { }
+            try
+            {
+                string path = PathIn(directory);
+                string tmp = path + ".tmp";
+                System.IO.File.WriteAllText(tmp, ToJson());
+                if (System.IO.File.Exists(path)) System.IO.File.Replace(tmp, path, null);
+                else System.IO.File.Move(tmp, path);
+            }
+            catch { }
         }
     }
 }

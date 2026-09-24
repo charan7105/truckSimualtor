@@ -70,7 +70,17 @@ struct SimConfig: Codable, Equatable {
     /// before the disconnect still falls inside the driving event the app has open for the logged-in
     /// driver (the app keeps pushing that event's end time to the latest live packet), so every packet
     /// is classified as already-assigned and no Unassigned Driving Period is ever created.
-    var storedReplayLeadInSec: Double = 10
+    /// How long after the link drops the app finally CLOSES the driver's open Driving event.
+    /// Verified in the iOS app: 300s of zero speed (`UtilDate.getZeroMonitorTargetDate`) + a 65s grace
+    /// (`getZeroMonitorTargetDatePlus65Seconds`) + the 1s monitor tick. This is the number that matters,
+    /// not the disconnect — the app stamps the closing On-Duty event at the moment the grace expires
+    /// (`ProcessAction2.setEventtime(newVal: Date())`), and `getDrivingLog` then sets the Driving
+    /// event's end to THAT timestamp. Stored packets stamped before it land inside a window the app has
+    /// already attributed to the logged-in driver and are silently classified as assigned — no UDP.
+    /// ponytail: measured from app source, not from a device run; re-check if the app's timers change.
+    var appDrivingCloseSec: Double = 370
+    /// Lead-in before a stored-replay scenario's recorded drive begins. Must clear `appDrivingCloseSec`.
+    var storedReplayLeadInSec: Double = 420
     /// The outage must also OUTLAST the app's Driving→On-Duty close — 300s of zero speed plus a 65s
     /// grace — so the open driving event ends at the disconnect, before the recorded drive begins.
     /// Shorter and the event stays open and swallows the dump. This is wall-clock and not compressible.
@@ -86,6 +96,21 @@ struct SimConfig: Codable, Equatable {
     /// ponytail: 30s is a plausible tracker logging interval, not a measured one — confirm against
     /// real MT flash and retune if the hardware logs at a different rate.
     var storedRecordIntervalSec: Double = 30
+
+    // MARK: Hard limits on operator-entered telemetry
+    /// Ceilings for the TEST SETUP fields. Two reasons they exist. (1) MTPacket converts miles to a
+    /// raw x10-km Int, so a non-finite or astronomically large value traps the packet builder — and the
+    /// value is persisted, so the crash repeats on every launch. (2) These match the widths the app's
+    /// own FMCSA output file allows, so the sim can never set a number the output silently rewrites.
+    static let maxOdometerMiles: Double = 9_999_999
+    static let maxEngineHours: Double = 99_999.9
+
+    static func isValidOdometer(_ miles: Double) -> Bool {
+        miles.isFinite && miles >= 0 && miles <= maxOdometerMiles
+    }
+    static func isValidEngineHours(_ hours: Double) -> Bool {
+        hours.isFinite && hours >= 0 && hours <= maxEngineHours
+    }
     /// F2 stored-dump repro: count + cadence. ~80 @ 0.5s reproduces Harshith's fast-dump disconnect; 1.0s is safe.
     var storedDumpCount: Int = 80
     var storedDumpCadenceSec: Double = 0.5

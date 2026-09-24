@@ -295,7 +295,9 @@ namespace MatrackSim.App
             }
         }
 
-        public string SetupHint => Streaming
+        // Must track the same flag the setter gates on (Connected), or the caption promises
+        // "any value" during a watchdog lapse while the app is still attached.
+        public string SetupHint => Connected
             ? "forward only while the app is connected"
             : "any value — no app connected";
 

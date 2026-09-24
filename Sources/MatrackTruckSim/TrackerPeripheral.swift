@@ -328,26 +328,38 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// confuse, so any value is allowed.
     @discardableResult
     func setOdometer(_ miles: Double) -> Bool {
-        let v = max(0, miles)
-        if streaming && v < engine.odometerMiles {
-            info("⚠ odometer can't go backwards while the app is connected — \(Int(engine.odometerMiles)) → \(Int(v)) rejected (disconnect first)")
+        // A non-finite or absurd value is fatal, not cosmetic: MTPacket converts miles to the raw
+        // x10-km integer, so anything outside Int range traps — and because the value is persisted on
+        // the same call, the crash then repeats on every launch. Reject before it can be stored.
+        guard SimConfig.isValidOdometer(miles) else {
+            info("⚠ odometer must be 0…\(Int(SimConfig.maxOdometerMiles)) mi — \"\(miles)\" rejected")
             return false
         }
-        engine.odometerMiles = v
-        engine.persisted.save(); mirror(); info("odometer set to \(String(format: "%.1f", v)) mi")
+        // Forward-only while the app is ATTACHED. Gate on `connected`, not `streaming`: streaming also
+        // goes false on a watchdog lapse and between stopdata/readdata while the GATT link is alive and
+        // the app still holds an open duty event whose eventStartOdo it restores from the DB.
+        if connected && miles < engine.odometerMiles {
+            info("⚠ odometer can't go backwards while the app is connected — \(Int(engine.odometerMiles)) → \(Int(miles)) rejected (disconnect first)")
+            return false
+        }
+        engine.odometerMiles = miles
+        engine.persisted.save(); mirror(); info("odometer set to \(String(format: "%.1f", miles)) mi")
         return true
     }
 
-    /// Engine hours, same forward-only rule and for the same reason.
+    /// Engine hours, same rules and for the same reasons.
     @discardableResult
     func setEngineHours(_ hours: Double) -> Bool {
-        let v = max(0, hours)
-        if streaming && v < engine.engineHours {
-            info("⚠ engine hours can't go backwards while the app is connected — \(String(format: "%.2f", engine.engineHours)) → \(String(format: "%.2f", v)) rejected (disconnect first)")
+        guard SimConfig.isValidEngineHours(hours) else {
+            info("⚠ engine hours must be 0…\(Int(SimConfig.maxEngineHours)) h — \"\(hours)\" rejected")
             return false
         }
-        engine.engineHours = v
-        engine.persisted.save(); mirror(); info("engine hours set to \(String(format: "%.2f", v)) h")
+        if connected && hours < engine.engineHours {
+            info("⚠ engine hours can't go backwards while the app is connected — \(String(format: "%.2f", engine.engineHours)) → \(String(format: "%.2f", hours)) rejected (disconnect first)")
+            return false
+        }
+        engine.engineHours = hours
+        engine.persisted.save(); mirror(); info("engine hours set to \(String(format: "%.2f", hours)) h")
         return true
     }
 
@@ -671,6 +683,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var scenarioQueue: [Emitted] = []
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
+    private var outageStartedAt: Date?            // when the current offline window began (see step())
     private var flashFullWarned = false
     private var pendingStored: [Emitted] = []     // stored packets, dumped on the app's next readstr (post-reconnect)
     private var pendingStoredCadence: Double = 1.0
@@ -742,6 +755,28 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         pendingStoredCadence = cadenceSec
         banner("Recording \(stored.count) packets offline for \(Int(outageSec))s — the app reconnects and claims them…", .working, nil)
         forceDisconnect(seconds: outageSec)
+    }
+
+    /// Split the flash backlog into what is worth sending and what the app would silently discard.
+    ///
+    /// The app does NOT treat the disconnect as the boundary. It keeps the driver's Driving event open
+    /// for `appDrivingCloseSec` after the link drops, and stamps the closing On-Duty event at the moment
+    /// that grace expires — so `getDrivingLog` reports the Driving window as ending there, not at the
+    /// disconnect. Records stamped inside that window are classified as already assigned to the logged-in
+    /// driver and produce nothing at all: no Unassigned Driving Period, no error, no UI. Sending them
+    /// anyway is what made the old build look like it was working when it was not.
+    private func storedRecordsWorthSending() -> (deliverable: [Emitted], suppressed: Int) {
+        guard !pendingStored.isEmpty else { return ([], 0) }
+        guard let outageStart = outageStartedAt else { return (pendingStored, 0) }   // scenario-armed batch: already anchored
+        let (keep, dropped) = ScenarioRunner.deliverableStored(pendingStored, outageStart: outageStart,
+                                                               appDrivingCloseSec: config.appDrivingCloseSec)
+        if keep.isEmpty {
+            let gap = Int(Date().timeIntervalSince(outageStart))
+            info("⚠ offline gap \(gap)s is under \(Int(config.appDrivingCloseSec))s — the app still has the driver's Driving event open and would file every one of these against it. Nothing to send; drive offline longer for an Unassigned Driving Period.")
+        } else if dropped > 0 {
+            info("⚠ withholding \(dropped) packets from the first \(Int(config.appDrivingCloseSec))s of the outage — the app's Driving event was still open then, so it would classify them as already assigned")
+        }
+        return (keep, dropped)
     }
 
     func stopScenario() {
@@ -991,7 +1026,12 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         // the backlog to the app on its next readstr. Without this, driving the sim with the app
         // disconnected produced NOTHING — the app asked, got "SAVED PACKET COUNT:0", and the whole
         // offline drive never existed (no miles, no Unassigned Driving Period).
-        if (!streaming || linkDown) && engine.ignitionOn {
+        // Gate on `connected`, not `streaming`: streaming also goes false on a 90s watchdog lapse and
+        // between stopdata/readdata while the GATT link is alive. In those windows the app is still
+        // attached but will never re-issue readstr (it sends it once per connection), so anything
+        // buffered there would sit in flash forever with both sides thinking they were fine.
+        if (!connected || linkDown) && engine.ignitionOn {
+            if outageStartedAt == nil { outageStartedAt = Date() }
             sinceLastStored += dt
             if sinceLastStored >= config.storedRecordIntervalSec {
                 sinceLastStored = 0
@@ -1009,6 +1049,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             }
         } else {
             sinceLastStored = 0
+            outageStartedAt = nil
         }
 
         sinceLastPacket += dt
@@ -1059,21 +1100,29 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             // storedEventsProcessed flag to false right before it — so THIS is the moment to deliver a
             // backlog. If a stored-replay/UDP scenario armed one (via replayStored → forceDisconnect),
             // dump it now so the app actually runs replay/UDP classification. Otherwise reply empty.
-            if !pendingStored.isEmpty {
-                let n = pendingStored.count
-                var q = pendingStored
+            let (deliverable, suppressed) = storedRecordsWorthSending()
+            if !deliverable.isEmpty {
+                let n = deliverable.count
+                var q = deliverable
                 q.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
                 q.append(Emitted(wire: "SAVED PACKET COUNT:\(n)", kind: .raw))
                 pendingStored = []
                 flashFullWarned = false
+                pendingStoredCadence = max(1.0, pendingStoredCadence)   // never dump faster than the app tolerates
                 scenarioQueue = q
                 scenarioTotal = q.count
                 runningScenario = "Stored replay (\(n))"
                 banner("Reconnected — sending the recorded trip to the app…", .working, 0)
                 scenarioTimer?.invalidate()
-                scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, pendingStoredCadence), repeats: true) { [weak self] _ in self?.popScenario() }
-                info("▶ app sent readstr → dumping \(n) stored packets recorded while offline (replay/UDP fires now)")
+                scenarioTimer = Timer.scheduledTimer(withTimeInterval: pendingStoredCadence, repeats: true) { [weak self] _ in self?.popScenario() }
+                // Don't assert an outcome the sim cannot observe: the app still has to have a vehicle
+                // assigned, and it alone decides whether these become an Unassigned Driving Period.
+                info("▶ app sent readstr → dumping \(n) stored packets recorded while offline (the app decides if a UDP is filed; it needs a vehicle assigned)")
+                if suppressed > 0 {
+                    info("   (\(suppressed) earlier packets withheld — see the note above)")
+                }
             } else {
+                pendingStored = []
                 sendRaw("LAST_STORED_PACKET"); sendRaw("SAVED PACKET COUNT:0")
             }
         }

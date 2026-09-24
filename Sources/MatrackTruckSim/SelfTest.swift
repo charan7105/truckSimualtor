@@ -95,10 +95,14 @@ enum SelfTest {
             before.latitude = 25.943368
             before.longitude = -80.224136
             before.fuelLevelPct = 47.1
-            before.persisted.save()
+            // Never the real Application Support file — a tester who runs selftest after a day of
+            // driving must not lose their odometer.
+            let scratch = FileManager.default.temporaryDirectory
+                .appendingPathComponent("MatrackSimSelfTest", isDirectory: true)
+            before.persisted.save(to: scratch)
 
             let after = EngineState()                       // a fresh launch starts at the defaults
-            let roundTripped = SimPersistedState.load()
+            let roundTripped = SimPersistedState.load(from: scratch)
             if let saved = roundTripped { after.restore(saved) }
             let carried = abs(after.odometerMiles - 25_312.5) < 0.01
                 && abs(after.engineHours - 4_401.25) < 0.01
@@ -115,7 +119,72 @@ enum SelfTest {
             print("  [\(monotonic ? "OK" : "FAIL")] a stale lower reading cannot rewind the odometer")
             if !monotonic { allPass = false }
 
-            if let url = SimPersistedState.fileURL { try? FileManager.default.removeItem(at: url) }
+            try? FileManager.default.removeItem(at: scratch)
+        }
+
+        // The app keeps the driver's Driving event open for ~370s after the link drops, so anything
+        // recorded inside that window is classified as already assigned and vanishes. Withhold it.
+        print("Offline backlog withholds what the app would silently discard:")
+        do {
+            let cfg = SimConfig.default
+            let outageStart = Date(timeIntervalSince1970: 1_700_000_000)
+            let e = EngineState(); e.ignitionOn = true; e.speedMph = 60
+            func rec(_ offset: Double) -> Emitted {
+                Emitted(wire: ScenarioRunner.toStored(MTPacket.livePosition(e, date: outageStart.addingTimeInterval(offset))),
+                        kind: .stored)
+            }
+            // three inside the close window, two past it
+            let batch = [rec(30), rec(120), rec(360), rec(400), rec(600)]
+            let split = ScenarioRunner.deliverableStored(batch, outageStart: outageStart,
+                                                        appDrivingCloseSec: cfg.appDrivingCloseSec)
+            let ok = split.keep.count == 2 && split.dropped == 3
+            print("  [\(ok ? "OK" : "FAIL")] kept \(split.keep.count)/5 past the \(Int(cfg.appDrivingCloseSec))s close, dropped \(split.dropped)")
+            if !ok { allPass = false }
+
+            // A short outage must yield nothing rather than a batch the app throws away.
+            let shortBatch = [rec(30), rec(60), rec(90)]
+            let shortSplit = ScenarioRunner.deliverableStored(shortBatch, outageStart: outageStart,
+                                                             appDrivingCloseSec: cfg.appDrivingCloseSec)
+            let emptied = shortSplit.keep.isEmpty && shortSplit.dropped == 3
+            print("  [\(emptied ? "OK" : "FAIL")] a sub-\(Int(cfg.appDrivingCloseSec))s outage delivers nothing")
+            if !emptied { allPass = false }
+
+            // Unparseable records must never be silently dropped.
+            let junk = [Emitted(wire: "GARBAGE", kind: .stored)]
+            let junkSplit = ScenarioRunner.deliverableStored(junk, outageStart: outageStart,
+                                                            appDrivingCloseSec: cfg.appDrivingCloseSec)
+            let keptJunk = junkSplit.keep.count == 1 && junkSplit.dropped == 0
+            print("  [\(keptJunk ? "OK" : "FAIL")] an unparseable record is kept, not dropped")
+            if !keptJunk { allPass = false }
+
+            // The scenario lead-in has to clear the same window, or S12 files zero UDPs.
+            let clears = cfg.storedReplayLeadInSec > cfg.appDrivingCloseSec
+            print("  [\(clears ? "OK" : "FAIL")] scenario lead-in \(Int(cfg.storedReplayLeadInSec))s clears the \(Int(cfg.appDrivingCloseSec))s close")
+            if !clears { allPass = false }
+        }
+
+        // Operator-entered telemetry must never reach the packet builder as a trapping value.
+        print("Telemetry edit bounds:")
+        do {
+            let bad = [Double.infinity, -Double.infinity, Double.nan, -1, 1e30, SimConfig.maxOdometerMiles + 1]
+            let rejected = bad.allSatisfy { !SimConfig.isValidOdometer($0) }
+            let good = SimConfig.isValidOdometer(25_000) && SimConfig.isValidOdometer(0)
+                && SimConfig.isValidOdometer(SimConfig.maxOdometerMiles)
+            print("  [\(rejected && good ? "OK" : "FAIL")] odometer rejects inf/nan/negative/oversize, accepts the real range")
+            if !(rejected && good) { allPass = false }
+
+            let hoursOk = !SimConfig.isValidEngineHours(.nan) && !SimConfig.isValidEngineHours(1e12)
+                && SimConfig.isValidEngineHours(4_352.5)
+            print("  [\(hoursOk ? "OK" : "FAIL")] engine hours rejects nan/oversize, accepts the real range")
+            if !hoursOk { allPass = false }
+
+            // Every accepted value must survive the packet builder without trapping.
+            let e = EngineState(); e.odometerMiles = SimConfig.maxOdometerMiles; e.engineHours = SimConfig.maxEngineHours
+            let built = MTPacket.livePosition(e)
+            let fields = built.components(separatedBy: ",")
+            let buildable = fields.count == 17 && Int(fields[4]) != nil && Int(fields[5]) != nil
+            print("  [\(buildable ? "OK" : "FAIL")] the ceiling values still build a valid 17-field packet")
+            if !buildable { allPass = false }
         }
 
         print("────────────────────────────────────────────────────────────")

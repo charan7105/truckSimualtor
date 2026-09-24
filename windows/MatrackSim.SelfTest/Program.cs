@@ -118,10 +118,13 @@ namespace MatrackSim.SelfTest
                     OdometerMiles = 25_312.5, EngineHours = 4_401.25,
                     Latitude = 25.943368, Longitude = -80.224136, FuelLevelPct = 47.1,
                 };
-                before.Persisted.Save();
+                // Never the real LocalAppData file — a tester who runs selftest after a day of driving
+                // must not lose their odometer.
+                string scratch = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MatrackSimSelfTest");
+                before.Persisted.Save(scratch);
 
                 var after = new EngineState();                   // a fresh launch starts at the defaults
-                var roundTripped = SimPersistedState.Load();
+                var roundTripped = SimPersistedState.Load(scratch);
                 if (roundTripped != null) after.Restore(roundTripped);
                 bool carried = Math.Abs(after.OdometerMiles - 25_312.5) < 0.01
                             && Math.Abs(after.EngineHours - 4_401.25) < 0.01
@@ -136,7 +139,71 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (monotonic ? "OK" : "FAIL") + "] a stale lower reading cannot rewind the odometer");
                 if (!monotonic) allPass = false;
 
-                try { System.IO.File.Delete(SimPersistedState.FilePath); } catch { }
+                try { System.IO.Directory.Delete(scratch, true); } catch { }
+            }
+
+            // The app keeps the driver's Driving event open for ~370s after the link drops, so anything
+            // recorded inside that window is classified as already assigned and vanishes. Withhold it.
+            Console.WriteLine("Offline backlog withholds what the app would silently discard:");
+            {
+                var cfg = SimConfig.Default;
+                var outageStart = new DateTime(2023, 11, 14, 22, 13, 20, DateTimeKind.Utc);
+                var e = new EngineState { IgnitionOn = true, SpeedMph = 60 };
+                Func<double, Emitted> rec = off => new Emitted(
+                    ScenarioRunner.ToStored(MTPacket.LivePosition(e, outageStart.AddSeconds(off))), Emitted.Kind.Stored);
+
+                var batch = new List<Emitted> { rec(30), rec(120), rec(360), rec(400), rec(600) };
+                var split = ScenarioRunner.DeliverableStored(batch, outageStart, cfg.AppDrivingCloseSec);
+                bool ok = split.Keep.Count == 2 && split.Dropped == 3;
+                Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] kept " + split.Keep.Count + "/5 past the " + (int)cfg.AppDrivingCloseSec + "s close, dropped " + split.Dropped);
+                if (!ok) allPass = false;
+
+                var shortBatch = new List<Emitted> { rec(30), rec(60), rec(90) };
+                var shortSplit = ScenarioRunner.DeliverableStored(shortBatch, outageStart, cfg.AppDrivingCloseSec);
+                bool emptied = shortSplit.Keep.Count == 0 && shortSplit.Dropped == 3;
+                Console.WriteLine("  [" + (emptied ? "OK" : "FAIL") + "] a sub-" + (int)cfg.AppDrivingCloseSec + "s outage delivers nothing");
+                if (!emptied) allPass = false;
+
+                var junk = new List<Emitted> { new Emitted("GARBAGE", Emitted.Kind.Stored) };
+                var junkSplit = ScenarioRunner.DeliverableStored(junk, outageStart, cfg.AppDrivingCloseSec);
+                bool keptJunk = junkSplit.Keep.Count == 1 && junkSplit.Dropped == 0;
+                Console.WriteLine("  [" + (keptJunk ? "OK" : "FAIL") + "] an unparseable record is kept, not dropped");
+                if (!keptJunk) allPass = false;
+
+                bool clears = cfg.StoredReplayLeadInSec > cfg.AppDrivingCloseSec;
+                Console.WriteLine("  [" + (clears ? "OK" : "FAIL") + "] scenario lead-in " + (int)cfg.StoredReplayLeadInSec + "s clears the " + (int)cfg.AppDrivingCloseSec + "s close");
+                if (!clears) allPass = false;
+            }
+
+            // Operator-entered telemetry must never reach the packet builder as a trapping value.
+            Console.WriteLine("Telemetry edit bounds:");
+            {
+                double[] bad = { double.PositiveInfinity, double.NegativeInfinity, double.NaN, -1, 1e30, SimConfig.MaxOdometerMiles + 1 };
+                bool rejected = true;
+                foreach (var v in bad) if (SimConfig.IsValidOdometer(v)) rejected = false;
+                bool good = SimConfig.IsValidOdometer(25_000) && SimConfig.IsValidOdometer(0)
+                         && SimConfig.IsValidOdometer(SimConfig.MaxOdometerMiles);
+                Console.WriteLine("  [" + (rejected && good ? "OK" : "FAIL") + "] odometer rejects inf/nan/negative/oversize, accepts the real range");
+                if (!(rejected && good)) allPass = false;
+
+                bool hoursOk = !SimConfig.IsValidEngineHours(double.NaN) && !SimConfig.IsValidEngineHours(1e12)
+                            && SimConfig.IsValidEngineHours(4_352.5);
+                Console.WriteLine("  [" + (hoursOk ? "OK" : "FAIL") + "] engine hours rejects nan/oversize, accepts the real range");
+                if (!hoursOk) allPass = false;
+
+                var ceil = new EngineState { OdometerMiles = SimConfig.MaxOdometerMiles, EngineHours = SimConfig.MaxEngineHours };
+                var fields = MTPacket.LivePosition(ceil).Split(',');
+                bool buildable = fields.Length == 17 && int.TryParse(fields[4], out _) && int.TryParse(fields[5], out _);
+                Console.WriteLine("  [" + (buildable ? "OK" : "FAIL") + "] the ceiling values still build a valid 17-field packet");
+                if (!buildable) allPass = false;
+            }
+
+            // A truncated state file must be rejected outright, not silently zeroed (that makes
+            // OutOfFuel true and DRIVE do nothing).
+            {
+                bool partialRejected = SimPersistedState.FromJson("{\"odometerMiles\":1,\"engineHours\":2}") == null;
+                Console.WriteLine("  [" + (partialRejected ? "OK" : "FAIL") + "] a truncated state file is rejected, not zero-filled");
+                if (!partialRejected) allPass = false;
             }
 
             Console.WriteLine("────────────────────────────────────────────────────────────");

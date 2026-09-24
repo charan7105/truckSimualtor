@@ -77,20 +77,29 @@ struct SimPersistedState: Codable {
     var fuelLevelPct: Double
     var fuelLevel2Pct: Double
 
-    static var fileURL: URL? {
-        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        let dir = base.appendingPathComponent("MatrackSim", isDirectory: true)
+    /// Where the live simulator keeps its state. `directory` exists so tests can point somewhere
+    /// disposable — the self-test used to save and then DELETE this exact file, wiping a real
+    /// session's odometer and reintroducing the rewind this type exists to prevent.
+    static func fileURL(in directory: URL? = nil) -> URL? {
+        let dir: URL
+        if let directory = directory {
+            dir = directory
+        } else {
+            guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+            dir = base.appendingPathComponent("MatrackSim", isDirectory: true)
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("state.json")
     }
 
-    static func load() -> SimPersistedState? {
-        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
+    static func load(from directory: URL? = nil) -> SimPersistedState? {
+        guard let url = fileURL(in: directory), let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SimPersistedState.self, from: data)
     }
 
-    func save() {
-        guard let url = SimPersistedState.fileURL, let data = try? JSONEncoder().encode(self) else { return }
+    func save(to directory: URL? = nil) {
+        guard let url = SimPersistedState.fileURL(in: directory),
+              let data = try? JSONEncoder().encode(self) else { return }
         try? data.write(to: url, options: .atomic)
     }
 }
