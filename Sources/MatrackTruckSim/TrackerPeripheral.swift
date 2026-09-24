@@ -469,32 +469,61 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                                  "ECM", "fuel 1", "fuel 2", "satellites", "GPS speed"]
 
     /// Override one telemetry field on the wire, or pass nil to clear it.
-    func setWireOverride(field: Int, value: String?) {
+    /// Arm or clear a wire fault. `probability` < 1 makes it intermittent — the shape most of the
+    /// requested faults actually need, because a constant fault is trivially visible while a
+    /// 1-in-5 fault is the one that finds ordering bugs in the consumer.
+    func setWireOverride(field: Int, value: String?, probability: Double = 1, requiresMotion: Bool = false) {
         guard (0..<Self.wireFieldNames.count).contains(field) else { return }
         let name = Self.wireFieldNames[field]
         if let value = value, !value.isEmpty {
-            engine.wireOverride[field] = value
-            info("⚠ faking \(name) = \(value) on every packet")
-        } else if engine.wireOverride.removeValue(forKey: field) != nil {
+            engine.wireFaults[field] = WireFault(value: value, probability: probability, requiresMotion: requiresMotion)
+            let how = probability >= 1 ? "every packet" : "~\(Int(probability * 100))% of packets"
+            let gate = requiresMotion ? " (only above \(Int(SimConfig.movingThresholdMph)) mph)" : ""
+            info("⚠ faking \(name) = \(value) on \(how)\(gate)")
+        } else if engine.wireFaults.removeValue(forKey: field) != nil {
             info("✓ \(name) back to the real value")
         }
         mirror()
     }
 
     /// Everything currently being faked, in field order — drives the UI's "what is armed" line.
-    var activeFaults: [(field: Int, name: String, value: String)] {
-        engine.wireOverride.keys.sorted().map { ($0, Self.wireFieldNames[$0], engine.wireOverride[$0] ?? "") }
+    var activeFaults: [(field: Int, name: String, value: String, probability: Double)] {
+        engine.wireFaults.keys.sorted().map {
+            ($0, Self.wireFieldNames[$0], engine.wireFaults[$0]?.value ?? "", engine.wireFaults[$0]?.probability ?? 1)
+        }
     }
 
-    var faultsArmed: Bool { !engine.wireOverride.isEmpty || config.timeSkewSec != 0 }
+    var faultsArmed: Bool { !engine.wireFaults.isEmpty || config.timeSkewSec != 0 || odoAlternating }
 
     /// One button back to a clean wire — the tester must never have to remember what they armed.
     func clearAllFaults() {
-        let n = engine.wireOverride.count + (config.timeSkewSec != 0 ? 1 : 0)
-        engine.wireOverride.removeAll()
+        let n = engine.wireFaults.count + (config.timeSkewSec != 0 ? 1 : 0) + (odoAlternating ? 1 : 0)
+        engine.wireFaults.removeAll()
         config.timeSkewSec = 0
+        odoAlternating = false
         mirror()
         info(n > 0 ? "✓ wire is clean again — \(n) fault\(n == 1 ? "" : "s") cleared" : "wire was already clean")
+    }
+
+    /// Two ECU odometer series, flipping every packet. This is the shape Praboo described: the ECU
+    /// reporting two different odometers. The app never alerts — it books the jump as driven miles,
+    /// or freezes the event's mileage at 0 if the low series sits below where the duty event began.
+    func setOdoAlternating(_ on: Bool) {
+        odoAlternating = on
+        if on {
+            info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)")
+        } else {
+            engine.wireFaults.removeValue(forKey: 4)
+            info("✓ odometer back to one series")
+        }
+        mirror()
+    }
+
+    /// Send the odometer-source packet. Included because it is literally what was asked for — and
+    /// because sending it PROVES the app does nothing with it.
+    func sendOdoSourcePacket(virtual: Bool) {
+        sendRaw(MTPacket.odoSource(virtualEnabled: virtual, activeSource: virtual ? 1 : 0))
+        info("↻ odometer-source packet sent (\(virtual ? "virtual" : "ECU")) — the app parses it into a variable nothing reads")
     }
 
     /// A burst of alternating ignition packets. Cannot go through step(): that path is edge-triggered
@@ -746,6 +775,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
     private var powerBurstTimer: Timer?           // fault injection: rapid ignition storm
+    @Published var odoAlternating = false         // fault injection: two ECU odometer series
+    private var odoSeriesHigh = false
     private var outageStartedAt: Date?            // when the current offline window began (see step())
     private var undeliveredStored: [Emitted] = [] // backlog handed to the dump but not yet fully sent
     private var flashFullWarned = false
@@ -1098,6 +1129,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             if engine.outOfFuel { engine.speedMph = 0 }     // stalled: can't move on empty tanks
             engine.advance(dt: dt * config.timeMultiplier)
             deadReckon(dt: dt * config.timeMultiplier)      // no route loaded: still move the GPS
+        }
+        if odoAlternating {                                 // two ECU series: flip on every tick
+            odoSeriesHigh.toggle()
+            engine.wireFaults[4] = WireFault(value: odoSeriesHigh ? config.odoSeriesHighRaw : config.odoSeriesLowRaw)
         }
         stateSaveCountdown -= dt                            // persist so a restart resumes, not resets
         if stateSaveCountdown <= 0 { stateSaveCountdown = 5; engine.persisted.save() }

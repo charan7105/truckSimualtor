@@ -135,6 +135,11 @@ namespace MatrackSim.Core
         /// skips the field and keeps the previous value — visible only in a stored dump, never live.
         /// </summary>
         public const string OdometerUnavailableSentinel = "4294967295";
+        /// <summary>The app treats speed >= 5 mph as moving; motion-gated faults use the same line.</summary>
+        public const double MovingThresholdMph = 5;
+        /// <summary>The two ECU odometer series the ALTERNATING fault flips between (raw field-4, x10 km).</summary>
+        public string OdoSeriesLowRaw = "402336";
+        public string OdoSeriesHighRaw = "462336";
 
         // ---- Hard limits on operator-entered telemetry -----------------------------------------
         /// <summary>

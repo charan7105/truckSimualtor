@@ -37,14 +37,14 @@ final class EngineState {
     var satellites = 11
     var ecmActive = true
 
-    /// FAULT INJECTION — raw wire-field overrides by index (0…16), substituted verbatim in
-    /// `MTPacket.telemetry` just before the fields are joined.
+    /// FAULT INJECTION — per-field wire faults, substituted in `MTPacket.telemetry` just before the
+    /// fields are joined.
     ///
     /// Deliberately bypasses the miles→Int conversion, `SimConfig.isValidOdometer` and the
     /// forward-only `setOdometer` guard: the whole point is to emit values a healthy tracker never
     /// would. It is NOT in `SimPersistedState`, so a restart always clears it — a junk odometer can
     /// never become permanent the way a typo in the TEST SETUP field once could.
-    var wireOverride: [Int: String] = [:]
+    var wireFaults: [Int: WireFault] = [:]
 
     // Config-driven model parameters (set from SimConfig)
     var idleRpmConfig = 750
@@ -67,6 +67,36 @@ final class EngineState {
         // Both tanks drain with distance (dual-tank crossfeed); tank 2 a touch slower so they don't read identical.
         fuelLevelPct  = max(0, fuelLevelPct  - milesThisTick * fuelBurnPctPerMile)
         fuelLevel2Pct = max(0, fuelLevel2Pct - milesThisTick * fuelBurnPctPerMile * 0.85)
+    }
+}
+
+/// One injected wire fault.
+///
+/// `probability` exists because real trackers misbehave INTERMITTENTLY — a request for "random
+/// packets with an invalid time" is not the same test as "every packet has an invalid time". A
+/// constant fault is trivially visible; a 1-in-5 fault is the one that finds ordering and
+/// state-machine bugs in the consumer.
+struct WireFault: Equatable {
+    var value: String
+    /// 0…1 share of packets that carry this fault. 1.0 = every packet.
+    var probability: Double = 1
+    /// Only inject while the truck is actually moving. The "no GPS lock above 5 mph" test is
+    /// meaningless on a stationary truck — a parked tracker legitimately loses its fix.
+    var requiresMotion: Bool = false
+}
+
+extension EngineState {
+    /// Which fields are faulted on THIS packet. Pure given `roll`, so the probability and
+    /// motion-gate logic can be tested without waiting on chance.
+    func faultedFields(roll: () -> Double) -> [Int: String] {
+        guard !wireFaults.isEmpty else { return [:] }
+        var out: [Int: String] = [:]
+        for (field, fault) in wireFaults {
+            if fault.requiresMotion && speedMph <= SimConfig.movingThresholdMph { continue }
+            if fault.probability < 1 && roll() >= fault.probability { continue }
+            out[field] = fault.value
+        }
+        return out
     }
 }
 

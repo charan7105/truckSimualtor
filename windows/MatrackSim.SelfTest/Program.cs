@@ -213,9 +213,9 @@ namespace MatrackSim.SelfTest
                 var e = new EngineState { IgnitionOn = true, SpeedMph = 60, OdometerMiles = 25_000 };
                 var clean = MTPacket.LivePosition(e).Split(',');
 
-                e.WireOverride[4] = SimConfig.OdometerUnavailableSentinel;
-                e.WireOverride[8] = "0";
-                e.WireOverride[12] = "0";
+                e.WireFaults[4] = new WireFault(SimConfig.OdometerUnavailableSentinel);
+                e.WireFaults[8] = new WireFault("0");
+                e.WireFaults[12] = new WireFault("0");
                 var faulted = MTPacket.LivePosition(e).Split(',');
                 bool expressed = faulted.Length == 17
                               && faulted[4] == SimConfig.OdometerUnavailableSentinel
@@ -237,11 +237,11 @@ namespace MatrackSim.SelfTest
                 // A fault must never become permanent: SimPersistedState is a whitelist.
                 var saved = e.Persisted;
                 var fresh = new EngineState(); fresh.Restore(saved);
-                bool cleared = fresh.WireOverride.Count == 0;
+                bool cleared = fresh.WireFaults.Count == 0;
                 Console.WriteLine("  [" + (cleared ? "OK" : "FAIL") + "] overrides are not persisted — a restart clears every fault");
                 if (!cleared) allPass = false;
 
-                e.WireOverride.Clear();
+                e.WireFaults.Clear();
                 bool backToClean = MTPacket.LivePosition(e).Split(',')[4] == clean[4];
                 Console.WriteLine("  [" + (backToClean ? "OK" : "FAIL") + "] clearing restores the real value");
                 if (!backToClean) allPass = false;
@@ -260,6 +260,34 @@ namespace MatrackSim.SelfTest
                     { allPass = false; Console.WriteLine("  [FAIL] LV mangled VIN \"" + vin + "\""); }
                 }
                 Console.WriteLine("  [OK] all-zero, 6-char and empty VINs pass through the LV builder verbatim");
+
+                // Intermittent faults. "Random packets with an invalid time" is a different test from
+                // "every packet has an invalid time" — a constant fault is trivially visible, a 1-in-5
+                // fault is the one that finds ordering bugs. Driven by an injected roll.
+                var m = new EngineState { IgnitionOn = true, SpeedMph = 60 };
+                m.WireFaults[10] = new WireFault("999999", 0.2);
+                var hits = m.FaultedFields(() => 0.1);
+                var misses = m.FaultedFields(() => 0.9);
+                bool intermittent = hits.ContainsKey(10) && hits[10] == "999999" && !misses.ContainsKey(10);
+                Console.WriteLine("  [" + (intermittent ? "OK" : "FAIL") + "] an intermittent fault fires on some packets and not others");
+                if (!intermittent) allPass = false;
+
+                // The motion gate: "no GPS lock above 5 mph" is meaningless on a parked truck.
+                m.WireFaults.Clear();
+                m.WireFaults[8] = new WireFault("0", 1, true);
+                m.SpeedMph = 60;
+                bool movingHit = m.FaultedFields(() => 0).ContainsKey(8);
+                m.SpeedMph = 0;
+                bool parkedClean = !m.FaultedFields(() => 0).ContainsKey(8);
+                Console.WriteLine("  [" + (movingHit && parkedClean ? "OK" : "FAIL") + "] a motion-gated fault fires while driving and not while parked");
+                if (!(movingHit && parkedClean)) allPass = false;
+
+                // The odometer-source packet must match the shape the app's parser demands.
+                var xo = MTPacket.OdoSource(true, 1);
+                bool xoOk = xo.StartsWith("xO,") && xo.EndsWith("$$")
+                         && xo.Replace("$$", "").Split(',').Length >= 10;
+                Console.WriteLine("  [" + (xoOk ? "OK" : "FAIL") + "] the odometer-source packet matches the app parser's shape");
+                if (!xoOk) allPass = false;
             }
 
             Console.WriteLine("────────────────────────────────────────────────────────────");

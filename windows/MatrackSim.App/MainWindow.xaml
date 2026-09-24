@@ -747,19 +747,29 @@
                                     <TextBlock Text="Packet time wrong by half an hour. Phone: red Malfunction(T) bar after ~20s." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="ODOMETER AND HOURS MISSING" Style="{StaticResource NeonButton}" Click="FaultOdoMissing_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Sends 0 for both. Phone: change duty status while ON → Data Diagnostic 3." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                    <Button Content="GPS LOCK LOST" Style="{StaticResource NeonButton}" Click="FaultGpsLock_Click" Margin="0,0,0,2" />
-                                    <TextBlock Text="Drops the fix while driving. Phone: nothing quickly — its positioning check never fires (see audit)." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <Button Content="GPS LOCK LOST — 1 IN 5, ONLY WHILE MOVING" Style="{StaticResource NeonButton}" Click="FaultGpsLock_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Randomly drops the fix on ~20% of packets, only above 5 mph. Phone: nothing quickly — its positioning check never fires (see audit)." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
 
                                     <TextBlock Text="WRONG NUMBER, NO WARNING" Style="{StaticResource Sec}" Foreground="{StaticResource Amber}" Margin="0,0,0,4" />
                                     <Button Content="ODOMETER JUMP +58,000 mi" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultOdoJump_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Phone: the Driving event's odometer jumps and stays. No warning at all." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="ODOMETER STUCK" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultOdoStuck_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Sends 'odometer not available'. Phone keeps showing the last value — that is the finding." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="TWO ECU ODOMETERS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultTwoOdo_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Two series ~3,700 mi apart, flipping every packet. Phone: BLE Values shows it flipping. No warning — that is the finding." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="BAD TIME ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultBadTime_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Scatters an impossible time through the stream instead of corrupting every packet." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="DEFAULT ODOMETER ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultDefaultOdo_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Scatters the 'odometer not available' value through the stream. Phone: nothing live; only a stored dump carries it." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="POWER CYCLE STORM x10" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultPowerStorm_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Phone speaks 'Vehicle Power up' each time. It never raises Power Compliance." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
 
                                     <TextBlock Text="THE PHONE IGNORES THESE" Style="{StaticResource Sec}" Foreground="{StaticResource Dim}" Margin="0,0,0,4" />
                                     <TextBlock Text="Verified against the app source. Send these to PROVE the app ignores them, not to wait for an alert." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <Button Content="ALL ZEROS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="VinZeros_Click" Margin="0,0,6,0" />
+                                        <Button Content="LAST 6 ONLY" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="VinLast6_Click" />
+                                    </StackPanel>
                                     <DockPanel Margin="0,0,0,2">
                                         <Button Content="SEND BAD VIN" Style="{StaticResource NeonButton}" DockPanel.Dock="Right" Click="FaultBadVin_Click" />
                                         <TextBox x:Name="BadVinBox" Text="00000000000000000" Background="Transparent" BorderThickness="0"
@@ -767,8 +777,10 @@
                                                  VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" Margin="0,0,6,0" />
                                     </DockPanel>
                                     <TextBlock Text="All zeros and a 6-char VIN behave identically. Only Troubleshoot → Run Diagnostic Check shows it." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                    <Button Content="DEFAULT DATE (01-01-00)" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultDefaultDate_Click" Margin="0,0,0,2" />
-                                    <TextBlock Text="Phone: nothing. It rewrites the packet date to phone time." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <Button Content="DEFAULT DATE ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultDefaultDate_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="A tracker that lost its clock reports 01-01-00. Phone: nothing — both the MT and PT parsers rewrite it to phone time." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="ODOMETER SOURCE → VIRTUAL" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultOdoSource_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="The xO packet that says the odometer source changed. Phone: nothing at all — it parses this into a variable with no readers." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
 
                                     <!-- TEST SETUP: dial the truck to a starting state instead of driving to it.

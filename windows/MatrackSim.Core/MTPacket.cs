@@ -64,15 +64,31 @@ namespace MatrackSim.Core
             // Fault injection: substitute any overridden field verbatim. Applied last so it can express
             // values the model itself cannot hold (the 4294967295 "unavailable" sentinel, a second ECU
             // odometer series, GPS lock 0 while moving).
-            if (e.WireOverride.Count > 0)
+            var faulted = e.FaultedFields(() => Rng.NextDouble());
+            if (faulted.Count > 0)
                 for (int i = 0; i < fields.Length; i++)
-                    if (e.WireOverride.TryGetValue(i, out string ov)) fields[i] = ov;
+                    if (faulted.TryGetValue(i, out string ov)) fields[i] = ov;
             return string.Join(",", fields);
         }
 
         /// <summary>Version/VIN packet: LV,VIN,mcuHW,mcuFW,bleHW,bleFW,canMode,canMask,deviceMAC</summary>
         public static string Version(DeviceInfo d) =>
             string.Join(",", new[] { "LV", d.Vin, d.McuHW, d.McuFW, d.BleHW, d.BleFW, d.CanMode, d.CanMask, d.DeviceMAC });
+
+        private static readonly Random Rng = new Random();
+
+        /// <summary>
+        /// Odometer-source packet: xO,&lt;fields&gt;$$. The app parses this into GlobalVar.mtOdoPacket —
+        /// which has ZERO readers — and posts a notification with ZERO observers. Shipped so a tester
+        /// can demonstrate that the app ignores an odometer-source switch entirely.
+        /// </summary>
+        public static string OdoSource(bool virtualEnabled, int activeSource)
+        {
+            string v = virtualEnabled ? "1" : "0";
+            var f = new[] { "xO", "1", activeSource.ToString(CultureInfo.InvariantCulture), v, "0", v, "0", "0", "0",
+                            activeSource.ToString(CultureInfo.InvariantCulture) };
+            return string.Join(",", f) + "$$";
+        }
 
         /// <summary>DTC packet (OBD-II path): LD,ign,rpm,canMode(0),count,spare(0),hexBlob</summary>
         public static string Dtc(IReadOnlyList<string> codes, int ignition, int rpm)

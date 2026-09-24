@@ -119,6 +119,13 @@ struct SimConfig: Codable, Equatable {
     /// The app skips the field and keeps the previous value (UtilParser.swift:1881) — so this is
     /// visible only in a stored dump, never live. Same sentinel applies to field 5.
     static let odometerUnavailableSentinel = "4294967295"
+    /// The app treats speed >= 5 mph as moving; motion-gated faults use the same line so a test
+    /// reads the same way on both sides.
+    static let movingThresholdMph: Double = 5
+    /// The two ECU odometer series the ALTERNATING fault flips between, as raw field-4 values
+    /// (x10 km). ~3,700 miles apart, which is large enough to be obvious in the app's day log.
+    var odoSeriesLowRaw = "402336"
+    var odoSeriesHighRaw = "462336"
 
     // MARK: Hard limits on operator-entered telemetry
     /// Ceilings for the TEST SETUP fields. Two reasons they exist. (1) MTPacket converts miles to a

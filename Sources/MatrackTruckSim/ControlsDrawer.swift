@@ -629,10 +629,12 @@ struct FaultPanel: View {
                 sim.setWireOverride(field: 5, value: armed ? nil : "0")
             }
 
-            faultToggle(title: "GPS LOCK LOST", on: sim.activeFaults.contains { $0.field == 8 },
-                        subtitle: "Drops the GPS fix while the truck keeps driving.",
-                        look: "Phone: nothing quickly. The app's positioning check never fires — see the note in the audit doc.") {
-                sim.setWireOverride(field: 8, value: sim.activeFaults.contains { $0.field == 8 } ? nil : "0")
+            faultToggle(title: "GPS LOCK LOST — 1 IN 5 PACKETS, ONLY WHILE MOVING",
+                        on: sim.activeFaults.contains { $0.field == 8 },
+                        subtitle: "Randomly drops the GPS fix on about a fifth of packets, and only above 5 mph.",
+                        look: "Phone: nothing quickly. The app's positioning check never fires — see the audit doc.") {
+                sim.setWireOverride(field: 8, value: sim.activeFaults.contains { $0.field == 8 } ? nil : "0",
+                                    probability: 0.2, requiresMotion: true)
             }
         }
     }
@@ -652,6 +654,29 @@ struct FaultPanel: View {
                         look: "Phone: keeps showing the LAST odometer as if it were live. Nothing changes on screen — that is the finding.") {
                 let armed = sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel }
                 sim.setWireOverride(field: 4, value: armed ? nil : SimConfig.odometerUnavailableSentinel)
+            }
+
+            faultToggle(title: "TWO ECU ODOMETERS", on: sim.odoAlternating,
+                        subtitle: "The ECU reports two different odometers about 3,700 miles apart, flipping every packet.",
+                        look: "Phone: Help → Bluetooth → BLE Values, the odometer visibly flips. No warning — this is the finding.") {
+                sim.setOdoAlternating(!sim.odoAlternating)
+            }
+
+            faultToggle(title: "BAD TIME ON 1 IN 5 PACKETS",
+                        on: sim.activeFaults.contains { $0.field == 10 },
+                        subtitle: "Scatters an impossible time through the stream instead of corrupting every packet.",
+                        look: "Phone: intermittent, so watch the event list rather than expecting a banner.") {
+                sim.setWireOverride(field: 10, value: sim.activeFaults.contains { $0.field == 10 } ? nil : "999999",
+                                    probability: 0.2)
+            }
+
+            faultToggle(title: "DEFAULT ODOMETER ON 1 IN 5 PACKETS",
+                        on: sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel && $0.probability < 1 },
+                        subtitle: "Scatters the tracker's \"odometer not available\" value through the stream.",
+                        look: "Phone: nothing live. Only a stored dump carries it into the FMCSA file.") {
+                let armed = sim.activeFaults.contains { $0.field == 4 && $0.probability < 1 }
+                sim.setWireOverride(field: 4, value: armed ? nil : SimConfig.odometerUnavailableSentinel,
+                                    probability: 0.2)
             }
 
             faultButton(title: "POWER CYCLE STORM  ×10",
@@ -687,10 +712,23 @@ struct FaultPanel: View {
                 Text("All zeros and a 6-character VIN behave identically. Only visible in Troubleshoot → Run Diagnostic Check.")
                     .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
 
-                faultButton(title: "DEFAULT DATE (01-01-00)",
-                            subtitle: "A tracker that lost its clock.",
-                            look: "Phone: nothing. It rewrites the packet date to phone time.") {
-                    sim.setWireOverride(field: 11, value: "010100")
+                HStack(spacing: 6) {
+                    NeonButton(title: "ALL ZEROS", tint: Theme.dim, filled: false) { customVin = "00000000000000000" }
+                    NeonButton(title: "LAST 6 ONLY", tint: Theme.dim, filled: false) { customVin = "292058" }
+                }
+
+                faultToggle(title: "DEFAULT DATE ON 1 IN 5 PACKETS",
+                            on: sim.activeFaults.contains { $0.field == 11 },
+                            subtitle: "A tracker that lost its clock reports 01-01-00.",
+                            look: "Phone: nothing. Both the MT and PT parsers rewrite the packet date to phone time.") {
+                    sim.setWireOverride(field: 11, value: sim.activeFaults.contains { $0.field == 11 } ? nil : "010100",
+                                        probability: 0.2)
+                }
+
+                faultButton(title: "ODOMETER SOURCE → VIRTUAL",
+                            subtitle: "The xO packet that tells the app the odometer source changed.",
+                            look: "Phone: nothing at all. It parses this into a variable with no readers and posts a notification with no observers.") {
+                    sim.sendOdoSourcePacket(virtual: true)
                 }
             }
         }

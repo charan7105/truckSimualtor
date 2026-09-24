@@ -220,9 +220,9 @@ enum SelfTest {
             let clean = MTPacket.livePosition(e).components(separatedBy: ",")
 
             // The sentinel is 26x the odometer ceiling — unreachable via setOdometer by design.
-            e.wireOverride[4] = SimConfig.odometerUnavailableSentinel
-            e.wireOverride[8] = "0"
-            e.wireOverride[12] = "0"
+            e.wireFaults[4] = WireFault(value: SimConfig.odometerUnavailableSentinel)
+            e.wireFaults[8] = WireFault(value: "0")
+            e.wireFaults[12] = WireFault(value: "0")
             let faulted = MTPacket.livePosition(e).components(separatedBy: ",")
             let expressed = faulted.count == 17
                 && faulted[4] == SimConfig.odometerUnavailableSentinel
@@ -246,11 +246,11 @@ enum SelfTest {
             // always returns a clean wire. This is what stops the TEST SETUP typo class of bug.
             let saved = e.persisted
             let fresh = EngineState(); fresh.restore(saved)
-            let cleared = fresh.wireOverride.isEmpty
+            let cleared = fresh.wireFaults.isEmpty
             print("  [\(cleared ? "OK" : "FAIL")] overrides are not persisted — a restart clears every fault")
             if !cleared { allPass = false }
 
-            e.wireOverride.removeAll()
+            e.wireFaults.removeAll()
             let backToClean = MTPacket.livePosition(e).components(separatedBy: ",")[4] == clean[4]
             print("  [\(backToClean ? "OK" : "FAIL")] clearing restores the real value")
             if !backToClean { allPass = false }
@@ -271,6 +271,38 @@ enum SelfTest {
                 if !ok { allPass = false; print("  [FAIL] LV mangled VIN \"\(vin)\"") }
             }
             print("  [OK] all-zero, 6-char and empty VINs pass through the LV builder verbatim")
+
+            // Intermittent faults. "Random packets with an invalid time" is a different test from
+            // "every packet has an invalid time" — a constant fault is trivially visible, a 1-in-5
+            // fault is the one that finds ordering bugs. Driven by an injected roll so it is
+            // deterministic here.
+            let m = EngineState(); m.ignitionOn = true; m.speedMph = 60
+            m.wireFaults[10] = WireFault(value: "999999", probability: 0.2)
+            let hits = m.faultedFields(roll: { 0.1 })      // roll below p → fault applies
+            let misses = m.faultedFields(roll: { 0.9 })    // roll above p → clean packet
+            let intermittent = hits[10] == "999999" && misses[10] == nil
+            print("  [\(intermittent ? "OK" : "FAIL")] an intermittent fault fires on some packets and not others")
+            if !intermittent { allPass = false }
+
+            // The motion gate: "no GPS lock above 5 mph" is meaningless on a parked truck, which
+            // legitimately loses its fix.
+            m.wireFaults.removeAll()
+            m.wireFaults[8] = WireFault(value: "0", requiresMotion: true)
+            m.speedMph = 60
+            let moving = m.faultedFields(roll: { 0 })[8] == "0"
+            m.speedMph = 0
+            let parked = m.faultedFields(roll: { 0 })[8] == nil
+            print("  [\(moving && parked ? "OK" : "FAIL")] a motion-gated fault fires while driving and not while parked")
+            if !(moving && parked) { allPass = false }
+
+            // The odometer-source packet must match the shape the app's parser demands (>= 10 comma
+            // fields, xO prefix, $$ terminator) or it is dropped before reaching the dead code path
+            // we are trying to demonstrate.
+            let xo = MTPacket.odoSource(virtualEnabled: true, activeSource: 1)
+            let xoOk = xo.hasPrefix("xO,") && xo.hasSuffix("$$")
+                && xo.replacingOccurrences(of: "$$", with: "").components(separatedBy: ",").count >= 10
+            print("  [\(xoOk ? "OK" : "FAIL")] the odometer-source packet matches the app parser's shape")
+            if !xoOk { allPass = false }
         }
 
         print("────────────────────────────────────────────────────────────")

@@ -506,21 +506,43 @@ namespace MatrackSim.App
         };
 
         /// <summary>Override one telemetry field on the wire, or pass null/empty to clear it.</summary>
-        public void SetWireOverride(int field, string value)
+        public void SetWireOverride(int field, string value, double probability = 1, bool requiresMotion = false)
         {
             if (field < 0 || field >= WireFieldNames.Length) return;
             string name = WireFieldNames[field];
             if (!string.IsNullOrEmpty(value))
             {
-                engine.WireOverride[field] = value;
-                Info($"⚠ faking {name} = {value} on every packet");
+                engine.WireFaults[field] = new WireFault(value, probability, requiresMotion);
+                string how = probability >= 1 ? "every packet" : $"~{(int)(probability * 100)}% of packets";
+                string gate = requiresMotion ? $" (only above {(int)SimConfig.MovingThresholdMph} mph)" : "";
+                Info($"⚠ faking {name} = {value} on {how}{gate}");
             }
-            else if (engine.WireOverride.Remove(field))
+            else if (engine.WireFaults.Remove(field))
             {
                 Info($"✓ {name} back to the real value");
             }
             Mirror();
-            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+            RefreshFaultBindings();
+        }
+
+        /// <summary>
+        /// Two ECU odometer series, flipping every packet — the shape Praboo described. The app never
+        /// alerts: it books the jump as driven miles, or freezes the event's mileage at 0 if the low
+        /// series sits below where the duty event began.
+        /// </summary>
+        public void SetOdoAlternating(bool on)
+        {
+            OdoAlternating = on;
+            if (on) Info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)");
+            else { engine.WireFaults.Remove(4); Info("✓ odometer back to one series"); }
+            Mirror(); RefreshFaultBindings();
+        }
+
+        /// <summary>Send the odometer-source packet — sending it PROVES the app does nothing with it.</summary>
+        public void SendOdoSourcePacket(bool virtualSource)
+        {
+            SendRaw(MTPacket.OdoSource(virtualSource, virtualSource ? 1 : 0));
+            Info($"↻ odometer-source packet sent ({(virtualSource ? "virtual" : "ECU")}) — the app parses it into a variable nothing reads");
         }
 
         /// <summary>Re-publish the armed-fault bindings after a change that is not a wire override
@@ -531,9 +553,13 @@ namespace MatrackSim.App
         }
 
         public bool IsFaked(int field, string value = null) =>
-            engine.WireOverride.TryGetValue(field, out string v) && (value == null || v == value);
+            engine.WireFaults.TryGetValue(field, out WireFault f) && (value == null || f.Value == value);
 
-        public bool FaultsArmed => engine.WireOverride.Count > 0 || Config.TimeSkewSec != 0;
+        private bool _odoAlternating;
+        public bool OdoAlternating { get => _odoAlternating; set => Set(ref _odoAlternating, value); }
+        private bool odoSeriesHigh;
+
+        public bool FaultsArmed => engine.WireFaults.Count > 0 || Config.TimeSkewSec != 0 || OdoAlternating;
 
         /// <summary>Everything currently being faked, in field order — drives the UI's status line.</summary>
         public string ArmedFaultsSummary
@@ -543,8 +569,13 @@ namespace MatrackSim.App
                 var parts = new List<string>();
                 if (Config.TimeSkewSec != 0)
                     parts.Add($"clock {(Config.TimeSkewSec > 0 ? "+" : "")}{(int)(Config.TimeSkewSec / 60)} min");
-                foreach (var k in new List<int>(engine.WireOverride.Keys))
-                    parts.Add($"{WireFieldNames[k]} = {engine.WireOverride[k]}");
+                if (OdoAlternating) parts.Add("two ECU odometers");
+                foreach (var k in new List<int>(engine.WireFaults.Keys))
+                {
+                    var f = engine.WireFaults[k];
+                    string pct = f.Probability >= 1 ? "" : $" ({(int)(f.Probability * 100)}%)";
+                    parts.Add($"{WireFieldNames[k]} = {f.Value}{pct}");
+                }
                 parts.Sort(StringComparer.Ordinal);
                 return parts.Count == 0 ? "" : string.Join(", ", parts);
             }
@@ -553,11 +584,12 @@ namespace MatrackSim.App
         /// <summary>One button back to a clean wire — the tester must never have to remember what they armed.</summary>
         public void ClearAllFaults()
         {
-            int n = engine.WireOverride.Count + (Config.TimeSkewSec != 0 ? 1 : 0);
-            engine.WireOverride.Clear();
+            int n = engine.WireFaults.Count + (Config.TimeSkewSec != 0 ? 1 : 0) + (OdoAlternating ? 1 : 0);
+            engine.WireFaults.Clear();
             Config.TimeSkewSec = 0;
+            OdoAlternating = false;
             Mirror();
-            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+            RefreshFaultBindings();
             Info(n > 0 ? $"✓ wire is clean again — {n} fault{(n == 1 ? "" : "s")} cleared" : "wire was already clean");
         }
 
@@ -1484,6 +1516,11 @@ namespace MatrackSim.App
                 if (engine.OutOfFuel) engine.SpeedMph = 0;          // stalled: can't move on empty tanks
                 engine.Advance(dt * Config.TimeMultiplier);
                 DeadReckon(dt * Config.TimeMultiplier);             // no route loaded: still move the GPS
+            }
+            if (OdoAlternating)                                     // two ECU series: flip on every tick
+            {
+                odoSeriesHigh = !odoSeriesHigh;
+                engine.WireFaults[4] = new WireFault(odoSeriesHigh ? Config.OdoSeriesHighRaw : Config.OdoSeriesLowRaw);
             }
             stateSaveCountdown -= dt;                               // persist so a restart resumes, not resets
             if (stateSaveCountdown <= 0) { stateSaveCountdown = 5; engine.Persisted.Save(); }

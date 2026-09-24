@@ -48,15 +48,27 @@ enum MTPacket {
         // Fault injection: substitute any overridden field verbatim. Applied last so it can express
         // values the model itself cannot hold (the 4294967295 "unavailable" sentinel, a second ECU
         // odometer series, GPS lock 0 while moving).
-        guard !e.wireOverride.isEmpty else { return fields.joined(separator: ",") }
+        let faulted = e.faultedFields(roll: { Double.random(in: 0..<1) })
+        guard !faulted.isEmpty else { return fields.joined(separator: ",") }
         return fields.enumerated()
-            .map { e.wireOverride[$0.offset] ?? $0.element }
+            .map { faulted[$0.offset] ?? $0.element }
             .joined(separator: ",")
     }
 
     /// Version/VIN packet: LV,VIN,mcuHW,mcuFW,bleHW,bleFW,canMode,canMask,deviceMAC
     static func version(_ d: DeviceInfo) -> String {
         ["LV", d.vin, d.mcuHW, d.mcuFW, d.bleHW, d.bleFW, d.canMode, d.canMask, d.deviceMAC].joined(separator: ",")
+    }
+
+    /// Odometer-source packet: `xO,<fields>$$`. The app parses this (BleClass.handleOdoSourcePacket
+    /// → OdoSource.swift) into `GlobalVar.shared.mtOdoPacket` — which has ZERO readers — and posts a
+    /// notification with ZERO observers. Shipped so a tester can demonstrate that the app ignores an
+    /// odometer-source switch entirely, which is the honest answer to "does it alert when the source
+    /// changes". Layout follows the app's parser: 9 fixed header fields, then the source list.
+    static func odoSource(virtualEnabled: Bool, activeSource: Int) -> String {
+        let f = ["xO", "1", "\(activeSource)", virtualEnabled ? "1" : "0", "0",
+                 virtualEnabled ? "1" : "0", "0", "0", "0", "\(activeSource)"]
+        return f.joined(separator: ",") + "$$"
     }
 
     /// DTC packet (OBD-II path): LD,ign,rpm,canMode(0),count,spare(0),hexBlob

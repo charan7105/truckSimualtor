@@ -143,8 +143,25 @@ namespace MatrackSim.App
             Sim.SetWireOverride(5, armed ? null : "0");
         }
 
+        // 1-in-5 and motion-gated: "when speed > 5, SOME packets without gps lock" is a different
+        // test from "every packet without gps lock", and a parked truck legitimately has no fix.
         private void FaultGpsLock_Click(object sender, RoutedEventArgs e) =>
-            Sim.SetWireOverride(8, Sim.IsFaked(8) ? null : "0");
+            Sim.SetWireOverride(8, Sim.IsFaked(8) ? null : "0", 0.2, true);
+
+        private void FaultTwoOdo_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetOdoAlternating(!Sim.OdoAlternating);
+
+        private void FaultBadTime_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(10, Sim.IsFaked(10) ? null : "999999", 0.2);
+
+        private void FaultDefaultOdo_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, Sim.IsFaked(4, SimConfig.OdometerUnavailableSentinel)
+                ? null : SimConfig.OdometerUnavailableSentinel, 0.2);
+
+        private void FaultOdoSource_Click(object sender, RoutedEventArgs e) => Sim.SendOdoSourcePacket(true);
+
+        private void VinZeros_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "00000000000000000";
+        private void VinLast6_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "292058";
 
         private void FaultOdoJump_Click(object sender, RoutedEventArgs e) =>
             Sim.SetWireOverride(4, "5000000");
@@ -161,7 +178,8 @@ namespace MatrackSim.App
             Sim.SendVinNow();
         }
 
-        private void FaultDefaultDate_Click(object sender, RoutedEventArgs e) => Sim.SetWireOverride(11, "010100");
+        private void FaultDefaultDate_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(11, Sim.IsFaked(11) ? null : "010100", 0.2);
 
         private void FaultClear_Click(object sender, RoutedEventArgs e) => Sim.ClearAllFaults();
         private void Auto_Click(object sender, RoutedEventArgs e) => Sim.SetAutoDrive(!Sim.AutoDrive);

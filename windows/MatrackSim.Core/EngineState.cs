@@ -68,8 +68,26 @@ namespace MatrackSim.Core
         /// would. It is NOT part of SimPersistedState, so a restart always clears it — a junk
         /// odometer can never become permanent.
         /// </summary>
-        public System.Collections.Generic.Dictionary<int, string> WireOverride =
-            new System.Collections.Generic.Dictionary<int, string>();
+        public System.Collections.Generic.Dictionary<int, WireFault> WireFaults =
+            new System.Collections.Generic.Dictionary<int, WireFault>();
+
+        /// <summary>
+        /// Which fields are faulted on THIS packet. Pure given `roll`, so the probability and
+        /// motion-gate logic can be tested without waiting on chance.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<int, string> FaultedFields(System.Func<double> roll)
+        {
+            var outv = new System.Collections.Generic.Dictionary<int, string>();
+            if (WireFaults.Count == 0) return outv;
+            foreach (var kv in WireFaults)
+            {
+                var f = kv.Value;
+                if (f.RequiresMotion && SpeedMph <= SimConfig.MovingThresholdMph) continue;
+                if (f.Probability < 1 && roll() >= f.Probability) continue;
+                outv[kv.Key] = f.Value;
+            }
+            return outv;
+        }
 
         /// <summary>Both tanks dry — the engine stalls, so the truck can't move until it's refueled.</summary>
         public bool OutOfFuel => FuelLevelPct <= 0 && FuelLevel2Pct <= 0;
@@ -110,6 +128,25 @@ namespace MatrackSim.Core
             FuelLevelPct = s.FuelLevelPct;
             FuelLevel2Pct = s.FuelLevel2Pct;
         }
+    }
+
+    /// <summary>
+    /// One injected wire fault.
+    ///
+    /// Probability exists because real trackers misbehave INTERMITTENTLY — "random packets with an
+    /// invalid time" is not the same test as "every packet has an invalid time". A constant fault is
+    /// trivially visible; a 1-in-5 fault is the one that finds ordering and state-machine bugs.
+    /// </summary>
+    public sealed class WireFault
+    {
+        public string Value { get; set; }
+        /// <summary>0…1 share of packets that carry this fault. 1.0 = every packet.</summary>
+        public double Probability { get; set; } = 1;
+        /// <summary>Only inject while the truck is moving — a parked tracker legitimately loses its fix.</summary>
+        public bool RequiresMotion { get; set; }
+
+        public WireFault(string value, double probability = 1, bool requiresMotion = false)
+        { Value = value; Probability = probability; RequiresMotion = requiresMotion; }
     }
 
     /// <summary>
