@@ -187,6 +187,30 @@ enum SelfTest {
             if !buildable { allPass = false }
         }
 
+        // A recorded drive must continue the live odometer, not restart from the config default —
+        // otherwise the dump sits below the live stream and the FMCSA output gets milespowerup < milesinception.
+        print("Stored replay continues the live odometer:")
+        do {
+            let liveOdo = 31_250.75, liveHrs = 5_001.25
+            for s in Scenarios.all {
+                let isStored: Bool
+                switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
+                if !isStored { continue }
+                let sr = ScenarioRunner.storedReplay(for: s, config: .default,
+                                                     from: Date(timeIntervalSince1970: 1_700_000_000),
+                                                     seed: (liveOdo, liveHrs, 25.9, -80.2))
+                guard let first = sr.first, let t0 = ScenarioRunner.telemetryOf(first.wire),
+                      let last = sr.last, let tN = ScenarioRunner.telemetryOf(last.wire) else {
+                    print("  [FAIL] S\(s.id): could not read telemetry back"); allPass = false; continue
+                }
+                let startsAtLive = t0.odometerMiles >= liveOdo - 0.5 && t0.engineHours >= liveHrs - 0.01
+                let movesForward = tN.odometerMiles >= t0.odometerMiles && tN.engineHours >= t0.engineHours
+                let ok = startsAtLive && movesForward
+                if !ok { allPass = false }
+                print("  [\(ok ? "OK" : "FAIL")] S\(s.id): \(String(format: "%.1f", t0.odometerMiles)) → \(String(format: "%.1f", tN.odometerMiles)) mi (live was \(String(format: "%.1f", liveOdo)))")
+            }
+        }
+
         print("────────────────────────────────────────────────────────────")
         print(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗")
         return allPass ? 0 : 1

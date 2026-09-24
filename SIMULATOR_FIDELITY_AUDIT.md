@@ -166,3 +166,39 @@ This core is a **Match** everywhere. The findings below are where they diverge.
 | **Weak-RSSI recording/upload debugging** | ❌ **Not possible on a laptop** — requires ESP32 (F2). |
 
 **Overall:** the simulator is a **faithful tracker for telemetry, parsing, stored-replay, and reconnect debugging** (not a "fake packet generator" for those paths). Two gaps stop it short of full real-tracker behavior: it **ignores the `$ACK` protocol** (fixable in software) and it **cannot produce real RSSI** (fixable only with ESP32 hardware). Close F1 in software and adopt the ESP32 for F2, and the sandbox covers the full contract.
+
+---
+
+## Appendix — app-side bugs the simulator will get blamed for
+
+Found 2026-09-25 during a 121-claim verification of the simulator against `matrack_ios_eld`. These are
+defects in the **ELD app**, not the simulator. Recording them here so a tester who hits them does not
+spend a day chasing the sim. Neither is fixable from our side.
+
+### A1 — stored packets insert locationlog rows with lat/lon 0.0, which can raise a false FMCSA malfunction
+`parseMTStored` writes locationlog rows from the **global** `gpsInfoPojo` (`UtilParser.swift:1823`,
+`:1834`), which is never populated on the MT path — so every stored packet inserts rows with
+latitude 0.0 / longitude 0.0 / `status = 0`, up to three per packet (`:407`, `:413`, `:294`). Those
+`status = 0` rows feed the positioning-compliance accumulator (`Utils.swift:2106-2146` →
+`ProcessAction2.swift:3325-3345`). Roughly four disconnect → drive → reconnect cycles in 24 h is
+enough to raise a positioning malfunction 'L' the tester never provoked. The simulator's own
+coordinates are correct on the wire; the app drops them on this path.
+
+### A2 — GPS speed (field 16) is emitted in km/h but compared against an mph threshold
+The tracker's 17th field is GPS speed. The simulator emits km/h, matching field 3
+(`EngineState.swift` `gpsSpeedKmh`). The app compares it **raw** against an mph threshold:
+`ProcessAction2.swift:4392-4395`, `if gpsSpeed > 5 { Util.addECMDiagnostic() }` on a manual Driving
+status change — so a 3.2 mph creep (5 km/h) trips an ECM diagnostic.
+
+**Do not "fix" this by flipping the simulator's unit.** The real tracker's field-16 unit is
+unconfirmed, and matching the app's misreading would make the simulator wrong against the hardware.
+Confirm against a physical MT tracker first. Marked with a `ponytail:` note in `EngineState.swift`
+and both `SimConfig` files.
+
+### A3 — the app silently discards a whole stored batch when no vehicle is assigned
+`UtilParser.swift:332-344`: `mtStoredPackets()` runs only when the logged-in driver has a vehicle
+AND `GlobalVar.shared.vehicleId > 0`; otherwise it writes an audit row and returns. The caller then
+sets `storedEventsProcessed = true` regardless (`:1064-1065`), and `isReadstrInProgress` is only
+cleared at the end of the function that never ran (`:936`) — so the 300 s readstr retry (`:1046`) is
+dead for the rest of the session too. Nothing surfaces to the user. **Always confirm the test account
+has a vehicle assigned before investigating a "stored packets did nothing" report.**

@@ -718,7 +718,10 @@ namespace MatrackSim.App
             // identity concern below only applies to the built-in WinRT provider).
             SerialControl("#adv off");
             Status = $"OUT OF RANGE — silent {(int)seconds}s"; StatusColorValue = StatusColor.Red;
-            Info($"📵 out of range: telemetry suppressed for {(int)seconds}s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)");
+            bool disconnects = seconds >= Config.AppDisconnectsAfterSec;
+            Info($"📵 out of range: telemetry suppressed for {(int)seconds}s — " + (disconnects
+                ? "long enough for the app to drop and reconnect"
+                : $"a stall demo; the app will NOT disconnect under {(int)Config.AppDisconnectsAfterSec}s"));
             DropEndsAt = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));
             dropTimer?.Dispose();
             dropTimer = new Timer(_ => ResumeLink(), null, (long)(Math.Max(1, seconds) * 1000), Timeout.Infinite);
@@ -979,7 +982,22 @@ namespace MatrackSim.App
                 // starts. Both halves are required — see SimConfig.StoredReplayMinOutageSec.
                 double dtS = Math.Max(0.05, Config.PacketIntervalSec);
                 var start = DateTime.UtcNow.AddSeconds(Config.StoredReplayLeadInSec);
-                var stored = ScenarioRunner.StoredReplay(s, Config, start);
+                // Seed from the LIVE engine so the recorded drive continues from where the truck actually is.
+                var stored = ScenarioRunner.StoredReplay(s, Config, start,
+                    engine.OdometerMiles, engine.EngineHours, engine.Latitude, engine.Longitude);
+                // The truck really did drive during the outage: advance the live engine to the end of the
+                // recording, so the first live packet after the dump continues it instead of rewinding.
+                if (stored.Count > 0)
+                {
+                    var t = ScenarioRunner.TelemetryOf(stored[stored.Count - 1].Wire);
+                    if (t.HasValue)
+                    {
+                        engine.OdometerMiles = Math.Max(engine.OdometerMiles, t.Value.OdometerMiles);
+                        engine.EngineHours = Math.Max(engine.EngineHours, t.Value.EngineHours);
+                        engine.Latitude = t.Value.Latitude; engine.Longitude = t.Value.Longitude;
+                        engine.Persisted.Save();
+                    }
+                }
                 double span = Config.StoredReplayLeadInSec + stored.Count * dtS;
                 double outage = Math.Max(Config.StoredReplayMinOutageSec, span + 20);
                 Info($"▶ scenario '{s.Name}' — recording {stored.Count} stored packets during a {(int)outage}s offline window; the app must stay logged in and reconnect on its own");
@@ -1283,7 +1301,11 @@ namespace MatrackSim.App
 
         private void StartStreaming()
         {
-            Streaming = true; lastIgnitionSent = null; lastWatchdog = DateTime.UtcNow;
+            // Do NOT clear lastIgnitionSent here. Real firmware sends LI only on an ignition CHANGE;
+            // the app has no dedup, so re-announcing on every resubscribe files a phantom
+            // PowerUp/Shutdown event per reconnect. It is still null on the first connect of a
+            // session, so the genuine opening LI is unaffected.
+            Streaming = true; lastWatchdog = DateTime.UtcNow;
             sinceLastPacket = Config.PacketIntervalSec;          // emit the first live packet promptly
             if (!LinkDown) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }  // don't override OUT OF RANGE
             EnsureClock();

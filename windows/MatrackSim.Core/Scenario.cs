@@ -305,6 +305,24 @@ namespace MatrackSim.Core
         }
 
         /// <summary>
+        /// Read the odometer / engine hours / position back off a telemetry packet, so the caller can
+        /// advance the live engine to exactly where a recorded drive ended and the stored dump and the
+        /// live stream never disagree about how far the truck has gone.
+        /// </summary>
+        public static (double OdometerMiles, double EngineHours, double Latitude, double Longitude)? TelemetryOf(string wire)
+        {
+            if (string.IsNullOrEmpty(wire)) return null;
+            var f = wire.Split(',');
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (f.Length <= 7) return null;
+            if (!double.TryParse(f[4], System.Globalization.NumberStyles.Float, inv, out double rawOdo)) return null;
+            if (!double.TryParse(f[5], System.Globalization.NumberStyles.Float, inv, out double rawHrs)) return null;
+            if (!double.TryParse(f[6], System.Globalization.NumberStyles.Float, inv, out double lat)) return null;
+            if (!double.TryParse(f[7], System.Globalization.NumberStyles.Float, inv, out double lon)) return null;
+            return (rawOdo * 0.0621371, rawHrs / 100.0, lat, lon);
+        }
+
+        /// <summary>
         /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
         /// Used by the self-test to prove stored packets are stamped inside the outage window.
         /// </summary>
@@ -374,11 +392,22 @@ namespace MatrackSim.Core
         /// `start` is the instant the BLE link drops; the recorded drive is stamped forward from there.
         /// Null keeps the legacy pre-disconnect backdating so the headless self-test keeps its shape.
         /// </summary>
-        public static List<Emitted> StoredReplay(Scenario s, SimConfig config, DateTime? start = null)
+        /// <summary>
+        /// seedOdometer/seedEngineHours/seedLat/seedLon carry the LIVE engine's state. Without them the
+        /// replay started from StartOdometerMiles while the live engine is persisted across launches, so
+        /// the dump could sit hundreds of miles BELOW the live stream — the app writes milesinception
+        /// from the stored packet but milesinceptionlatest from the live status, then re-seeds odoPowerup
+        /// from the newest PowerUpShutdown row, putting milespowerup below milesinception in the output.
+        /// </summary>
+        public static List<Emitted> StoredReplay(Scenario s, SimConfig config, DateTime? start = null,
+                                                 double? seedOdometer = null, double? seedEngineHours = null,
+                                                 double? seedLat = null, double? seedLon = null)
         {
             var e = new EngineState();
-            e.OdometerMiles = config.StartOdometerMiles;
-            e.EngineHours = config.StartEngineHours;
+            e.OdometerMiles = seedOdometer ?? config.StartOdometerMiles;
+            e.EngineHours = seedEngineHours ?? config.StartEngineHours;
+            if (seedLat.HasValue) e.Latitude = seedLat.Value;
+            if (seedLon.HasValue) e.Longitude = seedLon.Value;
             e.FuelLevelPct = config.StartFuelPct;
             e.IdleRpmConfig = config.IdleRpm;
             e.RpmPerMphConfig = config.RpmPerMph;

@@ -165,6 +165,17 @@ enum ScenarioRunner {
         return (keep, records.count - keep.count)
     }
 
+    /// Read the odometer / engine hours / position back off a telemetry packet. Lets the caller advance
+    /// the live engine to exactly where a recorded drive ended, so the stored dump and the live stream
+    /// never disagree about how far the truck has gone.
+    static func telemetryOf(_ wire: String) -> (odometerMiles: Double, engineHours: Double, latitude: Double, longitude: Double)? {
+        let f = wire.components(separatedBy: ",")
+        guard f.count > 7,
+              let rawOdo = Double(f[4]), let rawHrs = Double(f[5]),
+              let lat = Double(f[6]), let lon = Double(f[7]) else { return nil }
+        return (rawOdo * 0.0621371, rawHrs / 100.0, lat, lon)
+    }
+
     /// Parse the UTC a telemetry packet carries back out of the wire (fields 10 = HHMMSS, 11 = DDMMYY).
     /// Used by the self-test to prove stored packets are stamped inside the outage window.
     static func utcOf(_ wire: String) -> Date? {
@@ -217,10 +228,17 @@ enum ScenarioRunner {
     /// Defaults to the legacy pre-disconnect backdating so the headless self-test keeps its shape.
     /// Recorded drives are FLASH records, so they use `storedRecordIntervalSec`, not the 1s live
     /// cadence. At 1s a 5-minute scenario was 305 packets that then took 5 minutes to dump back.
-    static func storedReplay(for s: Scenario, config: SimConfig, from start: Date? = nil) -> [Emitted] {
+    /// `seed` carries the LIVE engine's odometer/hours/position. Without it the replay started from
+    /// `config.startOdometerMiles` while the live engine is now persisted across launches, so the dump
+    /// could sit hundreds of miles BELOW the live stream — the app writes milesinception from the stored
+    /// packet but milesinceptionlatest from the live status, and then re-seeds odoPowerup from the newest
+    /// PowerUpShutdown row, which puts milespowerup below milesinception in the FMCSA output file.
+    static func storedReplay(for s: Scenario, config: SimConfig, from start: Date? = nil,
+                             seed: (odometerMiles: Double, engineHours: Double, latitude: Double, longitude: Double)? = nil) -> [Emitted] {
         let e = EngineState()
-        e.odometerMiles = config.startOdometerMiles
-        e.engineHours = config.startEngineHours
+        e.odometerMiles = seed?.odometerMiles ?? config.startOdometerMiles
+        e.engineHours = seed?.engineHours ?? config.startEngineHours
+        if let seed = seed { e.latitude = seed.latitude; e.longitude = seed.longitude }
         e.fuelLevelPct = config.startFuelPct
         e.idleRpmConfig = config.idleRpm
         e.rpmPerMphConfig = config.rpmPerMph

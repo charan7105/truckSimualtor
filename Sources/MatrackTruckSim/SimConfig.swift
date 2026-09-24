@@ -60,9 +60,17 @@ struct SimConfig: Codable, Equatable {
     var reconnectDelaySec: Double = 600
     /// Packets buffered while disconnected, replayed (as stored 'S' packets) on reconnect.
     var storedBacklogCount: Int = 0
-    /// F1 out-of-range outage: how long to go silent. The ELD app only DISCONNECTS after ~75s of
-    /// silence (15s+30s+30s retry escalation), so ≥80 = a real disconnect+reconnect; 15–75 = a stall demo.
-    var rangeOutageSec: Double = 80
+    /// F1 out-of-range outage: how long to go silent. Must exceed `appDisconnectsAfterSec` for a real
+    /// disconnect+reconnect; anything shorter is a stall demo and the app stays connected throughout.
+    var rangeOutageSec: Double = 140
+    /// The silence the app actually needs before it drops the link — NOT the 75-80s this repo assumed.
+    /// `packetTimeoutInterval = 15.0` in BleClass is the timer PERIOD, not the threshold:
+    /// handle30SecondTimeout needs 30s since the last packet, every readdata retry re-arms
+    /// lastPacketDate, and handleMaxRetries only fires at readDataTryCount == 3. Best case ~90s,
+    /// realistically ~120s. An 80s outage therefore never disconnected anything — the F1
+    /// reconnect->stored-replay demo silently degraded into a stall demo.
+    /// ponytail: read from app source, not timed on a device; retime if the app's retry logic changes.
+    var appDisconnectsAfterSec: Double = 130
 
     // MARK: Stored replay (Unassigned Driving)
     /// Stored-replay scenarios record a drive that happened while the tracker was OFFLINE, so the

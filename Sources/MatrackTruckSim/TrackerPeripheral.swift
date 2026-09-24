@@ -464,7 +464,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// Signal 100→0. Weak signal = added LATENCY (not packet loss): real BLE retransmits at the link layer,
     /// so a fringe link delivers every packet, just slower — then cleanly disconnects at the edge. (We can't
     /// fake RSSI itself: a Mac/PC peripheral has no TX-power API, so the phone's signal bar reflects real
-    /// distance, not this control.) At 0 it goes out of range = silent → app times out (~75s) → reconnects.
+    /// distance, not this control.) At 0 it goes out of range = silent → the app eventually times out
+    /// and reconnects; see SimConfig.rangeOutageSec for why that takes longer than it looks.
     private var preDropSignalPct: Double = 100          // signal level to restore after a transient outage
     private func latencyMsFor(_ pct: Double) -> Double { max(0, (100 - pct) * 9) }   // FULL 0ms · WEAK(70) ~270ms · POOR(40) ~540ms
     func setSignal(_ pct: Double) {
@@ -487,7 +488,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     /// EMULATED out-of-range: suppress telemetry for `seconds`. We never stop advertising (the app
-    /// reconnects by scanning, so it must stay discoverable). After ~75s of silence the app disconnects
+    /// reconnects by scanning, so it must stay discoverable). After roughly 90-120s of silence the app disconnects
     /// and auto-reconnects on its own — exactly the real out-of-range round-trip.
     func dropLink(seconds: Double) {
         preDropSignalPct = config.signalPct >= 1 ? config.signalPct : 100   // remember weak level to restore on return
@@ -497,7 +498,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         // (the board keeps its BLE identity, so the phone reconnects fine on #adv on).
         serialControl("#adv off")
         status = "OUT OF RANGE — silent \(Int(seconds))s"; statusColor = Theme.red
-        info("📵 out of range: telemetry suppressed for \(Int(seconds))s (≥80s ⇒ app disconnect+reconnect; <75s ⇒ stall demo)")
+        let disconnects = seconds >= config.appDisconnectsAfterSec
+        info("📵 out of range: telemetry suppressed for \(Int(seconds))s — \(disconnects ? "long enough for the app to drop and reconnect" : "a stall demo; the app will NOT disconnect under \(Int(config.appDisconnectsAfterSec))s")")
         dropEndsAt = Date().addingTimeInterval(max(1, seconds))
         dropTimer?.invalidate()
         dropTimer = Timer.scheduledTimer(withTimeInterval: max(1, seconds), repeats: false) { [weak self] _ in self?.resumeLink() }
@@ -722,7 +724,18 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             // starts. Both halves are required — see SimConfig.storedReplayMinOutageSec.
             let dt = max(0.05, config.packetIntervalSec)
             let start = Date().addingTimeInterval(config.storedReplayLeadInSec)
-            let stored = ScenarioRunner.storedReplay(for: s, config: config, from: start)
+            // Seed from the LIVE engine so the recorded drive continues from where the truck actually is.
+            let stored = ScenarioRunner.storedReplay(
+                for: s, config: config, from: start,
+                seed: (engine.odometerMiles, engine.engineHours, engine.latitude, engine.longitude))
+            // The truck really did drive during the outage: advance the live engine to the end of the
+            // recording, so the first live packet after the dump continues it instead of rewinding.
+            if let last = stored.last, let t = ScenarioRunner.telemetryOf(last.wire) {
+                engine.odometerMiles = max(engine.odometerMiles, t.odometerMiles)
+                engine.engineHours = max(engine.engineHours, t.engineHours)
+                engine.latitude = t.latitude; engine.longitude = t.longitude
+                engine.persisted.save()
+            }
             let span = config.storedReplayLeadInSec + Double(stored.count) * dt
             let outage = max(config.storedReplayMinOutageSec, span + 20)
             info("▶ scenario '\(s.name)' — recording \(stored.count) stored packets during a \(Int(outage))s offline window; the app must stay logged in and reconnect on its own")
@@ -961,7 +974,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     private func startStreaming() {
-        streaming = true; lastIgnitionSent = nil; lastWatchdog = Date()
+        // Do NOT clear lastIgnitionSent here. Real firmware sends LI only on an ignition CHANGE; the
+        // app has no dedup (UtilParser has no check against its own engineIgnition), so re-announcing
+        // on every resubscribe files a phantom PowerUp/Shutdown event per reconnect. It is still nil on
+        // the first connect of a session, so the genuine opening LI is unaffected.
+        streaming = true; lastWatchdog = Date()
         sinceLastPacket = config.packetIntervalSec          // emit the first live packet promptly
         if !linkDown { status = "Connected · streaming"; statusColor = Theme.green }  // don't override OUT OF RANGE
         ensureClock()
