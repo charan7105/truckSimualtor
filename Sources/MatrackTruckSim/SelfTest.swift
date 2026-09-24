@@ -376,6 +376,12 @@ enum SelfTest {
                 if !ok { allPass = false }
             }
 
+            // Only one thing may own the odometer field. Two controls both writing field 4 would
+            // leave one of them looking armed while the other silently wins.
+            let odoOwners = cases.filter { $0.0.contains("odometer") }.count
+            print("  [\(odoOwners > 0 ? "OK" : "FAIL")] odometer faults are covered by \(odoOwners) wire checks")
+            if odoOwners == 0 { allPass = false }
+
             // The intermittent rate must actually be intermittent — not always-on, not never.
             // Uses real randomness, so the bounds are wide enough never to flake.
             let r = EngineState(); r.ignitionOn = true; r.speedMph = 60

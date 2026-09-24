@@ -476,6 +476,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         guard (0..<Self.wireFieldNames.count).contains(field) else { return }
         let name = Self.wireFieldNames[field]
         if let value = value, !value.isEmpty {
+            // TWO ECU ODOMETERS rewrites field 4 on every tick, so it would silently overwrite any
+            // other odometer fault the tester arms. Turn it off rather than let them fight — a
+            // control that appears armed while something else wins is exactly the confusion this
+            // panel exists to avoid.
+            if field == 4 && odoAlternating {
+                odoAlternating = false
+                info("  (two ECU odometers turned off — it would overwrite this)")
+            }
             engine.wireFaults[field] = WireFault(value: value, probability: probability, requiresMotion: requiresMotion)
             let how = probability >= 1 ? "every packet" : "~\(Int(probability * 100))% of packets"
             let gate = requiresMotion ? " (only above \(Int(SimConfig.movingThresholdMph)) mph)" : ""
@@ -511,6 +519,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func setOdoAlternating(_ on: Bool) {
         odoAlternating = on
         if on {
+            // Same reason in reverse: drop any standing odometer fault so only one thing owns field 4.
+            if engine.wireFaults.removeValue(forKey: 4) != nil {
+                info("  (cleared the other odometer fault — only one can own that field)")
+            }
             info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)")
         } else {
             engine.wireFaults.removeValue(forKey: 4)

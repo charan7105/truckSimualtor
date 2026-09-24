@@ -512,6 +512,14 @@ namespace MatrackSim.App
             string name = WireFieldNames[field];
             if (!string.IsNullOrEmpty(value))
             {
+                // TWO ECU ODOMETERS rewrites field 4 every tick, so it would silently overwrite any
+                // other odometer fault. Turn it off rather than let them fight — a control that
+                // appears armed while something else wins is the confusion this panel exists to avoid.
+                if (field == 4 && OdoAlternating)
+                {
+                    OdoAlternating = false;
+                    Info("  (two ECU odometers turned off — it would overwrite this)");
+                }
                 engine.WireFaults[field] = new WireFault(value, probability, requiresMotion);
                 string how = probability >= 1 ? "every packet" : $"~{(int)(probability * 100)}% of packets";
                 string gate = requiresMotion ? $" (only above {(int)SimConfig.MovingThresholdMph} mph)" : "";
@@ -533,7 +541,12 @@ namespace MatrackSim.App
         public void SetOdoAlternating(bool on)
         {
             OdoAlternating = on;
-            if (on) Info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)");
+            if (on)
+            {
+                // Same reason in reverse: only one thing may own field 4.
+                if (engine.WireFaults.Remove(4)) Info("  (cleared the other odometer fault — only one can own that field)");
+                Info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)");
+            }
             else { engine.WireFaults.Remove(4); Info("✓ odometer back to one series"); }
             Mirror(); RefreshFaultBindings();
         }
