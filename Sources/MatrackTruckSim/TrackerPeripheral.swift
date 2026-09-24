@@ -686,6 +686,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
     private var outageStartedAt: Date?            // when the current offline window began (see step())
+    private var undeliveredStored: [Emitted] = [] // backlog handed to the dump but not yet fully sent
     private var flashFullWarned = false
     private var pendingStored: [Emitted] = []     // stored packets, dumped on the app's next readstr (post-reconnect)
     private var pendingStoredCadence: Double = 1.0
@@ -813,6 +814,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func popScenario() {
         guard !scenarioQueue.isEmpty else {
             scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil
+            // The dump finished, so the flash records really did go out — only now is it safe to
+            // forget them. If the app had dropped mid-dump they would still be in pendingStored.
+            if !undeliveredStored.isEmpty { undeliveredStored = []; pendingStored = [] }
             bannerDone("Done — check the app.")
             mirror(); info("✓ scenario complete"); return
         }
@@ -1123,7 +1127,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 var q = deliverable
                 q.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
                 q.append(Emitted(wire: "SAVED PACKET COUNT:\(n)", kind: .raw))
-                pendingStored = []
+                // Keep the backlog until it has actually gone out. Real flash is not erased when the
+                // dump STARTS — if the app drops mid-dump (write backpressure, a background
+                // transition), clearing here loses the drive for good and the next readstr answers
+                // "SAVED PACKET COUNT:0". popScenario() clears it once the queue drains.
+                undeliveredStored = deliverable
                 flashFullWarned = false
                 pendingStoredCadence = max(1.0, pendingStoredCadence)   // never dump faster than the app tolerates
                 scenarioQueue = q
@@ -1188,6 +1196,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         info("✓ Device subscribed to data characteristic")
     }
     func peripheralManager(_ p: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
+        // A drop mid-dump must NOT lose the drive: restore whatever was handed to the dump but never
+        // confirmed, so the next readstr can deliver it again. Real flash is only erased once read.
+        if !undeliveredStored.isEmpty {
+            pendingStored = undeliveredStored + pendingStored
+            undeliveredStored = []
+            scenarioQueue.removeAll(); scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil
+            info("↩︎ link dropped mid-dump — \(pendingStored.count) stored packets kept for the next readstr")
+        }
         connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
         awaitingAck = false; awaitingAckSince = nil                                    // F1: clear ack-gate so reconnect streams cleanly
         if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect

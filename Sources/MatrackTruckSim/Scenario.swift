@@ -330,6 +330,7 @@ enum Scenarios {
                     "The link drops and the truck 'drives' offline. This takes ~7 minutes of real time: the app needs 5 minutes of no movement plus a grace period to close your Driving event before the recorded drive can belong to nobody. It cannot be sped up.",
                     "Wait for the app to reconnect to ELD-MA on its own — the drive is sent automatically.",
                     "Open Unidentified / Unassigned Driving and claim or reject the period.",
+                    "If nothing appears: the app only files this when the drive falls outside YOUR duty windows. Set yourself Off Duty before tapping Run — a Driving event that is still the newest event can read as open-ended and absorb the whole recording.",
                  ]),
     ]
 }

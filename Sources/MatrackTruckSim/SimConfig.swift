@@ -86,6 +86,11 @@ struct SimConfig: Codable, Equatable {
     /// event's end to THAT timestamp. Stored packets stamped before it land inside a window the app has
     /// already attributed to the logged-in driver and are silently classified as assigned — no UDP.
     /// ponytail: measured from app source, not from a device run; re-check if the app's timers change.
+    /// KNOWN RESIDUAL RISK: this assumes the window ends at the close. If the Driving event is still
+    /// the NEWEST event, `getDrivingLog` leaves its end as the raw column — empty for an event that
+    /// never got an intermediate update — and `sqlToDate("")` yields *now*, i.e. the window runs to the
+    /// reconnect and NO lead-in is sufficient. Unverified either way. Until a device run settles it,
+    /// the reliable route to an Unassigned Driving Period is for the driver not to be in Driving.
     var appDrivingCloseSec: Double = 370
     /// Lead-in before a stored-replay scenario's recorded drive begins. Must clear `appDrivingCloseSec`.
     var storedReplayLeadInSec: Double = 420

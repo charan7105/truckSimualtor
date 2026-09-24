@@ -962,6 +962,7 @@ namespace MatrackSim.App
         private double stateSaveCountdown = 0;                       // periodic persist (SimPersistedState)
         private double sinceLastStored = 0;                          // offline flash recorder cadence
         private DateTime? outageStartedAt = null;                    // when the current offline window began
+        private List<Emitted> undeliveredStored = new List<Emitted>(); // handed to the dump, not yet fully sent
         private bool flashFullWarned = false;
 
         private string _runningScenario;
@@ -1083,6 +1084,13 @@ namespace MatrackSim.App
                 if (scenarioQueue.Count == 0)
                 {
                     scenarioTimer?.Dispose(); scenarioTimer = null; runningScenario = null;
+                    // The dump finished, so the flash records really did go out — only now is it safe
+                    // to forget them. A mid-dump drop leaves them in pendingStored instead.
+                    if (undeliveredStored.Count > 0)
+                    {
+                        undeliveredStored = new List<Emitted>();
+                        pendingStored = new List<Emitted>();
+                    }
                     Mirror(); Info("✓ scenario complete"); return;
                 }
                 var em = scenarioQueue[0];
@@ -1478,7 +1486,11 @@ namespace MatrackSim.App
                     var q = new List<Emitted>(split.Keep);
                     q.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
                     q.Add(new Emitted("SAVED PACKET COUNT:" + n.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
-                    pendingStored = new List<Emitted>();
+                    // Keep the backlog until it has actually gone out. Real flash is not erased when the
+                    // dump STARTS — if the app drops mid-dump, clearing here loses the drive for good
+                    // and the next readstr answers "SAVED PACKET COUNT:0". PopScenario clears it once
+                    // the queue drains; a disconnect puts it back.
+                    undeliveredStored = new List<Emitted>(split.Keep);
                     flashFullWarned = false;
                     pendingStoredCadence = Math.Max(1.0, pendingStoredCadence);   // never dump faster than the app tolerates
                     scenarioQueue = q;
@@ -1755,6 +1767,18 @@ namespace MatrackSim.App
             }
             else if (count == 0)   // last central unsubscribed → disconnected
             {
+                // A drop mid-dump must NOT lose the drive: restore whatever was handed to the dump but
+                // never confirmed, so the next readstr can deliver it again. Flash is only erased once read.
+                if (undeliveredStored.Count > 0)
+                {
+                    var restored = new List<Emitted>(undeliveredStored);
+                    restored.AddRange(pendingStored);
+                    pendingStored = restored;
+                    undeliveredStored = new List<Emitted>();
+                    lock (scenarioGate) { scenarioQueue.Clear(); }
+                    scenarioTimer?.Dispose(); scenarioTimer = null; runningScenario = null;
+                    Info($"↩︎ link dropped mid-dump — {pendingStored.Count} stored packets kept for the next readstr");
+                }
                 Connected = false; Streaming = false; heldPacket = null; pending.Clear();   // drop stale out-of-order hold + unsent chunks
                 awaitingAck = false; awaitingAckSince = null;                               // F1: clear ack-gate so reconnect streams cleanly
                 if (runningScenario != null) StopScenario();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
