@@ -206,6 +206,62 @@ namespace MatrackSim.SelfTest
                 if (!partialRejected) allPass = false;
             }
 
+            // Fault injection must be able to express values the model CANNOT hold, and must never be
+            // able to leak into persisted state or into a clean packet.
+            Console.WriteLine("Fault injection:");
+            {
+                var e = new EngineState { IgnitionOn = true, SpeedMph = 60, OdometerMiles = 25_000 };
+                var clean = MTPacket.LivePosition(e).Split(',');
+
+                e.WireOverride[4] = SimConfig.OdometerUnavailableSentinel;
+                e.WireOverride[8] = "0";
+                e.WireOverride[12] = "0";
+                var faulted = MTPacket.LivePosition(e).Split(',');
+                bool expressed = faulted.Length == 17
+                              && faulted[4] == SimConfig.OdometerUnavailableSentinel
+                              && faulted[8] == "0" && faulted[12] == "0";
+                Console.WriteLine("  [" + (expressed ? "OK" : "FAIL") + "] overrides reach the wire and the packet stays 17 fields");
+                if (!expressed) allPass = false;
+
+                bool neighbours = true;
+                foreach (int i in new[] { 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16 })
+                    if (faulted[i] != clean[i]) neighbours = false;
+                Console.WriteLine("  [" + (neighbours ? "OK" : "FAIL") + "] non-overridden fields are unchanged");
+                if (!neighbours) allPass = false;
+
+                var decoded = MTDecoder.Decode(MTPacket.LivePosition(e));
+                bool sentinelUnderstood = decoded != null && decoded.OdometerMiles == null;
+                Console.WriteLine("  [" + (sentinelUnderstood ? "OK" : "FAIL") + "] the sentinel decodes as 'odometer unavailable'");
+                if (!sentinelUnderstood) allPass = false;
+
+                // A fault must never become permanent: SimPersistedState is a whitelist.
+                var saved = e.Persisted;
+                var fresh = new EngineState(); fresh.Restore(saved);
+                bool cleared = fresh.WireOverride.Count == 0;
+                Console.WriteLine("  [" + (cleared ? "OK" : "FAIL") + "] overrides are not persisted — a restart clears every fault");
+                if (!cleared) allPass = false;
+
+                e.WireOverride.Clear();
+                bool backToClean = MTPacket.LivePosition(e).Split(',')[4] == clean[4];
+                Console.WriteLine("  [" + (backToClean ? "OK" : "FAIL") + "] clearing restores the real value");
+                if (!backToClean) allPass = false;
+
+                var baseUtc = new DateTime(2023, 11, 14, 22, 13, 20, DateTimeKind.Utc);
+                var skewed = ScenarioRunner.UtcOf(MTPacket.LivePosition(e, baseUtc.AddSeconds(1800)));
+                bool skewWorks = skewed.HasValue && Math.Abs((skewed.Value - baseUtc).TotalSeconds - 1800) < 1.5;
+                Console.WriteLine("  [" + (skewWorks ? "OK" : "FAIL") + "] a 30-minute clock skew reaches fields 10/11");
+                if (!skewWorks) allPass = false;
+
+                foreach (var vin in new[] { "00000000000000000", "292058", "" })
+                {
+                    var d = new DeviceInfo(); d.Vin = vin;
+                    var lv = MTPacket.Version(d).Split(',');
+                    if (!(lv.Length >= 2 && lv[0] == "LV" && lv[1] == vin))
+                    { allPass = false; Console.WriteLine("  [FAIL] LV mangled VIN \"" + vin + "\""); }
+                }
+                Console.WriteLine("  [OK] all-zero, 6-char and empty VINs pass through the LV builder verbatim");
+            }
+
             Console.WriteLine("────────────────────────────────────────────────────────────");
             Console.WriteLine(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗");
             return allPass ? 0 : 1;

@@ -45,7 +45,13 @@ enum MTPacket {
             "\(e.satellites)",                            // 15 satellites
             "\(e.gpsSpeedKmh)"                            // 16 gps speed
         ]
-        return fields.joined(separator: ",")
+        // Fault injection: substitute any overridden field verbatim. Applied last so it can express
+        // values the model itself cannot hold (the 4294967295 "unavailable" sentinel, a second ECU
+        // odometer series, GPS lock 0 while moving).
+        guard !e.wireOverride.isEmpty else { return fields.joined(separator: ",") }
+        return fields.enumerated()
+            .map { e.wireOverride[$0.offset] ?? $0.element }
+            .joined(separator: ",")
     }
 
     /// Version/VIN packet: LV,VIN,mcuHW,mcuFW,bleHW,bleFW,canMode,canMask,deviceMAC

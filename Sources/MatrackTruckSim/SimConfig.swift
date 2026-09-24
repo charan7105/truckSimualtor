@@ -110,6 +110,16 @@ struct SimConfig: Codable, Equatable {
     /// real MT flash and retune if the hardware logs at a different rate.
     var storedRecordIntervalSec: Double = 30
 
+    // MARK: Fault injection
+    /// Seconds added to the UTC stamped into fields 10/11 of every live packet. The app compares the
+    /// packet clock against the phone's and raises Timing malfunction "T" past its tolerance — the
+    /// fastest unambiguous malfunction the simulator can provoke. 0 = clean.
+    var timeSkewSec: Double = 0
+    /// Field 4 value for the "unavailable" sentinel a tracker reports when it has no ECU odometer.
+    /// The app skips the field and keeps the previous value (UtilParser.swift:1881) — so this is
+    /// visible only in a stored dump, never live. Same sentinel applies to field 5.
+    static let odometerUnavailableSentinel = "4294967295"
+
     // MARK: Hard limits on operator-entered telemetry
     /// Ceilings for the TEST SETUP fields. Two reasons they exist. (1) MTPacket converts miles to a
     /// raw x10-km Int, so a non-finite or astronomically large value traps the packet builder — and the

@@ -61,6 +61,12 @@ namespace MatrackSim.Core
                 e.Satellites.ToString(CultureInfo.InvariantCulture),               // 15 satellites
                 e.GpsSpeedKmh.ToString(CultureInfo.InvariantCulture)               // 16 gps speed
             };
+            // Fault injection: substitute any overridden field verbatim. Applied last so it can express
+            // values the model itself cannot hold (the 4294967295 "unavailable" sentinel, a second ECU
+            // odometer series, GPS lock 0 while moving).
+            if (e.WireOverride.Count > 0)
+                for (int i = 0; i < fields.Length; i++)
+                    if (e.WireOverride.TryGetValue(i, out string ov)) fields[i] = ov;
             return string.Join(",", fields);
         }
 

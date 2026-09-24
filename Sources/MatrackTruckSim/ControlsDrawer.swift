@@ -550,3 +550,169 @@ struct PacketConsole: View {
         }
     }
 }
+
+// MARK: - Fault injection panel
+//
+// Deliberately grouped by WHAT THE TESTER WILL SEE ON THE PHONE, not by protocol field. Four of the
+// faults people ask for are silently ignored by the ELD app; hiding that would have testers demoing
+// a button and waiting for an alert that cannot come. So the sections are labelled by outcome and
+// the ignored ones are collapsed by default — present, but never mistaken for a warning.
+struct FaultPanel: View {
+    @EnvironmentObject var sim: SimController
+    @State private var showIgnored = false
+    @State private var customVin = "00000000000000000"
+
+    private var armedSummary: String {
+        var parts = sim.activeFaults.map { "\($0.name) = \($0.value)" }
+        if sim.config.timeSkewSec != 0 { parts.insert("clock \(sim.config.timeSkewSec > 0 ? "+" : "")\(Int(sim.config.timeSkewSec / 60)) min", at: 0) }
+        return parts.joined(separator: ", ")
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                legend
+                warns
+                Divider().overlay(Theme.stroke)
+                noWarning
+                Divider().overlay(Theme.stroke)
+                ignoredSection
+            }
+        }
+        .frame(maxHeight: 560)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.red)
+                Text("FAULT INJECTION · SEND BAD DATA")
+                    .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(Theme.text)
+            }
+            Text(sim.faultsArmed ? "SENDING BAD DATA: \(armedSummary)" : "Wire is clean — the phone is getting good data.")
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
+            NeonButton(title: "RESET TO CLEAN DATA", tint: Theme.red, filled: sim.faultsArmed) {
+                sim.clearAllFaults()
+            }
+        }
+    }
+
+    private var legend: some View {
+        Text("⚠ phone warns     ◐ bad data, no warning     ∅ phone ignores it")
+            .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+    }
+
+    // Ordered fastest-to-fire first, so a demo runs straight down the list.
+    private var warns: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("⚠ THE PHONE WILL WARN").sectionLabel()
+
+            faultToggle(title: "ENGINE SYNC LOST", on: sim.activeFaults.contains { $0.field == 12 },
+                        subtitle: "Tells the phone the engine computer stopped answering while the key is on.",
+                        look: "Phone: Data Diagnostic 2 within about 3 seconds.") {
+                sim.setWireOverride(field: 12, value: sim.activeFaults.contains { $0.field == 12 } ? nil : "0")
+            }
+
+            faultToggle(title: "CLOCK AHEAD +30 MIN", on: sim.config.timeSkewSec != 0,
+                        subtitle: "Stamps every packet with a time that is wrong by half an hour.",
+                        look: "Phone: red bar reading Malfunction(T) after about 20 seconds. One good packet clears it.") {
+                sim.config.timeSkewSec = sim.config.timeSkewSec == 0 ? 1800 : 0
+            }
+
+            faultToggle(title: "ODOMETER & HOURS MISSING", on: sim.activeFaults.contains { $0.field == 4 && $0.value == "0" },
+                        subtitle: "Sends odometer 0 and engine hours 0, like a tracker with no ECU data.",
+                        look: "Phone: change duty status while this is on → Data Diagnostic 3. Nothing happens until you change status.") {
+                let armed = sim.activeFaults.contains { $0.field == 4 && $0.value == "0" }
+                sim.setWireOverride(field: 4, value: armed ? nil : "0")
+                sim.setWireOverride(field: 5, value: armed ? nil : "0")
+            }
+
+            faultToggle(title: "GPS LOCK LOST", on: sim.activeFaults.contains { $0.field == 8 },
+                        subtitle: "Drops the GPS fix while the truck keeps driving.",
+                        look: "Phone: nothing quickly. The app's positioning check never fires — see the note in the audit doc.") {
+                sim.setWireOverride(field: 8, value: sim.activeFaults.contains { $0.field == 8 } ? nil : "0")
+            }
+        }
+    }
+
+    private var noWarning: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("◐ WRONG NUMBER, NO WARNING").sectionLabel()
+
+            faultButton(title: "ODOMETER JUMP  +58,000 mi",
+                        subtitle: "One jump to a different ECU odometer series.",
+                        look: "Phone: Logs → today → the Driving event's odometer jumps and stays. No warning at all.") {
+                sim.setWireOverride(field: 4, value: "5000000")
+            }
+
+            faultToggle(title: "ODOMETER STUCK", on: sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel },
+                        subtitle: "Sends the tracker's \"odometer not available\" value.",
+                        look: "Phone: keeps showing the LAST odometer as if it were live. Nothing changes on screen — that is the finding.") {
+                let armed = sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel }
+                sim.setWireOverride(field: 4, value: armed ? nil : SimConfig.odometerUnavailableSentinel)
+            }
+
+            faultButton(title: "POWER CYCLE STORM  ×10",
+                        subtitle: "Ten power-up/shutdown pairs, two per second.",
+                        look: "Phone: speaks \"Vehicle Power up\" each time and re-shows the popups. It never raises Power Compliance — no code in the app can.") {
+                sim.powerCycleBurst()
+            }
+        }
+    }
+
+    private var ignoredSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { withAnimation { showIgnored.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showIgnored ? "chevron.down" : "chevron.right").font(.system(size: 9))
+                    Text("∅ SHOW THE FAULTS THE APP IGNORES").font(.system(size: 10, weight: .bold, design: .rounded))
+                }.foregroundStyle(Theme.dim)
+            }.buttonStyle(.plain)
+
+            if showIgnored {
+                Text("Verified against the app source. These are worth sending to PROVE the app ignores them — not to wait for an alert.")
+                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+
+                HStack(spacing: 6) {
+                    TextField("VIN", text: $customVin)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.text)
+                    NeonButton(title: "SEND BAD VIN", tint: Theme.dim, filled: false) {
+                        sim.vin = customVin
+                        sim.sendVINNow()
+                    }
+                }
+                Text("All zeros and a 6-character VIN behave identically. Only visible in Troubleshoot → Run Diagnostic Check.")
+                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+
+                faultButton(title: "DEFAULT DATE (01-01-00)",
+                            subtitle: "A tracker that lost its clock.",
+                            look: "Phone: nothing. It rewrites the packet date to phone time.") {
+                    sim.setWireOverride(field: 11, value: "010100")
+                }
+            }
+        }
+    }
+
+    // MARK: - Row builders
+
+    private func faultToggle(title: String, on: Bool, subtitle: String, look: String,
+                             action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            NeonButton(title: on ? "\(title)  ● ON" : title, tint: on ? Theme.red : Theme.ice, filled: on, action: action)
+            Text(subtitle).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+        }
+    }
+
+    private func faultButton(title: String, subtitle: String, look: String,
+                             action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            NeonButton(title: title, tint: Theme.amber, filled: false, action: action)
+            Text(subtitle).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+        }
+    }
+}

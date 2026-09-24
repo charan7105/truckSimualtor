@@ -494,6 +494,108 @@ namespace MatrackSim.App
             Mirror();
         }
 
+        // MARK: - Fault injection
+
+        /// <summary>
+        /// Names for the wire fields, so the UI and the log can say what is being faked rather than
+        /// printing a bare index. Index matches the 17-field telemetry layout.
+        /// </summary>
+        public static readonly string[] WireFieldNames = {
+            "type", "ignition", "rpm", "speed", "odometer", "engine hours", "latitude", "longitude",
+            "GPS lock", "heading", "time", "date", "ECM", "fuel 1", "fuel 2", "satellites", "GPS speed"
+        };
+
+        /// <summary>Override one telemetry field on the wire, or pass null/empty to clear it.</summary>
+        public void SetWireOverride(int field, string value)
+        {
+            if (field < 0 || field >= WireFieldNames.Length) return;
+            string name = WireFieldNames[field];
+            if (!string.IsNullOrEmpty(value))
+            {
+                engine.WireOverride[field] = value;
+                Info($"⚠ faking {name} = {value} on every packet");
+            }
+            else if (engine.WireOverride.Remove(field))
+            {
+                Info($"✓ {name} back to the real value");
+            }
+            Mirror();
+            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+        }
+
+        /// <summary>Re-publish the armed-fault bindings after a change that is not a wire override
+        /// (the clock skew lives in SimConfig, not in the override table).</summary>
+        public void RefreshFaultBindings()
+        {
+            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+        }
+
+        public bool IsFaked(int field, string value = null) =>
+            engine.WireOverride.TryGetValue(field, out string v) && (value == null || v == value);
+
+        public bool FaultsArmed => engine.WireOverride.Count > 0 || Config.TimeSkewSec != 0;
+
+        /// <summary>Everything currently being faked, in field order — drives the UI's status line.</summary>
+        public string ArmedFaultsSummary
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (Config.TimeSkewSec != 0)
+                    parts.Add($"clock {(Config.TimeSkewSec > 0 ? "+" : "")}{(int)(Config.TimeSkewSec / 60)} min");
+                foreach (var k in new List<int>(engine.WireOverride.Keys))
+                    parts.Add($"{WireFieldNames[k]} = {engine.WireOverride[k]}");
+                parts.Sort(StringComparer.Ordinal);
+                return parts.Count == 0 ? "" : string.Join(", ", parts);
+            }
+        }
+
+        /// <summary>One button back to a clean wire — the tester must never have to remember what they armed.</summary>
+        public void ClearAllFaults()
+        {
+            int n = engine.WireOverride.Count + (Config.TimeSkewSec != 0 ? 1 : 0);
+            engine.WireOverride.Clear();
+            Config.TimeSkewSec = 0;
+            Mirror();
+            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+            Info(n > 0 ? $"✓ wire is clean again — {n} fault{(n == 1 ? "" : "s")} cleared" : "wire was already clean");
+        }
+
+        public void SendVinNow()
+        {
+            SendReliable(MTPacket.Version(device));
+            Info($"↻ VIN packet sent ({(string.IsNullOrEmpty(device.Vin) ? "empty" : device.Vin)})");
+        }
+
+        /// <summary>
+        /// A burst of alternating ignition packets. Cannot go through Step(): that path is
+        /// edge-triggered on lastIgnitionSent, so it emits at most one LI per real ignition change.
+        /// 500ms spacing is deliberate — whole-second spacing between same-direction packets hits
+        /// the app's own de-dup.
+        /// </summary>
+        public void PowerCycleBurst(int cycles = 10, double intervalSec = 0.5)
+        {
+            if (cycles <= 0) return;
+            powerBurstTimer?.Dispose();
+            int remaining = cycles * 2;
+            bool on = !engine.IgnitionOn;
+            Info($"⚡️ power-cycle burst — {cycles} power-up/shutdown pairs at {(int)(1 / Math.Max(0.05, intervalSec))}/s");
+            long period = (long)(Math.Max(0.05, intervalSec) * 1000);
+            powerBurstTimer = new Timer(_ =>
+            {
+                if (remaining <= 0)
+                {
+                    powerBurstTimer?.Dispose(); powerBurstTimer = null;
+                    lastIgnitionSent = engine.IgnitionOn;     // resync so Step() doesn't re-announce
+                    Info("⚡️ power-cycle burst finished");
+                    return;
+                }
+                SendReliable(MTPacket.Ignition(engine, on));
+                on = !on;
+                remaining--;
+            }, null, period, period);
+        }
+
         // MARK: - Test setup: dial the truck to a starting state
 
         /// <summary>
@@ -961,6 +1063,7 @@ namespace MatrackSim.App
         private double pendingStoredCadence = 1.0;
         private double stateSaveCountdown = 0;                       // periodic persist (SimPersistedState)
         private double sinceLastStored = 0;                          // offline flash recorder cadence
+        private Timer powerBurstTimer;                               // fault injection: rapid ignition storm
         private DateTime? outageStartedAt = null;                    // when the current offline window began
         private List<Emitted> undeliveredStored = new List<Emitted>(); // handed to the dump, not yet fully sent
         private bool flashFullWarned = false;
@@ -1428,7 +1531,8 @@ namespace MatrackSim.App
             {
                 sinceLastPacket = 0;
                 if (lastIgnitionSent != engine.IgnitionOn) { SendReliable(MTPacket.Ignition(engine, engine.IgnitionOn)); lastIgnitionSent = engine.IgnitionOn; }
-                SendPacket(MTPacket.LivePosition(engine));
+                // Fault injection: TimeSkewSec shifts the clock the app sees in fields 10/11.
+                SendPacket(MTPacket.LivePosition(engine, DateTime.UtcNow.AddSeconds(Config.TimeSkewSec)));
             }
             // Real-tracker watchdog: app sends $wdg every ~20s; if it stops, the tracker stops streaming
             // (resumes on the next readdata). 90s is a safe margin so normal operation never trips it.

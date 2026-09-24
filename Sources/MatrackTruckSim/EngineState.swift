@@ -37,6 +37,15 @@ final class EngineState {
     var satellites = 11
     var ecmActive = true
 
+    /// FAULT INJECTION — raw wire-field overrides by index (0…16), substituted verbatim in
+    /// `MTPacket.telemetry` just before the fields are joined.
+    ///
+    /// Deliberately bypasses the miles→Int conversion, `SimConfig.isValidOdometer` and the
+    /// forward-only `setOdometer` guard: the whole point is to emit values a healthy tracker never
+    /// would. It is NOT in `SimPersistedState`, so a restart always clears it — a junk odometer can
+    /// never become permanent the way a typo in the TEST SETUP field once could.
+    var wireOverride: [Int: String] = [:]
+
     // Config-driven model parameters (set from SimConfig)
     var idleRpmConfig = 750
     var rpmPerMphConfig = 26.0

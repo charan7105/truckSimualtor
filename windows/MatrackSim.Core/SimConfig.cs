@@ -123,6 +123,19 @@ namespace MatrackSim.Core
         /// </summary>
         public double StoredRecordIntervalSec = 30;
 
+        // ---- Fault injection --------------------------------------------------------------------
+        /// <summary>
+        /// Seconds added to the UTC stamped into fields 10/11 of every live packet. The app compares
+        /// the packet clock against the phone's and raises Timing malfunction "T" past its tolerance —
+        /// the fastest unambiguous malfunction the simulator can provoke. 0 = clean.
+        /// </summary>
+        public double TimeSkewSec = 0;
+        /// <summary>
+        /// Field 4 value for the "unavailable" sentinel a tracker reports with no ECU odometer. The app
+        /// skips the field and keeps the previous value — visible only in a stored dump, never live.
+        /// </summary>
+        public const string OdometerUnavailableSentinel = "4294967295";
+
         // ---- Hard limits on operator-entered telemetry -----------------------------------------
         /// <summary>
         /// Ceilings for the TEST SETUP fields. MTPacket converts miles to a raw x10-km int, so a

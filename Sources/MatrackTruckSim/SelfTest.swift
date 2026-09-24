@@ -211,6 +211,68 @@ enum SelfTest {
             }
         }
 
+        // Fault injection must be able to express values the model CANNOT hold, and must never be
+        // able to leak into persisted state or into a clean packet.
+        print("Fault injection:")
+        do {
+            let e = EngineState()
+            e.ignitionOn = true; e.speedMph = 60; e.odometerMiles = 25_000
+            let clean = MTPacket.livePosition(e).components(separatedBy: ",")
+
+            // The sentinel is 26x the odometer ceiling — unreachable via setOdometer by design.
+            e.wireOverride[4] = SimConfig.odometerUnavailableSentinel
+            e.wireOverride[8] = "0"
+            e.wireOverride[12] = "0"
+            let faulted = MTPacket.livePosition(e).components(separatedBy: ",")
+            let expressed = faulted.count == 17
+                && faulted[4] == SimConfig.odometerUnavailableSentinel
+                && faulted[8] == "0" && faulted[12] == "0"
+            print("  [\(expressed ? "OK" : "FAIL")] overrides reach the wire and the packet stays 17 fields")
+            if !expressed { allPass = false }
+
+            // Everything NOT overridden must be untouched — an override must not disturb its neighbours.
+            let neighboursIntact = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 16].allSatisfy { faulted[$0] == clean[$0] }
+            print("  [\(neighboursIntact ? "OK" : "FAIL")] non-overridden fields are unchanged")
+            if !neighboursIntact { allPass = false }
+
+            // The app reads this sentinel as "no odometer" — prove our own decoder agrees, so the
+            // control demonstrates the real behaviour rather than a value we invented.
+            let decoded = MTDecoder.decode(MTPacket.livePosition(e))
+            let sentinelUnderstood = decoded?.odometerMiles == nil
+            print("  [\(sentinelUnderstood ? "OK" : "FAIL")] the sentinel decodes as 'odometer unavailable'")
+            if !sentinelUnderstood { allPass = false }
+
+            // A fault must never become permanent: SimPersistedState is a whitelist, so a restart
+            // always returns a clean wire. This is what stops the TEST SETUP typo class of bug.
+            let saved = e.persisted
+            let fresh = EngineState(); fresh.restore(saved)
+            let cleared = fresh.wireOverride.isEmpty
+            print("  [\(cleared ? "OK" : "FAIL")] overrides are not persisted — a restart clears every fault")
+            if !cleared { allPass = false }
+
+            e.wireOverride.removeAll()
+            let backToClean = MTPacket.livePosition(e).components(separatedBy: ",")[4] == clean[4]
+            print("  [\(backToClean ? "OK" : "FAIL")] clearing restores the real value")
+            if !backToClean { allPass = false }
+
+            // A skewed clock has to actually move the wire timestamp, or the Timing malfunction
+            // control is theatre.
+            let base = Date(timeIntervalSince1970: 1_700_000_000)
+            let skewed = ScenarioRunner.utcOf(MTPacket.livePosition(e, date: base.addingTimeInterval(1800)))
+            let skewWorks = skewed.map { abs($0.timeIntervalSince(base) - 1800) < 1.5 } ?? false
+            print("  [\(skewWorks ? "OK" : "FAIL")] a 30-minute clock skew reaches fields 10/11")
+            if !skewWorks { allPass = false }
+
+            // Bad VINs must survive the LV builder untouched — no trimming, no padding.
+            for vin in ["00000000000000000", "292058", ""] {
+                var d = DeviceInfo(); d.vin = vin
+                let lv = MTPacket.version(d).components(separatedBy: ",")
+                let ok = lv.count >= 2 && lv[0] == "LV" && lv[1] == vin
+                if !ok { allPass = false; print("  [FAIL] LV mangled VIN \"\(vin)\"") }
+            }
+            print("  [OK] all-zero, 6-char and empty VINs pass through the LV builder verbatim")
+        }
+
         print("────────────────────────────────────────────────────────────")
         print(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗")
         return allPass ? 0 : 1

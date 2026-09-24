@@ -731,6 +731,46 @@
                                         <Slider Minimum="15" Maximum="180" Value="{Binding RangeOutageSec, Mode=TwoWay}" />
                                     </DockPanel>
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+                                    <!-- FAULT INJECTION. Grouped by what the tester will SEE on the phone, not by
+                                         protocol field. Four of these are silently ignored by the ELD app; they are
+                                         labelled that way rather than hidden, so nobody demos a button waiting for an
+                                         alert that cannot come. -->
+                                    <TextBlock Text="⚠ FAULT INJECTION · SEND BAD DATA" Style="{StaticResource Sec}" Foreground="{StaticResource Red}" Margin="0,0,0,4" />
+                                    <TextBlock Text="{Binding ArmedFaultsSummary}" Foreground="{StaticResource Red}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4" />
+                                    <Button Content="RESET TO CLEAN DATA" Style="{StaticResource NeonButton}" Foreground="{StaticResource Red}"
+                                            Click="FaultClear_Click" Margin="0,0,0,6" />
+
+                                    <TextBlock Text="THE PHONE WILL WARN" Style="{StaticResource Sec}" Margin="0,0,0,4" />
+                                    <Button Content="ENGINE SYNC LOST" Style="{StaticResource NeonButton}" Click="FaultEcm_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Engine computer stops answering. Phone: Data Diagnostic 2 in ~3s." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="CLOCK AHEAD +30 MIN" Style="{StaticResource NeonButton}" Click="FaultClock_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Packet time wrong by half an hour. Phone: red Malfunction(T) bar after ~20s." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="ODOMETER AND HOURS MISSING" Style="{StaticResource NeonButton}" Click="FaultOdoMissing_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Sends 0 for both. Phone: change duty status while ON → Data Diagnostic 3." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="GPS LOCK LOST" Style="{StaticResource NeonButton}" Click="FaultGpsLock_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Drops the fix while driving. Phone: nothing quickly — its positioning check never fires (see audit)." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                                    <TextBlock Text="WRONG NUMBER, NO WARNING" Style="{StaticResource Sec}" Foreground="{StaticResource Amber}" Margin="0,0,0,4" />
+                                    <Button Content="ODOMETER JUMP +58,000 mi" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultOdoJump_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Phone: the Driving event's odometer jumps and stays. No warning at all." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="ODOMETER STUCK" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultOdoStuck_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Sends 'odometer not available'. Phone keeps showing the last value — that is the finding." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="POWER CYCLE STORM x10" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultPowerStorm_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Phone speaks 'Vehicle Power up' each time. It never raises Power Compliance." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                                    <TextBlock Text="THE PHONE IGNORES THESE" Style="{StaticResource Sec}" Foreground="{StaticResource Dim}" Margin="0,0,0,4" />
+                                    <TextBlock Text="Verified against the app source. Send these to PROVE the app ignores them, not to wait for an alert." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4" />
+                                    <DockPanel Margin="0,0,0,2">
+                                        <Button Content="SEND BAD VIN" Style="{StaticResource NeonButton}" DockPanel.Dock="Right" Click="FaultBadVin_Click" />
+                                        <TextBox x:Name="BadVinBox" Text="00000000000000000" Background="Transparent" BorderThickness="0"
+                                                 Foreground="{StaticResource Ice}" FontFamily="{StaticResource Mono}" FontSize="10"
+                                                 VerticalContentAlignment="Center" CaretBrush="{StaticResource Ice}" Margin="0,0,6,0" />
+                                    </DockPanel>
+                                    <TextBlock Text="All zeros and a 6-char VIN behave identically. Only Troubleshoot → Run Diagnostic Check shows it." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="DEFAULT DATE (01-01-00)" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultDefaultDate_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="Phone: nothing. It rewrites the packet date to phone time." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+
                                     <!-- TEST SETUP: dial the truck to a starting state instead of driving to it.
                                          Forward-only while the app is connected (see SetOdometer). -->
                                     <TextBlock Text="TEST SETUP" Style="{StaticResource Sec}" Margin="0,0,0,6" />

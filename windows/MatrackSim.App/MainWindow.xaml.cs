@@ -124,6 +124,46 @@ namespace MatrackSim.App
 
         // MARK: - DRIVE
         private void Engine_Click(object sender, RoutedEventArgs e) => Sim.SetEngine(!Sim.IgnitionOn);
+
+        // ---- Fault injection. Grouped in the XAML by WHAT THE TESTER SEES ON THE PHONE, not by
+        // protocol field, and the faults the app ignores are labelled as such rather than hidden.
+        private void FaultEcm_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(12, Sim.IsFaked(12) ? null : "0");
+
+        private void FaultClock_Click(object sender, RoutedEventArgs e)
+        {
+            Sim.Config.TimeSkewSec = Sim.Config.TimeSkewSec == 0 ? 1800 : 0;
+            Sim.RefreshFaultBindings();
+        }
+
+        private void FaultOdoMissing_Click(object sender, RoutedEventArgs e)
+        {
+            bool armed = Sim.IsFaked(4, "0");
+            Sim.SetWireOverride(4, armed ? null : "0");
+            Sim.SetWireOverride(5, armed ? null : "0");
+        }
+
+        private void FaultGpsLock_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(8, Sim.IsFaked(8) ? null : "0");
+
+        private void FaultOdoJump_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, "5000000");
+
+        private void FaultOdoStuck_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, Sim.IsFaked(4, SimConfig.OdometerUnavailableSentinel)
+                ? null : SimConfig.OdometerUnavailableSentinel);
+
+        private void FaultPowerStorm_Click(object sender, RoutedEventArgs e) => Sim.PowerCycleBurst();
+
+        private void FaultBadVin_Click(object sender, RoutedEventArgs e)
+        {
+            Sim.Vin = string.IsNullOrWhiteSpace(BadVinBox.Text) ? "00000000000000000" : BadVinBox.Text.Trim();
+            Sim.SendVinNow();
+        }
+
+        private void FaultDefaultDate_Click(object sender, RoutedEventArgs e) => Sim.SetWireOverride(11, "010100");
+
+        private void FaultClear_Click(object sender, RoutedEventArgs e) => Sim.ClearAllFaults();
         private void Auto_Click(object sender, RoutedEventArgs e) => Sim.SetAutoDrive(!Sim.AutoDrive);
 
         private static string Param(object sender) =>

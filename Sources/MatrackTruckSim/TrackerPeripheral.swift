@@ -458,7 +458,67 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             outOfFuelNotified = false
         }
     }
-    func sendVINNow() { sendReliable(MTPacket.version(device)) }
+    func sendVINNow() { sendReliable(MTPacket.version(device)); info("↻ VIN packet sent (\(device.vin.isEmpty ? "empty" : device.vin))") }
+
+    // MARK: - Fault injection
+
+    /// Names for the wire fields, so the UI and the log can say what is being faked rather than
+    /// printing a bare index. Index matches the 17-field telemetry layout.
+    static let wireFieldNames = ["type", "ignition", "rpm", "speed", "odometer", "engine hours",
+                                 "latitude", "longitude", "GPS lock", "heading", "time", "date",
+                                 "ECM", "fuel 1", "fuel 2", "satellites", "GPS speed"]
+
+    /// Override one telemetry field on the wire, or pass nil to clear it.
+    func setWireOverride(field: Int, value: String?) {
+        guard (0..<Self.wireFieldNames.count).contains(field) else { return }
+        let name = Self.wireFieldNames[field]
+        if let value = value, !value.isEmpty {
+            engine.wireOverride[field] = value
+            info("⚠ faking \(name) = \(value) on every packet")
+        } else if engine.wireOverride.removeValue(forKey: field) != nil {
+            info("✓ \(name) back to the real value")
+        }
+        mirror()
+    }
+
+    /// Everything currently being faked, in field order — drives the UI's "what is armed" line.
+    var activeFaults: [(field: Int, name: String, value: String)] {
+        engine.wireOverride.keys.sorted().map { ($0, Self.wireFieldNames[$0], engine.wireOverride[$0] ?? "") }
+    }
+
+    var faultsArmed: Bool { !engine.wireOverride.isEmpty || config.timeSkewSec != 0 }
+
+    /// One button back to a clean wire — the tester must never have to remember what they armed.
+    func clearAllFaults() {
+        let n = engine.wireOverride.count + (config.timeSkewSec != 0 ? 1 : 0)
+        engine.wireOverride.removeAll()
+        config.timeSkewSec = 0
+        mirror()
+        info(n > 0 ? "✓ wire is clean again — \(n) fault\(n == 1 ? "" : "s") cleared" : "wire was already clean")
+    }
+
+    /// A burst of alternating ignition packets. Cannot go through step(): that path is edge-triggered
+    /// on `lastIgnitionSent`, so it emits at most one LI per real ignition change. 500ms spacing is
+    /// deliberate — whole-second spacing between same-direction packets hits the app's own de-dup.
+    func powerCycleBurst(cycles: Int = 10, intervalSec: Double = 0.5) {
+        guard cycles > 0 else { return }
+        powerBurstTimer?.invalidate()
+        var remaining = cycles * 2
+        var on = !engine.ignitionOn
+        info("⚡️ power-cycle burst — \(cycles) power-up/shutdown pairs at \(Int(1 / max(0.05, intervalSec)))/s")
+        powerBurstTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, intervalSec), repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            guard remaining > 0 else {
+                t.invalidate(); self.powerBurstTimer = nil
+                self.lastIgnitionSent = self.engine.ignitionOn      // resync so step() doesn't re-announce
+                self.info("⚡️ power-cycle burst finished")
+                return
+            }
+            self.sendReliable(MTPacket.ignition(self.engine, on: on))
+            on.toggle()
+            remaining -= 1
+        }
+    }
 
     // MARK: - F1: signal strength + out-of-range emulation
     /// Signal 100→0. Weak signal = added LATENCY (not packet loss): real BLE retransmits at the link layer,
@@ -685,6 +745,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var scenarioQueue: [Emitted] = []
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
+    private var powerBurstTimer: Timer?           // fault injection: rapid ignition storm
     private var outageStartedAt: Date?            // when the current offline window began (see step())
     private var undeliveredStored: [Emitted] = [] // backlog handed to the dump but not yet fully sent
     private var flashFullWarned = false
@@ -1081,7 +1142,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if streaming && !linkDown && ackReady && sinceLastPacket >= config.packetIntervalSec {   // linkDown = out of range → silent
             sinceLastPacket = 0
             if lastIgnitionSent != engine.ignitionOn { sendReliable(MTPacket.ignition(engine, on: engine.ignitionOn)); lastIgnitionSent = engine.ignitionOn }
-            sendPacket(MTPacket.livePosition(engine))
+            // Fault injection: timeSkewSec shifts the clock the app sees in fields 10/11.
+            sendPacket(MTPacket.livePosition(engine, date: Date().addingTimeInterval(config.timeSkewSec)))
         }
         // Real-tracker watchdog: app sends $wdg every ~20s; if it stops, the tracker stops streaming
         // (resumes on the next readdata). 90s is a safe margin so normal operation never trips it.

@@ -9,7 +9,8 @@ struct ContentView: View {
     // clips. The content is compacted to fit this height at ~full size (no heavy shrink). Wider-than-16:10
     // screens (16:9 / ultrawide) get slim, balanced side margins rather than stretched panels.
     private let designSize = CGSize(width: 1800, height: 1120)
-    @State private var showDTC = false      // diagnostics live behind a footer menu (low priority right now)
+    @State private var showDTC = false
+    @State private var showFaults = false      // diagnostics live behind a footer menu (low priority right now)
     @State private var showScenario = false // scenarios are a testing tool → tucked behind a footer button, like DTC
     @State private var linkCopied = false   // brief ✓ feedback after tapping the FUEL LINK pill to copy the address
     @ObservedObject private var bridge = SimBridge.shared   // LAN link the Fuel App follows
@@ -286,6 +287,17 @@ struct ContentView: View {
             .buttonStyle(.plain).hoverGlow()
             .popover(isPresented: $showDTC, arrowEdge: .bottom) {
                 DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
+            }
+            Button { showFaults.toggle() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(sim.faultsArmed ? "BAD DATA ▸ SENDING" : "BAD DATA").font(.system(size: 11, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
+            }
+            .buttonStyle(.plain).hoverGlow()
+            .popover(isPresented: $showFaults, arrowEdge: .bottom) {
+                FaultPanel().frame(width: 400).padding(14).background(Theme.bg1)
             }
             Button { sim.rearmStartup() } label: {
                 HStack(spacing: 6) {

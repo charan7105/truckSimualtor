@@ -59,6 +59,18 @@ namespace MatrackSim.Core
         /// <summary>GPS-derived speed on the wire (km/h). Tracks vehicle speed.</summary>
         public int GpsSpeedKmh => (int)System.Math.Round(SpeedMph * 1.60934, System.MidpointRounding.AwayFromZero);
 
+        /// <summary>
+        /// FAULT INJECTION — raw wire-field overrides by index (0…16), substituted verbatim in
+        /// MTPacket.Telemetry just before the fields are joined.
+        ///
+        /// Deliberately bypasses the miles→int conversion, SimConfig.IsValidOdometer and the
+        /// forward-only SetOdometer guard: the whole point is to emit values a healthy tracker never
+        /// would. It is NOT part of SimPersistedState, so a restart always clears it — a junk
+        /// odometer can never become permanent.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<int, string> WireOverride =
+            new System.Collections.Generic.Dictionary<int, string>();
+
         /// <summary>Both tanks dry — the engine stalls, so the truck can't move until it's refueled.</summary>
         public bool OutOfFuel => FuelLevelPct <= 0 && FuelLevel2Pct <= 0;
 
