@@ -495,9 +495,13 @@ struct NetworkPanel: View {
                     sim.config.storedDumpCount = fallback
                     sim.info("Count back to the default \(fallback)")
                 } label: {
-                    Text("↺ default \(fallback)").font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                    Text("↺ back to default \(fallback)")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
                 .buttonStyle(.plain).padding(.leading, 64)
+            } else {
+                Text("default \(fallback)").font(.system(size: 9, design: .rounded))
+                    .foregroundStyle(Theme.dim.opacity(0.7)).padding(.leading, 64)
             }
         }
     }
@@ -523,17 +527,21 @@ struct NetworkPanel: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(changed ? Theme.amber : Theme.ice).frame(width: 42, alignment: .trailing)
             }
+            // ALWAYS visible, not just once it differs: you need to know what normal looks like
+            // BEFORE touching anything, otherwise every slider reads as "probably fine".
             if changed {
-                // Only shown once it differs, so a clean drawer stays quiet.
                 Button {
                     sim.config[keyPath: kp] = fallback
                     sim.info("\(label) back to the default \(String(format: "%.\(dec)f", fallback))\(unit)")
                 } label: {
-                    Text("↺ default \(String(format: "%.\(dec)f", fallback))\(unit)")
-                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                    Text("↺ back to default \(String(format: "%.\(dec)f", fallback))\(unit)")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
-                .buttonStyle(.plain)
-                .padding(.leading, 64)
+                .buttonStyle(.plain).padding(.leading, 64)
+            } else {
+                Text("default \(String(format: "%.\(dec)f", fallback))\(unit)")
+                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim.opacity(0.7))
+                    .padding(.leading, 64)
             }
         }
     }
