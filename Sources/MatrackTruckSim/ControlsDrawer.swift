@@ -484,11 +484,16 @@ struct NetworkPanel: View {
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
                 Text("Count").font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(changed ? Theme.amber : Theme.dim).frame(width: 56, alignment: .leading)
+                    .foregroundStyle(changed ? Theme.amber : Theme.dim)
+                    .lineLimit(1).fixedSize()
                 Slider(value: Binding(get: { Double(sim.config.storedDumpCount) }, set: { sim.config.storedDumpCount = Int($0) }), in: 0...300)
                     .tint(changed ? Theme.amber : Theme.ice)
-                Text("\(value)").font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(changed ? Theme.amber : Theme.ice).frame(width: 42, alignment: .trailing)
+                    .frame(minWidth: 60).layoutPriority(1)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("\(value)").font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(changed ? Theme.amber : Theme.ice)
+                    Text("def \(fallback)").font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.dim)
+                }.fixedSize()
             }
             if changed {
                 Button {
@@ -499,9 +504,6 @@ struct NetworkPanel: View {
                         .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
                 .buttonStyle(.plain).padding(.leading, 64)
-            } else {
-                Text("default \(fallback)").font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(Theme.dim.opacity(0.7)).padding(.leading, 64)
             }
         }
     }
@@ -520,12 +522,20 @@ struct NetworkPanel: View {
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
                 Text(label).font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(changed ? Theme.amber : Theme.dim).frame(width: 56, alignment: .leading)
+                    .foregroundStyle(changed ? Theme.amber : Theme.dim)
+                    .lineLimit(1).fixedSize()
                 Slider(value: Binding(get: { sim.config[keyPath: kp] }, set: { sim.config[keyPath: kp] = $0 }), in: range)
                     .tint(changed ? Theme.amber : Theme.ice)
-                Text("\(String(format: "%.\(dec)f", value))\(unit)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(changed ? Theme.amber : Theme.ice).frame(width: 42, alignment: .trailing)
+                    .frame(minWidth: 60).layoutPriority(1)
+                // Value over default, right-aligned: the value stays where the eye already looks and
+                // the default sits directly beneath it for comparison, instead of crowding the label.
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("\(String(format: "%.\(dec)f", value))\(unit)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(changed ? Theme.amber : Theme.ice)
+                    Text("def \(String(format: "%.\(dec)f", fallback))")
+                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.dim)
+                }.fixedSize()
             }
             // ALWAYS visible, not just once it differs: you need to know what normal looks like
             // BEFORE touching anything, otherwise every slider reads as "probably fine".
@@ -538,10 +548,6 @@ struct NetworkPanel: View {
                         .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
                 .buttonStyle(.plain).padding(.leading, 64)
-            } else {
-                Text("default \(String(format: "%.\(dec)f", fallback))\(unit)")
-                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim.opacity(0.7))
-                    .padding(.leading, 64)
             }
         }
     }
