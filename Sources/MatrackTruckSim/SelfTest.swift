@@ -375,6 +375,59 @@ enum SelfTest {
             if !plausible { allPass = false }
         }
 
+        // Stored-packet test cases. The app's guard (REQ-940) refuses a stored packet whose time is a
+        // year or more from now and requires fields 10/11 to be exactly 6 digits, so the dump has to
+        // produce something that reaches that check rather than failing an earlier one.
+        print("Stored-packet test dumps:")
+        do {
+            let cfg = SimConfig.default
+
+            let future = WireBuilder.storedDump(count: 5, config: cfg,
+                                                options: .init(stampedAt: SimConfig.futureStoredPacketDate))
+            let futureStored = future.filter { $0.kind == .stored }
+            var fieldsOK = true, allFuture = true, allStoredPrefix = true
+            for em in futureStored {
+                let f = em.wire.components(separatedBy: ",")
+                if f.count < 12 || f[10].count != 6 || f[11].count != 6 { fieldsOK = false }
+                if !em.wire.hasPrefix("SP") && !em.wire.hasPrefix("SS") && !em.wire.hasPrefix("S") { allStoredPrefix = false }
+                guard let utc = WireBuilder.utcOf(em.wire) else { allFuture = false; continue }
+                if utc.timeIntervalSinceNow < 365 * 24 * 3600 { allFuture = false }
+            }
+            print("  [\(futureStored.count == 5 ? "OK" : "FAIL")] future-dated dump emits 5 stored packets")
+            print("  [\(allStoredPrefix ? "OK" : "FAIL")] they carry a stored 'S' prefix")
+            print("  [\(fieldsOK ? "OK" : "FAIL")] time and date fields are exactly 6 digits (the app rejects otherwise before the time check)")
+            print("  [\(allFuture ? "OK" : "FAIL")] every packet is more than a year ahead, so the app's guard is what refuses it")
+            if !(futureStored.count == 5 && allStoredPrefix && fieldsOK && allFuture) { allPass = false }
+
+            // Same-connection duplicates: byte-identical and ADJACENT, because the app only compares
+            // against the packet immediately before.
+            let dup = WireBuilder.storedDump(count: 3, config: cfg, options: .init(repeatEachPacket: true))
+            let dupStored = dup.filter { $0.kind == .stored }
+            var adjacentPairs = 0
+            var i = 0
+            while i + 1 < dupStored.count {
+                if dupStored[i].wire == dupStored[i + 1].wire { adjacentPairs += 1 }
+                i += 2
+            }
+            let dupOK = dupStored.count == 6 && adjacentPairs == 3
+            print("  [\(dupOK ? "OK" : "FAIL")] duplicate dump: \(dupStored.count) packets forming \(adjacentPairs) adjacent identical pairs")
+            if !dupOK { allPass = false }
+
+            // The footer count must describe what was actually sent, or the app is told one number
+            // and handed another.
+            let footer = dup.first { $0.wire.hasPrefix("SAVED PACKET COUNT:") }?.wire ?? ""
+            let footerOK = footer == "SAVED PACKET COUNT:\(dupStored.count)"
+            print("  [\(footerOK ? "OK" : "FAIL")] footer reports the real count (\(footer))")
+            if !footerOK { allPass = false }
+
+            // A normal dump must stay normal — no duplicates, not future dated.
+            let normal = WireBuilder.storedDump(count: 4, config: cfg).filter { $0.kind == .stored }
+            let noDupes = Set(normal.map { $0.wire }).count == normal.count
+            let notFuture = normal.allSatisfy { (WireBuilder.utcOf($0.wire)?.timeIntervalSinceNow ?? 0) < 0 }
+            print("  [\(noDupes && notFuture ? "OK" : "FAIL")] a normal dump is still unique and backdated")
+            if !(noDupes && notFuture) { allPass = false }
+        }
+
         print("────────────────────────────────────────────────────────────")
         print(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗")
         return allPass ? 0 : 1

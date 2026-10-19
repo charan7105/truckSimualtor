@@ -122,6 +122,10 @@ struct SimConfig: Codable, Equatable {
     /// The app treats speed >= 5 mph as moving; motion-gated faults use the same line so a test
     /// reads the same way on both sides.
     static let movingThresholdMph: Double = 5
+    /// The instant the "future dated" stored dump stamps every packet at.
+    /// The app refuses a stored packet whose time is a year or more from now (REQ-940), so this has
+    /// to be comfortably past that line — 2030 is roughly four years out and unambiguous in a log.
+    static let futureStoredPacketDate = Date(timeIntervalSince1970: 1_893_456_000)   // 2030-01-01 00:00:00 UTC
     /// The two ECU odometer series the ALTERNATING fault flips between, as raw field-4 values
     /// (x10 km). ~3,700 miles apart, which is large enough to be obvious in the app's day log.
     var odoSeriesLowRaw = "402336"

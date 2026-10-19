@@ -544,6 +544,26 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         mirror()
     }
 
+    /// Re-send the previous dump byte for byte.
+    ///
+    /// This is the cross-connection duplicate case: dump, let the app process it, disconnect,
+    /// reconnect, then send the SAME packets again. The app's packet-level de-dup only compares
+    /// against the immediately previous stored packet and that value is never reset on connect, so
+    /// whether the repeat is caught depends on what the app saw last — which is exactly what the
+    /// test is there to find out.
+    func repeatLastStoredDump(cadenceSec: Double) {
+        guard !lastStoredBatch.isEmpty else { info("no previous stored dump to repeat"); return }
+        let n = lastStoredBatch.filter { $0.kind == .stored }.count
+        scenarioQueue = lastStoredBatch
+        runningDump = "Repeat stored dump (\(n))"
+        info("▶ repeating the previous dump — \(n) identical stored packets")
+        faultJournal("ONE-SHOT", "repeat of previous stored dump, \(n) packets, byte-identical")
+        scenarioTimer?.invalidate()
+        scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, cadenceSec), repeats: true) { [weak self] _ in
+            self?.popScenario()
+        }
+    }
+
     /// A single deliberately broken packet. This is the one thing the live path genuinely cannot
     /// produce on its own — every packet the engine builds is well formed by construction — so it
     /// lives here rather than needing a scenario to exist for it.
@@ -811,6 +831,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
     private var powerBurstTimer: Timer?           // fault injection: rapid ignition storm
+    private var lastStoredBatch: [Emitted] = []   // so a dump can be repeated byte-for-byte after a reconnect
     /// Stable for the life of the process, so every fault line in the log belongs to one run.
     private let faultSessionId = String(UInt32.random(in: 0x1000...0xFFFF), radix: 16).uppercased()
     private var faultSessionSeq = 0
@@ -886,11 +907,16 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
     /// disconnect (≈0.5s breaks the app; 1.0s completes cleanly). The SIM never fails — it reproduces
     /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
-    func dumpStoredPackets(count: Int, cadenceSec: Double, stopDrive: Bool = true) {
+    func dumpStoredPackets(count: Int, cadenceSec: Double, stopDrive: Bool = true,
+                           options: WireBuilder.StoredDumpOptions = .normal, label: String? = nil) {
         if stopDrive { autoDrive = false; drivingRoute = false; dayDriving = false }   // app-issued readstr keeps the drive (resumes when queue drains)
-        scenarioQueue = WireBuilder.storedDump(count: count, config: config)
-        runningDump = "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
-        info("▶ stored dump — \(count) packets @ \(Int(cadenceSec * 1000))ms cadence (≈500ms repros the disconnect)")
+        let batch = WireBuilder.storedDump(count: count, config: config, options: options)
+        // Kept so the same bytes can be sent again after a reconnect — the cross-connection
+        // duplicate test needs the SECOND dump to be identical to the first, not merely similar.
+        lastStoredBatch = batch
+        scenarioQueue = batch
+        runningDump = label ?? "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
+        info("▶ \(label ?? "stored dump") — \(batch.filter { $0.kind == .stored }.count) packets @ \(Int(cadenceSec * 1000))ms cadence")
         scenarioTimer?.invalidate()
         scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, cadenceSec), repeats: true) { [weak self] _ in
             self?.popScenario()

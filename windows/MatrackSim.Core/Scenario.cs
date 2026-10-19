@@ -124,7 +124,20 @@ namespace MatrackSim.Core
         /// F2: the exact wire sequence a real `readstr` dump produces — N stored 'S' packets + footers.
         /// Played back at a configurable cadence to reproduce the fast-dump disconnect (≈0.5s breaks, 1s is fine).
         /// </summary>
-        public static List<Emitted> StoredDump(int count, SimConfig config)
+        /// <summary>
+        /// How a stored dump should deviate from a normal one, for the REQ-940 / REQ-942 test cases.
+        /// StampedAt replaces the usual backdating so every packet carries one chosen instant.
+        /// RepeatEachPacket emits every packet twice back to back — the app's only packet-level
+        /// de-dup compares against the IMMEDIATELY previous stored packet, so adjacency matters.
+        /// </summary>
+        public sealed class StoredDumpOptions
+        {
+            public DateTime? StampedAt;
+            public bool RepeatEachPacket;
+            public static StoredDumpOptions Normal => new StoredDumpOptions();
+        }
+
+        public static List<Emitted> StoredDump(int count, SimConfig config, StoredDumpOptions options = null)
         {
             var e = new EngineState();
             e.OdometerMiles = config.StartOdometerMiles;
@@ -135,15 +148,21 @@ namespace MatrackSim.Core
             e.FuelBurnPctPerMile = config.FuelBurnPctPerMile;
             e.IgnitionOn = true;
             double dt = config.PacketIntervalSec;
+            var opts = options ?? StoredDumpOptions.Normal;
             var output = new List<Emitted>();
             int n = Math.Max(0, count);
             for (int i = 0; i < n; i++)
             {
                 e.Advance(dt);
-                output.Add(new Emitted(ToStored(MTPacket.LivePosition(e, Backdated(i, count, dt))), Emitted.Kind.Stored));
+                var at = opts.StampedAt ?? Backdated(i, count, dt);
+                string wire = ToStored(MTPacket.LivePosition(e, at));
+                output.Add(new Emitted(wire, Emitted.Kind.Stored));
+                // Byte-identical repeat, immediately after — the only shape the app's de-dup looks for.
+                if (opts.RepeatEachPacket) output.Add(new Emitted(wire, Emitted.Kind.Stored));
             }
+            int sent = output.FindAll(x => x.ItemKind == Emitted.Kind.Stored).Count;
             output.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
-            output.Add(new Emitted("SAVED PACKET COUNT:" + count.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
+            output.Add(new Emitted("SAVED PACKET COUNT:" + sent.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
             return output;
         }
 
