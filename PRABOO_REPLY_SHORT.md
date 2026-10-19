@@ -2,7 +2,7 @@
 
 Hi Praboo,
 
-Earlier you asked for these to be added in the simulator:
+Earlier you asked to add these in the simulator:
 
 1. Virtual odo to ECU odo switching
 2. Two ECU odo switching
@@ -14,32 +14,37 @@ Earlier you asked for these to be added in the simulator:
 8. Excessive power up and shutdown packets
 9. Speed > 5, some packets without GPS lock
 
-All nine are now buttons in the simulator.
+All nine are added. Each one is a button now.
 
-**Only #5 triggers anything in the app** — invalid time raises `Malfunction(T)`, and only when the
-clock is off by more than 10 minutes, across 20 packets, with the truck moving.
+I tested them with the app today. **Only #5 shows anything.** Invalid time raises Malfunction(T).
+For that the clock must be wrong by more than 10 minutes, it needs 20 packets, and the truck must be
+moving.
 
-**Four are silent because the app can't catch them:**
+The other eight show nothing.
 
-- **#3, #4 VIN** — the mismatch handler exists at `Utils.swift:4209`, message already written.
-  Nothing calls it.
-- **#8 Power up/shutdown** — Power Compliance has no raiser anywhere. The app can display it and let
-  a driver clear it, but nothing creates it.
-- **#9 GPS lock** — the detector runs, but location rows are written with `Date.description` and read
-  back as `"yyyy-MM-dd HH:mm:ss +zzzz"` (`UtilDate.swift:442`). Every parse fails, so malfunction `L`
-  can never fire.
+**Four of them the app cannot catch:**
 
-**Four the app ignores by design** — #1, #2, #6, #7. No rule requires a check and the ECU is treated
-as authoritative. I'd leave these alone; adding alerts would cause false positives on real trackers.
+- **#3, #4 VIN** — the mismatch handler is already written in the app
+  (`Util.addVinMalfunctionasOtherDataMalfunction`, Utils.swift:4209). The message is written also.
+  But no one calls this function.
+- **#8 Power up/shutdown** — there is no code anywhere that raises Power Compliance. The app can show
+  it and the driver can clear it, but nothing creates it.
+- **#9 GPS lock** — the detector runs, but the location rows are saved using `Date.description` and
+  read back using format `"yyyy-MM-dd HH:mm:ss +zzzz"` (UtilDate.swift:442). The format does not
+  match, so every read fails and the count stays zero. Malfunction L can never come.
 
-**But #2 uncovered something worth your attention.** `Util.aculatedmilescheck` (`Utils.swift:4971`)
-looks like an odometer plausibility check and is dead code — both branches call
-`UpdateAccumulatedMiles`, which discards its argument and recomputes in SQL
-(`LatestDB_New.swift:8790`). An odometer jump gets booked as real driven miles; a downward jump
-freezes the event's mileage. No alert, and the numbers are wrong. **I'd look at this one first.**
+**Four the app ignores by design** — #1, #2, #6, #7. No rule asks for a check here, and the ECU
+value is taken as correct. Better to leave these. If we add alerts, real trackers will give false
+alarms.
 
-On your PT vs MT question for #6: both parsers rewrite an uninitialised date to phone time, so no
-default year survives in either. They don't differ.
+**One more thing came out of #2, please check this.** `Util.aculatedmilescheck` (Utils.swift:4971)
+looks like an odometer check but it is dead code. Both branches call `UpdateAccumulatedMiles`, and
+that method throws away the value we pass and calculates again in SQL (LatestDB_New.swift:8790).
+So if the odometer jumps, those miles are saved as real driven miles. If it goes down, the event
+mileage freezes. No alert, and the numbers are wrong. Please look at this one first.
 
-All nine buttons stay in regardless — the ignored ones are labelled as ignored, so they can be used
-to demonstrate the gap rather than wait for an alert that won't come.
+For your PT vs MT question on #6: both parsers change an empty date to phone time. So no default
+year is visible in either one. Both behave the same.
+
+All nine buttons stay in the simulator. The ones the app ignores are marked as ignored, so we can
+use them to show the gap instead of waiting for an alert that will not come.
