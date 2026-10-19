@@ -103,6 +103,35 @@ legitimately has no fix and testing that proves nothing.
 
 ---
 
+## Proving later that a fault was injected
+
+Every arm, clear and one-shot is written to the simulator's persistent log with a `FAULT#` tag and
+a per-run session id:
+
+```
+[14:37:12] • FAULT#A3F1-1 ARMED — field 8 (GPS lock) = 0, ~20% of packets (only above 5 mph)
+[14:41:03] • FAULT#A3F1-2 CLEARED — field 8 (GPS lock)
+[14:41:05] • FAULT#A3F1-3 ONE-SHOT — power-cycle burst, 10 pairs at 2/s
+```
+
+So `grep FAULT# ~/Library/Application\ Support/MatrackSim/logs/matracksim.log` gives the complete
+timeline of what was faked and when, months later, without reading the whole file. The session id
+is stable for one run of the simulator, so you can tell two sittings apart.
+
+**The app keeps its own record, separately.** The simulator cannot write into it. To get the phone's
+side, use **Troubleshoot → support dump**, which uploads the `audit`, `bletroubleshoot`,
+`bleconnectionhistory` and `vehicle` tables. The `audit` rows are where the app records the
+decisions it makes silently — "MT stored packet stoped due to vehicle id is less than 0", "Packet
+skipped via Stored Action queue MT". That is the difference between *never arrived*, *arrived and
+was discarded*, and *processed with no visible result* — three outcomes that look identical on
+screen.
+
+Correlate the two by timestamp. Nothing joins them automatically.
+
+**One trap:** the Help screen's "enable logging" toggle does not enable anything — its body is
+commented out, and it still shows "Logging enabled". Bugfender is already active from launch, so
+the logs exist regardless; just don't read that toast as confirmation.
+
 ## Things worth knowing
 
 **Faults never survive a restart.** They are not written to the state file. Quit and relaunch and the
