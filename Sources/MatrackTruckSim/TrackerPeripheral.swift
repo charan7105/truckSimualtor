@@ -452,6 +452,22 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - Fault injection
 
+    /// A greppable record of every fault, written to the persistent log as well as the on-screen
+    /// stream.
+    ///
+    /// Why this exists: a fault arm/clear used to be one `info()` line among thousands of packets.
+    /// When someone later asks "was that a real tracker problem or did we inject it?", the answer
+    /// has to be findable months afterwards without reading the whole file. Every line is tagged
+    /// FAULT# with a session id, so `grep FAULT#` on the log gives the complete timeline.
+    ///
+    /// NOTE: this is the SIMULATOR's record. The simulator cannot write into the ELD app's audit
+    /// table, so correlate by timestamp — the app's own audit rows come from its BLE dump
+    /// (Troubleshoot → support dump includes the `audit` table).
+    private func faultJournal(_ event: String, _ detail: String) {
+        faultSessionSeq += 1
+        info("FAULT#\(faultSessionId)-\(faultSessionSeq) \(event) — \(detail)")
+    }
+
     /// Names for the wire fields, so the UI and the log can say what is being faked rather than
     /// printing a bare index. Index matches the 17-field telemetry layout.
     static let wireFieldNames = ["type", "ignition", "rpm", "speed", "odometer", "engine hours",
@@ -478,8 +494,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             let how = probability >= 1 ? "every packet" : "~\(Int(probability * 100))% of packets"
             let gate = requiresMotion ? " (only above \(Int(SimConfig.movingThresholdMph)) mph)" : ""
             info("⚠ faking \(name) = \(value) on \(how)\(gate)")
+            faultJournal("ARMED", "field \(field) (\(name)) = \(value), \(how)\(gate)")
         } else if engine.wireFaults.removeValue(forKey: field) != nil {
             info("✓ \(name) back to the real value")
+            faultJournal("CLEARED", "field \(field) (\(name))")
         }
         faultRevision += 1
         mirror()
@@ -503,6 +521,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         faultRevision += 1
         mirror()
         info(n > 0 ? "✓ wire is clean again — \(n) fault\(n == 1 ? "" : "s") cleared" : "wire was already clean")
+        if n > 0 { faultJournal("ALL CLEARED", "\(n) fault\(n == 1 ? "" : "s") removed — wire is clean") }
     }
 
     /// Two ECU odometer series, flipping every packet. This is the shape Praboo described: the ECU
@@ -516,6 +535,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 info("  (cleared the other odometer fault — only one can own that field)")
             }
             info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)")
+            faultJournal("ARMED", "two ECU odometer series, flipping every packet")
         } else {
             engine.wireFaults.removeValue(forKey: 4)
             info("✓ odometer back to one series")
@@ -530,6 +550,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func sendMalformedPacket() {
         sendRaw("ZZ,not,a,valid,packet")
         info("☠︎ malformed packet sent — the app should reject it and keep running")
+        faultJournal("ONE-SHOT", "malformed packet")
     }
 
     /// Send the odometer-source packet. Included because it is literally what was asked for — and
@@ -537,6 +558,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func sendOdoSourcePacket(virtual: Bool) {
         sendRaw(MTPacket.odoSource(virtualEnabled: virtual, activeSource: virtual ? 1 : 0))
         info("↻ odometer-source packet sent (\(virtual ? "virtual" : "ECU")) — the app parses it into a variable nothing reads")
+        faultJournal("ONE-SHOT", "odometer-source packet (\(virtual ? "virtual" : "ECU"))")
     }
 
     /// A burst of alternating ignition packets. Cannot go through step(): that path is edge-triggered
@@ -548,6 +570,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         var remaining = cycles * 2
         var on = !engine.ignitionOn
         info("⚡️ power-cycle burst — \(cycles) power-up/shutdown pairs at \(Int(1 / max(0.05, intervalSec)))/s")
+        faultJournal("ONE-SHOT", "power-cycle burst, \(cycles) pairs at \(Int(1 / max(0.05, intervalSec)))/s")
         powerBurstTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, intervalSec), repeats: true) { [weak self] t in
             guard let self else { t.invalidate(); return }
             guard remaining > 0 else {
@@ -788,6 +811,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var stateSaveCountdown: Double = 0    // periodic persist of odo/hours/position (SimPersistedState)
     private var sinceLastStored: Double = 0       // offline flash recorder cadence
     private var powerBurstTimer: Timer?           // fault injection: rapid ignition storm
+    /// Stable for the life of the process, so every fault line in the log belongs to one run.
+    private let faultSessionId = String(UInt32.random(in: 0x1000...0xFFFF), radix: 16).uppercased()
+    private var faultSessionSeq = 0
     @Published var odoAlternating = false         // fault injection: two ECU odometer series
     /// Bumped whenever a fault is armed or cleared. `engine` is not an ObservableObject, so mutating
     /// `engine.wireFaults` publishes nothing on its own — with the truck parked, `mirror()` finds no
