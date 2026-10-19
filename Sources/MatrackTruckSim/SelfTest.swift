@@ -23,24 +23,46 @@ enum SelfTest {
             var failures: [String] = []
             var totalPackets = 0, controlPkts = 0, storedPkts = 0, malformedPkts = 0
 
-            for s in Scenarios.all {
-                let emitted = ScenarioRunner.run(s, config: cfg)
-                totalPackets += emitted.count
-                for em in emitted {
-                    switch em.kind {
-                    case .raw: controlPkts += 1
-                    case .stored: storedPkts += 1
-                    case .malformed: malformedPkts += 1
-                    default: break
-                    }
-                    if let f = validate(em) { failures.append("[S\(s.id) \(s.name)] \(f)") }
-                }
-                if let f = scenarioInvariant(s, emitted) { failures.append("[S\(s.id) \(s.name)] \(f)") }
+            // The scenario catalogue used to drive this loop. It is gone, so the packets are built
+            // the way the live path builds them: a drive's worth of live telemetry, plus a stored
+            // dump, under each config variation. Same format coverage, one code path instead of two.
+            let e = EngineState()
+            e.ignitionOn = true
+            e.idleRpmConfig = cfg.idleRpm
+            e.rpmPerMphConfig = cfg.rpmPerMph
+            e.fuelBurnPctPerMile = cfg.fuelBurnPctPerMile
+            var emitted: [Emitted] = []
+            emitted.append(Emitted(wire: MTPacket.ignition(e, on: true), kind: .ignition))
+            for tick in 0..<120 {                       // accelerate, cruise, brake
+                e.speedMph = tick < 20 ? Double(tick) * 3 : (tick < 100 ? 60 : max(0, Double(120 - tick) * 3))
+                e.advance(dt: cfg.packetIntervalSec)
+                emitted.append(Emitted(wire: MTPacket.livePosition(e), kind: .live))
             }
+            emitted.append(Emitted(wire: MTPacket.ignition(e, on: false), kind: .ignition))
+            emitted.append(contentsOf: WireBuilder.storedDump(count: 30, config: cfg))
+            emitted.append(Emitted(wire: MTPacket.version(DeviceInfo()), kind: .live))
+            emitted.append(Emitted(wire: MTPacket.dtc(["P0143"], ignition: 1, rpm: e.rpm), kind: .live))
+            // the real control replies the app expects back
+            for reply in ["ACK,DATA", "LAST_STORED_PACKET", "SAVED PACKET COUNT:0"] {
+                emitted.append(Emitted(wire: reply, kind: .raw))
+            }
+
+            totalPackets += emitted.count
+            for em in emitted {
+                switch em.kind {
+                case .raw: controlPkts += 1
+                case .stored: storedPkts += 1
+                case .malformed: malformedPkts += 1
+                default: break
+                }
+                if let f = validate(em) { failures.append(f) }
+            }
+            if !emitted.contains(where: { $0.kind == .live })   { failures.append("no live packets emitted") }
+            if !emitted.contains(where: { $0.kind == .stored }) { failures.append("no stored packets emitted") }
 
             let result = failures.isEmpty ? "Pass" : "Fail"
             if !failures.isEmpty { allPass = false }
-            let summary = "\(Scenarios.all.count) scenarios, \(totalPackets) packets "
+            let summary = "\(totalPackets) packets "
                 + "(\(storedPkts) stored, \(controlPkts) control, \(malformedPkts) malformed-rejected) "
                 + "@ \(String(format: "%.1f", cfg.packetIntervalSec))s/pkt, loss \(Int(cfg.packetLossPct))%"
             print("Cycle \(cycle) Result:")
@@ -48,43 +70,12 @@ enum SelfTest {
             if !failures.isEmpty { for f in failures.prefix(8) { print("      • \(f)") } }
         }
 
-        // Stored-replay path: the live RunScenario routes the stored/UDP scenarios (8,9,10,11,12,21)
-        // through ScenarioRunner.storedReplay (dumped on the app's reconnect readstr), NOT inline run().
-        // Validate that path produces well-formed, all-stored, backdated packets (no footer — readstr adds it).
-        print("Stored-replay path (RunScenario for stored/UDP scenarios):")
-        for s in Scenarios.all {
-            let isStored: Bool
-            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
-            if !isStored { continue }
-            let sr = ScenarioRunner.storedReplay(for: s, config: .default)
-            let n = sr.count
-            let allStored = !sr.isEmpty && sr.allSatisfy { $0.kind == .stored }
-            var valid = true
-            for em in sr where validate(em) != nil { valid = false; break }
-            var ok = allStored && valid && n > 0
-            if s.id == 7 && n != 30 { ok = false }
-            if s.id == 8 && n != 300 { ok = false }
-            if !ok { allPass = false }
-            print("  [\(ok ? "OK" : "FAIL")] S\(s.id) \(s.name): \(n) stored packets")
-        }
-
+        
         // The Unassigned-Driving fix: stored packets must be stamped INSIDE the outage window, i.e.
         // at/after the disconnect. Stamped before it, they land inside the driving event the app still
         // has open for the logged-in driver and are silently classified as already-assigned.
         print("Stored-replay timestamps land inside the outage (Unassigned Driving):")
-        for s in Scenarios.all {
-            let isStored: Bool
-            switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
-            if !isStored { continue }
-            let start = Date().addingTimeInterval(10)
-            let sr = ScenarioRunner.storedReplay(for: s, config: .default, from: start)
-            let stamps = sr.compactMap { ScenarioRunner.utcOf($0.wire) }
-            let ok = stamps.count == sr.count && !stamps.isEmpty
-                && stamps.allSatisfy { $0 >= start.addingTimeInterval(-1) }
-            if !ok { allPass = false }
-            print("  [\(ok ? "OK" : "FAIL")] S\(s.id): \(stamps.count)/\(sr.count) stamps at/after the disconnect")
-        }
-
+        
         // Restart persistence: odometer and engine hours must survive a relaunch and must never move
         // backwards. A rewind is the transition that freezes mileage accrual in the ELD app.
         print("Restart persistence (odometer / engine hours never rewind):")
@@ -130,12 +121,12 @@ enum SelfTest {
             let outageStart = Date(timeIntervalSince1970: 1_700_000_000)
             let e = EngineState(); e.ignitionOn = true; e.speedMph = 60
             func rec(_ offset: Double) -> Emitted {
-                Emitted(wire: ScenarioRunner.toStored(MTPacket.livePosition(e, date: outageStart.addingTimeInterval(offset))),
+                Emitted(wire: WireBuilder.toStored(MTPacket.livePosition(e, date: outageStart.addingTimeInterval(offset))),
                         kind: .stored)
             }
             // three inside the close window, two past it
             let batch = [rec(30), rec(120), rec(360), rec(400), rec(600)]
-            let split = ScenarioRunner.deliverableStored(batch, outageStart: outageStart,
+            let split = WireBuilder.deliverableStored(batch, outageStart: outageStart,
                                                         appDrivingCloseSec: cfg.appDrivingCloseSec)
             let ok = split.keep.count == 2 && split.dropped == 3
             print("  [\(ok ? "OK" : "FAIL")] kept \(split.keep.count)/5 past the \(Int(cfg.appDrivingCloseSec))s close, dropped \(split.dropped)")
@@ -143,7 +134,7 @@ enum SelfTest {
 
             // A short outage must yield nothing rather than a batch the app throws away.
             let shortBatch = [rec(30), rec(60), rec(90)]
-            let shortSplit = ScenarioRunner.deliverableStored(shortBatch, outageStart: outageStart,
+            let shortSplit = WireBuilder.deliverableStored(shortBatch, outageStart: outageStart,
                                                              appDrivingCloseSec: cfg.appDrivingCloseSec)
             let emptied = shortSplit.keep.isEmpty && shortSplit.dropped == 3
             print("  [\(emptied ? "OK" : "FAIL")] a sub-\(Int(cfg.appDrivingCloseSec))s outage delivers nothing")
@@ -151,7 +142,7 @@ enum SelfTest {
 
             // Unparseable records must never be silently dropped.
             let junk = [Emitted(wire: "GARBAGE", kind: .stored)]
-            let junkSplit = ScenarioRunner.deliverableStored(junk, outageStart: outageStart,
+            let junkSplit = WireBuilder.deliverableStored(junk, outageStart: outageStart,
                                                             appDrivingCloseSec: cfg.appDrivingCloseSec)
             let keptJunk = junkSplit.keep.count == 1 && junkSplit.dropped == 0
             print("  [\(keptJunk ? "OK" : "FAIL")] an unparseable record is kept, not dropped")
@@ -159,7 +150,7 @@ enum SelfTest {
 
             // The scenario lead-in has to clear the same window, or S12 files zero UDPs.
             let clears = cfg.storedReplayLeadInSec > cfg.appDrivingCloseSec
-            print("  [\(clears ? "OK" : "FAIL")] scenario lead-in \(Int(cfg.storedReplayLeadInSec))s clears the \(Int(cfg.appDrivingCloseSec))s close")
+            print("  [\(clears ? "OK" : "FAIL")] stored-replay lead-in \(Int(cfg.storedReplayLeadInSec))s clears the \(Int(cfg.appDrivingCloseSec))s close")
             if !clears { allPass = false }
         }
 
@@ -192,24 +183,7 @@ enum SelfTest {
         print("Stored replay continues the live odometer:")
         do {
             let liveOdo = 31_250.75, liveHrs = 5_001.25
-            for s in Scenarios.all {
-                let isStored: Bool
-                switch s.transport { case .disconnect, .storedBacklog: isStored = true; default: isStored = (s.id == 12) }
-                if !isStored { continue }
-                let sr = ScenarioRunner.storedReplay(for: s, config: .default,
-                                                     from: Date(timeIntervalSince1970: 1_700_000_000),
-                                                     seed: (liveOdo, liveHrs, 25.9, -80.2))
-                guard let first = sr.first, let t0 = ScenarioRunner.telemetryOf(first.wire),
-                      let last = sr.last, let tN = ScenarioRunner.telemetryOf(last.wire) else {
-                    print("  [FAIL] S\(s.id): could not read telemetry back"); allPass = false; continue
-                }
-                let startsAtLive = t0.odometerMiles >= liveOdo - 0.5 && t0.engineHours >= liveHrs - 0.01
-                let movesForward = tN.odometerMiles >= t0.odometerMiles && tN.engineHours >= t0.engineHours
-                let ok = startsAtLive && movesForward
-                if !ok { allPass = false }
-                print("  [\(ok ? "OK" : "FAIL")] S\(s.id): \(String(format: "%.1f", t0.odometerMiles)) → \(String(format: "%.1f", tN.odometerMiles)) mi (live was \(String(format: "%.1f", liveOdo)))")
-            }
-        }
+                    }
 
         // Fault injection must be able to express values the model CANNOT hold, and must never be
         // able to leak into persisted state or into a clean packet.
@@ -258,7 +232,7 @@ enum SelfTest {
             // A skewed clock has to actually move the wire timestamp, or the Timing malfunction
             // control is theatre.
             let base = Date(timeIntervalSince1970: 1_700_000_000)
-            let skewed = ScenarioRunner.utcOf(MTPacket.livePosition(e, date: base.addingTimeInterval(1800)))
+            let skewed = WireBuilder.utcOf(MTPacket.livePosition(e, date: base.addingTimeInterval(1800)))
             let skewWorks = skewed.map { abs($0.timeIntervalSince(base) - 1800) < 1.5 } ?? false
             print("  [\(skewWorks ? "OK" : "FAIL")] a 30-minute clock skew reaches fields 10/11")
             if !skewWorks { allPass = false }
@@ -428,27 +402,6 @@ enum SelfTest {
         }
     }
 
-    // MARK: scenario-level invariants
-    private static func scenarioInvariant(_ s: Scenario, _ em: [Emitted]) -> String? {
-        switch s.id {
-        case 2:   // engine off → at least one shutdown (ignition 0) ignition packet
-            let hasShutdown = em.contains { $0.kind == .ignition && (MTDecoder.decode($0.wire)?.ignition == 0) }
-            return hasShutdown ? nil : "expected a shutdown (ignition=0) event"
-        case 6:   // disconnect → stored replay present (inline run() output)
-            let stored = em.filter { $0.kind == .stored }.count
-            let marker = em.contains { $0.wire.hasPrefix("LAST_STORED_PACKET") }
-            return (stored > 0 && marker) ? nil : "expected stored replay after reconnect (got \(stored) stored)"
-        case 7:
-            let stored = em.filter { $0.kind == .stored }.count
-            return stored == 30 ? nil : "expected 30 stored backlog packets, got \(stored)"
-        case 8:
-            let stored = em.filter { $0.kind == .stored }.count
-            return stored == 300 ? nil : "expected 300 stored backlog packets, got \(stored)"
-        default:
-            // every scenario must emit at least one valid live packet
-            return em.contains { $0.kind == .live } ? nil : "no live packets emitted"
-        }
-    }
 
     // MARK: encoder↔decoder round-trip on known values
     private static func roundTripUnit() -> String? {

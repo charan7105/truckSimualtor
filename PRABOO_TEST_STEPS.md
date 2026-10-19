@@ -127,22 +127,19 @@ stationary proves nothing.
 
 ---
 
-## Do you still need the Scenarios panel?
+## The Scenarios panel is gone
 
-For most of this, no. Engine on/off, idle, driving, stopping, duplicate and out-of-order packets are
-all dashboard controls — the scenario just presses them for you. Offline recording now happens
-automatically whenever the phone is disconnected, which covers the stored-packet cases too.
+All twelve scenarios were reachable from the dashboard. Engine on/off, idle, driving and stopping are
+buttons; duplicate and out-of-order packets are RAW EFFECTS sliders; stored backlogs are DUMP STORED
+with the Count slider; a disconnect mid-drive is DROP, and the offline recorder captures the gap by
+itself. The malformed packet is now a control in BAD DATA.
 
-Scenarios still earn their place for one thing: **packets that do not match what the simulator is
-currently doing** — a drive that supposedly happened hours ago, with timestamps you choose. That is
-what the stored-replay scenarios fabricate, and the dashboard cannot.
+Even Unassigned Driving — the last one with real logic — saved no time: its scenario sat through a
+7.5-minute blackout, the same wait as simply driving offline and reconnecting, which the recorder
+already handles including the 370s withholding window.
 
-The one capability that used to need a scenario — a deliberately malformed packet — is now a button
-in BAD DATA.
-
-The panel is down from twelve scenarios to four: **BLE disconnect during drive**, **Stored packets
-later**, **Large stored backlog**, and **Unassigned Driving**. The eight that were deleted were each
-a dashboard control with extra steps.
+Keeping a second code path that did the same job is how the Unassigned Driving timing shipped broken
+for weeks while its own self-test stayed green.
 
 ---
 

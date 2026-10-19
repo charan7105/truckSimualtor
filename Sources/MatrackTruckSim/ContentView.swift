@@ -10,8 +10,7 @@ struct ContentView: View {
     // screens (16:9 / ultrawide) get slim, balanced side margins rather than stretched panels.
     private let designSize = CGSize(width: 1800, height: 1120)
     @State private var showDTC = false
-    @State private var showFaults = false      // diagnostics live behind a footer menu (low priority right now)
-    @State private var showScenario = false // scenarios are a testing tool → tucked behind a footer button, like DTC
+    @State private var showFaults = false      // fault injection lives behind a footer button, like DTC
     @State private var linkCopied = false   // brief ✓ feedback after tapping the FUEL LINK pill to copy the address
     @ObservedObject private var bridge = SimBridge.shared   // LAN link the Fuel App follows
 
@@ -69,19 +68,6 @@ struct ContentView: View {
             if sim.phase != .live {
                 IgnitionView().transition(.opacity).zIndex(30)
             }
-            if let g = sim.guidedScenario {
-                ZStack {
-                    Color.black.opacity(0.58).ignoresSafeArea()
-                        .onTapGesture { sim.cancelGuided() }       // tap the dimmed backdrop to dismiss
-                    GuidedStepView(scenario: g, step: sim.guidedStep,
-                                   onAdvance: { sim.advanceGuided() },
-                                   onCancel: { sim.cancelGuided() })
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
-                        .shadow(color: .black.opacity(0.6), radius: 44, y: 22)
-                }
-                .zIndex(60)
-            }
             if sim.showLowFuel {
                 ZStack {
                     Color.black.opacity(0.62).ignoresSafeArea()
@@ -92,7 +78,6 @@ struct ContentView: View {
                 .zIndex(65)
             }
         }
-        .onChange(of: sim.guidedScenario != nil) { open in if open { showScenario = false; showDTC = false } }
     }
 
     // Low-fuel prompt: the drain is the hook that pushes the tester into the Matrack Fuel App, then lets
@@ -266,17 +251,6 @@ struct ContentView: View {
                 .help("Tap to copy the address, then paste it into the phone's Fuel App → Link to sim. Phone + this computer must share WiFi (or the phone's hotspot).")
             }
             Spacer()
-            Button { showScenario.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "flag.checkered")
-                    Text(sim.runningScenario == nil ? "SCENARIO" : "SCENARIO ▸ RUNNING").font(.system(size: 11, weight: .bold, design: .rounded))
-                }
-                .foregroundStyle(sim.runningScenario == nil ? Theme.dim : Theme.amber)
-            }
-            .buttonStyle(.plain).hoverGlow()
-            .popover(isPresented: $showScenario, arrowEdge: .bottom) {
-                ScenarioPanel().frame(width: 380).padding(14).background(Theme.bg1)
-            }
             Button { showDTC.toggle() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "wrench.and.screwdriver.fill")

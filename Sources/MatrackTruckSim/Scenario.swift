@@ -7,129 +7,22 @@ struct Emitted {
     let kind: Kind
 }
 
-/// A timed driving phase.
-struct Phase {
-    var seconds: Double
-    var targetSpeedMph: Double
-    var ignition: Bool
-}
 
 /// Transport behavior overlaid on the packet stream (deterministic for repeatable tests).
-enum Transport: Equatable {
-    case clean
-    case packetLoss(everyN: Int)
-    case duplicate(everyN: Int)
-    case outOfOrder(everyN: Int)
-    case disconnect(afterSec: Double, gapSec: Double)   // buffer during outage → replay as stored on reconnect (interval-independent)
-    case storedBacklog(count: Int)                // pre-existing stored packets delivered up front
-}
 
-struct Scenario {
-    let id: Int
-    let name: String
-    let expect: String
-    var phases: [Phase]
-    var transport: Transport = .clean
-    var appSteps: [String] = []          // what to do in the ELD app to observe this scenario
-}
 
 /// Deterministically simulates a scenario tick-by-tick and returns the exact wire sequence.
 /// Shares the real packet builders (MTPacket) so output is byte-identical to the live sim.
-enum ScenarioRunner {
-    static func run(_ s: Scenario, config: SimConfig) -> [Emitted] {
-        let e = EngineState()
-        e.odometerMiles = config.startOdometerMiles
-        e.engineHours = config.startEngineHours
-        e.fuelLevelPct = config.startFuelPct
-        e.idleRpmConfig = config.idleRpm
-        e.rpmPerMphConfig = config.rpmPerMph
-        e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
-        e.ignitionOn = false
-
-        var out: [Emitted] = []
-        var lastIgn: Bool? = nil
-        var tick = 0
-        var held: String? = nil
-        var buffer: [String] = []          // packets captured while "disconnected"
-        let dt = config.packetIntervalSec
-
-        // Disconnect window resolved to ticks from time (interval-independent).
-        var dcAt = -1, dcGap = 0
-        if case .disconnect(let aSec, let gSec) = s.transport {
-            dcAt = Int((aSec / dt).rounded()); dcGap = max(1, Int((gSec / dt).rounded()))
-        }
-        var storedFlushed = false
-        func flushBuffer() {
-            guard !buffer.isEmpty else { return }
-            for p in buffer { out.append(Emitted(wire: toStored(p), kind: .stored)) }
-            out.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
-            out.append(Emitted(wire: "SAVED PACKET COUNT:\(buffer.count)", kind: .raw))
-            buffer.removeAll(); storedFlushed = true
-        }
-
-        // pre-existing stored backlog delivered first
-        if case .storedBacklog(let count) = s.transport {
-            for i in 0..<count {
-                e.advance(dt: dt)
-                let stored = toStored(MTPacket.livePosition(e, date: backdated(i, count, dt)))
-                out.append(Emitted(wire: stored, kind: .stored))
-            }
-            out.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
-            out.append(Emitted(wire: "SAVED PACKET COUNT:\(count)", kind: .raw))
-        }
-
-        for phase in s.phases {
-            let ticks = max(1, Int((phase.seconds / dt).rounded()))
-            for _ in 0..<ticks {
-                e.ignitionOn = phase.ignition
-                rampSpeed(e, toward: phase.targetSpeedMph, config: config)
-                e.advance(dt: dt * config.timeMultiplier)
-
-                // disconnect window?
-                let disconnected = (dcAt >= 0 && tick >= dcAt && tick < dcAt + dcGap)
-
-                // ignition change → LI event
-                if lastIgn != e.ignitionOn {
-                    let li = MTPacket.ignition(e, on: e.ignitionOn)
-                    routeEmit(li, kind: .ignition, disconnected: disconnected, buffer: &buffer, out: &out, held: &held, tick: tick, transport: s.transport)
-                    lastIgn = e.ignitionOn
-                }
-
-                let lp = MTPacket.livePosition(e)
-                routeEmit(lp, kind: .live, disconnected: disconnected, buffer: &buffer, out: &out, held: &held, tick: tick, transport: s.transport)
-
-                // reconnect boundary → flush buffered as stored
-                if dcAt >= 0, tick == dcAt + dcGap - 1 { flushBuffer() }
-                tick += 1
-            }
-        }
-        if let h = held { out.append(Emitted(wire: h, kind: .live)) }   // flush any held out-of-order packet
-        if dcAt >= 0 && !storedFlushed { flushBuffer() }                 // outage outlasted the run → replay at end
-        return out
-    }
+/// Wire-packet helpers shared by the offline recorder, the stored dump and the self-test.
+///
+/// This used to also run a catalogue of twelve scenarios. Every one of them turned out to be a
+/// dashboard control with extra steps, and keeping a second code path that did the same job is how
+/// the Unassigned Driving timing shipped broken for weeks while its own self-test stayed green.
+/// The catalogue is gone; these builders remain because the live path genuinely needs them.
+enum WireBuilder {
 
     // MARK: helpers
-    private static func rampSpeed(_ e: EngineState, toward target: Double, config: SimConfig) {
-        if e.speedMph < target { e.speedMph = min(target, e.speedMph + config.accelMphPerSec * config.packetIntervalSec) }
-        else if e.speedMph > target { e.speedMph = max(target, e.speedMph - config.decelMphPerSec * config.packetIntervalSec) }
-    }
 
-    private static func routeEmit(_ wire: String, kind: Emitted.Kind, disconnected: Bool,
-                                  buffer: inout [String], out: inout [Emitted], held: inout String?,
-                                  tick: Int, transport: Transport) {
-        if disconnected { buffer.append(wire); return }
-        switch transport {
-        case .packetLoss(let n) where n > 0 && tick % n == 0:
-            return  // dropped in flight
-        case .duplicate(let n) where n > 0 && tick % n == 0:
-            out.append(Emitted(wire: wire, kind: kind)); out.append(Emitted(wire: wire, kind: kind))
-        case .outOfOrder(let n) where n > 0 && tick % n == 0 && held == nil:
-            held = wire  // hold; flushed after the next emit
-        default:
-            out.append(Emitted(wire: wire, kind: kind))
-            if let h = held { held = nil; out.append(Emitted(wire: h, kind: kind)) }
-        }
-    }
 
     static func toStored(_ live: String) -> String {
         guard let first = live.first, first == "L" else { return live }
@@ -222,90 +115,7 @@ enum ScenarioRunner {
     /// Defaults to the legacy pre-disconnect backdating so the headless self-test keeps its shape.
     /// Recorded drives are FLASH records, so they use `storedRecordIntervalSec`, not the 1s live
     /// cadence. At 1s a 5-minute scenario was 305 packets that then took 5 minutes to dump back.
-    /// `seed` carries the LIVE engine's odometer/hours/position. Without it the replay started from
-    /// `config.startOdometerMiles` while the live engine is now persisted across launches, so the dump
-    /// could sit hundreds of miles BELOW the live stream — the app writes milesinception from the stored
-    /// packet but milesinceptionlatest from the live status, and then re-seeds odoPowerup from the newest
-    /// PowerUpShutdown row, which puts milespowerup below milesinception in the FMCSA output file.
-    static func storedReplay(for s: Scenario, config: SimConfig, from start: Date? = nil,
-                             seed: (odometerMiles: Double, engineHours: Double, latitude: Double, longitude: Double)? = nil) -> [Emitted] {
-        let e = EngineState()
-        e.odometerMiles = seed?.odometerMiles ?? config.startOdometerMiles
-        e.engineHours = seed?.engineHours ?? config.startEngineHours
-        if let seed = seed { e.latitude = seed.latitude; e.longitude = seed.longitude }
-        e.fuelLevelPct = config.startFuelPct
-        e.idleRpmConfig = config.idleRpm
-        e.rpmPerMphConfig = config.rpmPerMph
-        e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
-        let dt = max(1, config.storedRecordIntervalSec)
-        var out: [Emitted] = []
-        // pre-existing backlog (scenarios 11/12): N backdated stored positions
-        if case .storedBacklog(let count) = s.transport {
-            e.ignitionOn = true
-            for i in 0..<max(0, count) {
-                e.advance(dt: dt)
-                let at = start.map { recorded(i, dt, from: $0) } ?? backdated(i, count, dt)
-                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: at)), kind: .stored))
-            }
-            return out
-        }
-        // drive scenarios (8/9/10/21): replay the phases as backdated stored packets (speed preserved →
-        // 60-mph phase yields driving stored packets → driving UDP for scenario 21)
-        var total = 0
-        for p in s.phases { total += max(1, Int((p.seconds / dt).rounded())) }
-        var idx = 0
-        for phase in s.phases {
-            let ticks = max(1, Int((phase.seconds / dt).rounded()))
-            for _ in 0..<ticks {
-                e.ignitionOn = phase.ignition
-                rampSpeed(e, toward: phase.targetSpeedMph, config: config)
-                e.advance(dt: dt)
-                let at = start.map { recorded(idx, dt, from: $0) } ?? backdated(idx, total, dt)
-                out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: at)), kind: .stored))
-                idx += 1
-            }
-        }
-        return out
-    }
 }
 
 // MARK: - The 20 required scenarios
 
-enum Scenarios {
-    /// The scenarios that still earn their place.
-    ///
-    /// Engine on/off, idle, driving, stopping, duplicate and out-of-order packets used to live here
-    /// and were deleted: every one of them is a dashboard control now, so the scenario was just
-    /// pressing a button for you — and a second code path doing the same job is how scenario 12
-    /// shipped broken for weeks while looking green. The malformed-packet case moved to the BAD DATA
-    /// panel, which is where a one-shot fault belongs.
-    ///
-    /// What is left is the one thing the dashboard genuinely cannot do: fabricate packets that do
-    /// NOT match what the simulator is currently doing — a drive that supposedly happened hours ago,
-    /// with timestamps we choose. IDs are deliberately NOT renumbered; test notes reference them.
-    static let all: [Scenario] = [
-        Scenario(id: 6, name: "BLE disconnect during drive", expect: "Buffer then stored replay",
-                 phases: [Phase(seconds: 60, targetSpeedMph: 60, ignition: true)],
-                 transport: .disconnect(afterSec: 15, gapSec: 20),
-                 appSteps: ["Tap RUN", "Link drops mid-drive, then reconnects", "App replays buffered 'stored' packets — no miles lost"]),
-        Scenario(id: 7, name: "Stored packets later", expect: "Stored backlog processed",
-                 phases: [Phase(seconds: 20, targetSpeedMph: 50, ignition: true)],
-                 transport: .storedBacklog(count: 30),
-                 appSteps: ["Tap RUN", "App receives a stored backlog up front and processes it"]),
-        Scenario(id: 8, name: "Large stored backlog", expect: "Big stored batch, no corruption",
-                 phases: [Phase(seconds: 10, targetSpeedMph: 50, ignition: true)],
-                 transport: .storedBacklog(count: 300),
-                 appSteps: ["Tap RUN", "300 stored packets delivered → app stays stable, no corruption"]),
-        Scenario(id: 12, name: "Unassigned Driving (~7 min)",
-                 expect: "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
-                 phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),
-                          Phase(seconds: 300, targetSpeedMph: 60, ignition: true)],
-                 appSteps: [
-                    "Stay logged IN and leave Bluetooth on — no log-out needed. Tap Run it.",
-                    "The link drops and the truck 'drives' offline. This takes ~7 minutes of real time: the app needs 5 minutes of no movement plus a grace period to close your Driving event before the recorded drive can belong to nobody. It cannot be sped up.",
-                    "Wait for the app to reconnect to ELD-MA on its own — the drive is sent automatically.",
-                    "Open Unidentified / Unassigned Driving and claim or reject the period.",
-                    "If nothing appears: the app only files this when the drive falls outside YOUR duty windows. Set yourself Off Duty before tapping Run — a Driving event that is still the newest event can read as open-ended and absorb the whole recording.",
-                 ]),
-    ]
-}

@@ -713,7 +713,7 @@ namespace MatrackSim.App
         // MARK: - Manual controls
         public void SetEngine(bool on)
         {
-            if (runningScenario != null) StopScenario();
+            if (runningDump != null) StopDump();
             AutoDrive = false; DrivingRoute = false; DayDriving = false;
             engine.IgnitionOn = on;
             if (!on) engine.SpeedMph = 0;
@@ -722,7 +722,7 @@ namespace MatrackSim.App
 
         public void SetSpeed(double mph)
         {
-            if (runningScenario != null) StopScenario();
+            if (runningDump != null) StopDump();
             DayDriving = false;                          // a manual speed set ends DRIVE MY DAY automation
             if (DrivingRoute)
             {
@@ -742,7 +742,7 @@ namespace MatrackSim.App
         /// </summary>
         public void SetAutoDrive(bool on)
         {
-            if (runningScenario != null) StopScenario();
+            if (runningDump != null) StopDump();
             DayDriving = false;                          // AUTO cruise takes over from DRIVE MY DAY automation
             AutoDrive = on;
             if (on)
@@ -1015,7 +1015,7 @@ namespace MatrackSim.App
         private void BeginDrive()
         {
             if (!Route.HasRoute) { Info("load a route first"); return; }
-            if (runningScenario != null) StopScenario();
+            if (runningDump != null) StopDump();
             if (Route.ProgressFraction >= 0.999) Route.Reset();   // re-drive a finished route from the start
             DrivingRoute = true;
             engine.IgnitionOn = true;
@@ -1123,72 +1123,20 @@ namespace MatrackSim.App
         private List<Emitted> undeliveredStored = new List<Emitted>(); // handed to the dump, not yet fully sent
         private bool flashFullWarned = false;
 
-        private string _runningScenario;
-        public string RunningScenario { get => _runningScenario; set => Set(ref _runningScenario, value); }
-        private string runningScenario { get => _runningScenario; set => RunningScenario = value; }
+        private string _runningDump;
+        public string RunningDump { get => _runningDump; set => Set(ref _runningDump, value); }
+        private string runningDump { get => _runningDump; set => RunningDump = value; }
 
-        public void RunScenario(Scenario s)
-        {
-            AutoDrive = false; DrivingRoute = false; DayDriving = false;   // step() pauses normal emission while a scenario runs
-            runningScenario = s.Name;
-            // Stored-replay / Unassigned-Driving scenarios must arrive as a real flash dump on RECONNECT:
-            // both apps run stored replay (and UDP classification) ONLY right after the readstr they send on
-            // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
-            if (IsStoredReplay(s))
-            {
-                // The drive is recorded INSIDE the outage, and the outage outlasts the app's
-                // Driving→On-Duty close, so the app's open driving event ends before the recording
-                // starts. Both halves are required — see SimConfig.StoredReplayMinOutageSec.
-                double dtS = Math.Max(0.05, Config.PacketIntervalSec);
-                var start = DateTime.UtcNow.AddSeconds(Config.StoredReplayLeadInSec);
-                // Seed from the LIVE engine so the recorded drive continues from where the truck actually is.
-                var stored = ScenarioRunner.StoredReplay(s, Config, start,
-                    engine.OdometerMiles, engine.EngineHours, engine.Latitude, engine.Longitude);
-                // The truck really did drive during the outage: advance the live engine to the end of the
-                // recording, so the first live packet after the dump continues it instead of rewinding.
-                if (stored.Count > 0)
-                {
-                    var t = ScenarioRunner.TelemetryOf(stored[stored.Count - 1].Wire);
-                    if (t.HasValue)
-                    {
-                        engine.OdometerMiles = Math.Max(engine.OdometerMiles, t.Value.OdometerMiles);
-                        engine.EngineHours = Math.Max(engine.EngineHours, t.Value.EngineHours);
-                        engine.Latitude = t.Value.Latitude; engine.Longitude = t.Value.Longitude;
-                        engine.Persisted.Save();
-                    }
-                }
-                double span = Config.StoredReplayLeadInSec + stored.Count * dtS;
-                double outage = Math.Max(Config.StoredReplayMinOutageSec, span + 20);
-                Info($"▶ scenario '{s.Name}' — recording {stored.Count} stored packets during a {(int)outage}s offline window; the app must stay logged in and reconnect on its own");
-                ReplayStored(stored, dtS, outage);
-                return;
-            }
-            scenarioQueue = ScenarioRunner.Run(s, Config);
-            Info($"▶ scenario '{s.Name}' — {scenarioQueue.Count} packets (effects baked in)");
-            scenarioTimer?.Dispose();
-            long period = (long)(Math.Max(0.05, Config.PacketIntervalSec) * 1000);
-            scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
-        }
+        
 
         // Scenarios whose expect depends on the app processing STORED packets (replay or Unassigned Driving):
         // they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
-        public static bool IsStoredReplay(Scenario s)
-        {
-            if (s.Id == 12) return true;                                  // Unassigned Driving (UDP)
-            return s.Transport.TKind == Transport.TransportKind.Disconnect
-                || s.Transport.TKind == Transport.TransportKind.StoredBacklog;
-        }
+        
 
         // Stash backdated stored packets and force a REAL BLE disconnect. When the app reconnects and sends
         // readstr, the handler dumps them + LAST_STORED_PACKET + the true count — the only sequence that makes
         // both apps run stored replay / UDP classification.
-        public void ReplayStored(List<Emitted> stored, double cadenceSec, double outageSec = 8)
-        {
-            if (stored == null || stored.Count == 0) return;
-            pendingStored = stored;
-            pendingStoredCadence = cadenceSec;
-            ForceDisconnect(outageSec);
-        }
+        
 
         /// <summary>
         /// Split the flash backlog into what is worth sending and what the app would silently discard.
@@ -1200,7 +1148,7 @@ namespace MatrackSim.App
         {
             if (pendingStored.Count == 0) return (new List<Emitted>(), 0);
             if (!outageStartedAt.HasValue) return (pendingStored, 0);   // scenario-armed batch: already anchored
-            var split = ScenarioRunner.DeliverableStored(pendingStored, outageStartedAt.Value, Config.AppDrivingCloseSec);
+            var split = WireBuilder.DeliverableStored(pendingStored, outageStartedAt.Value, Config.AppDrivingCloseSec);
             if (split.Keep.Count == 0)
             {
                 int gap = (int)(DateTime.UtcNow - outageStartedAt.Value).TotalSeconds;
@@ -1213,10 +1161,10 @@ namespace MatrackSim.App
             return split;
         }
 
-        public void StopScenario()
+        public void StopDump()
         {
             scenarioTimer?.Dispose(); scenarioTimer = null;
-            scenarioQueue.Clear(); runningScenario = null; Info("scenario stopped");
+            scenarioQueue.Clear(); runningDump = null; Info("scenario stopped");
         }
 
         /// <summary>
@@ -1227,8 +1175,8 @@ namespace MatrackSim.App
         public void DumpStoredPackets(int count, double cadenceSec, bool stopDrive = true)
         {
             if (stopDrive) { AutoDrive = false; DrivingRoute = false; DayDriving = false; }   // app-issued readstr keeps the drive (resumes when queue drains)
-            scenarioQueue = ScenarioRunner.StoredDump(count, Config);
-            runningScenario = $"Stored dump ({count} @ {(int)(cadenceSec * 1000)}ms)";
+            scenarioQueue = WireBuilder.StoredDump(count, Config);
+            runningDump = $"Stored dump ({count} @ {(int)(cadenceSec * 1000)}ms)";
             Info($"▶ stored dump — {count} packets @ {(int)(cadenceSec * 1000)}ms cadence (≈500ms repros the disconnect)");
             scenarioTimer?.Dispose();
             long period = (long)(Math.Max(0.05, cadenceSec) * 1000);
@@ -1241,7 +1189,7 @@ namespace MatrackSim.App
             {
                 if (scenarioQueue.Count == 0)
                 {
-                    scenarioTimer?.Dispose(); scenarioTimer = null; runningScenario = null;
+                    scenarioTimer?.Dispose(); scenarioTimer = null; runningDump = null;
                     // The dump finished, so the flash records really did go out — only now is it safe
                     // to forget them. A mid-dump drop leaves them in pendingStored instead.
                     if (undeliveredStored.Count > 0)
@@ -1483,7 +1431,7 @@ namespace MatrackSim.App
         /// </summary>
         private void Step()
         {
-            if (runningScenario != null) return;        // scenario playback owns the stream
+            if (runningDump != null) return;        // scenario playback owns the stream
             double dt = uiTickSec;
             if (AutoSignal && !LinkDown)                 // AUTO SIGNAL: sweep link quality like real driving
             {
@@ -1567,7 +1515,7 @@ namespace MatrackSim.App
                     sinceLastStored = 0;
                     if (pendingStored.Count < Config.StoredFlashCapacity)
                     {
-                        pendingStored.Add(new Emitted(ScenarioRunner.ToStored(MTPacket.LivePosition(engine)), Emitted.Kind.Stored));
+                        pendingStored.Add(new Emitted(WireBuilder.ToStored(MTPacket.LivePosition(engine)), Emitted.Kind.Stored));
                         // Tell the operator it is recording — otherwise an offline drive looks like the sim
                         // is doing nothing, which is exactly how the missing recorder went unnoticed.
                         if (pendingStored.Count % 20 == 0)
@@ -1658,7 +1606,7 @@ namespace MatrackSim.App
                     flashFullWarned = false;
                     pendingStoredCadence = Math.Max(1.0, pendingStoredCadence);   // never dump faster than the app tolerates
                     scenarioQueue = q;
-                    runningScenario = $"Stored replay ({n})";
+                    runningDump = $"Stored replay ({n})";
                     scenarioTimer?.Dispose();
                     long period = (long)(pendingStoredCadence * 1000);
                     scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
@@ -1940,12 +1888,12 @@ namespace MatrackSim.App
                     pendingStored = restored;
                     undeliveredStored = new List<Emitted>();
                     lock (scenarioGate) { scenarioQueue.Clear(); }
-                    scenarioTimer?.Dispose(); scenarioTimer = null; runningScenario = null;
+                    scenarioTimer?.Dispose(); scenarioTimer = null; runningDump = null;
                     Info($"↩︎ link dropped mid-dump — {pendingStored.Count} stored packets kept for the next readstr");
                 }
                 Connected = false; Streaming = false; heldPacket = null; pending.Clear();   // drop stale out-of-order hold + unsent chunks
                 awaitingAck = false; awaitingAckSince = null;                               // F1: clear ack-gate so reconnect streams cleanly
-                if (runningScenario != null) StopScenario();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
+                if (runningDump != null) StopDump();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
                 dropTimer?.Dispose(); dropTimer = null; LinkDown = false; DropEndsAt = null;   // out-of-range ends when the link actually drops → reconnect resumes streaming
                 Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
                 Info("Device disconnected");

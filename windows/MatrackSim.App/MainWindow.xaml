@@ -888,65 +888,6 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <!-- SCENARIO footer button + popup (mirrors Mac: scenarios are a testing tool tucked behind a footer button) -->
-                        <Button x:Name="ScenarioButton2" Content="{Binding ScenarioButtonText}" Style="{StaticResource NeonButton}" Padding="10,5"
-                                Foreground="{Binding ScenarioButtonBrush}" Click="Scenario_Click" Margin="0,0,8,0" />
-                        <Popup x:Name="ScenarioPopup" PlacementTarget="{Binding ElementName=ScenarioButton2}" Placement="Top"
-                               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                            <Border Background="{StaticResource Bg1}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
-                                    CornerRadius="14" Padding="18" Width="380" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <DockPanel Margin="0,0,0,12">
-                                        <TextBlock Text="🎬" FontFamily="Segoe UI Emoji" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                        <TextBlock Text="SCENARIO" Style="{StaticResource Sec}" Foreground="{StaticResource Red}" VerticalAlignment="Center" />
-                                    </DockPanel>
-                                    <ComboBox ItemsSource="{Binding Scenarios}" SelectedItem="{Binding SelectedScenario, Mode=TwoWay}"
-                                              Height="32" Margin="0,0,0,10" FontFamily="{StaticResource Rounded}" />
-                                    <!-- One button like the Mac: filled-red RUN when idle (opens the guided overlay), red-outline STOP while running -->
-                                    <Button x:Name="ScenarioRunButton" Click="ScenarioToggle_Click" Margin="0,0,0,8">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
-                                                <Setter Property="Content" Value="▶ RUN" />
-                                                <Setter Property="Background" Value="{StaticResource Red}" />
-                                                <Setter Property="BorderBrush" Value="{StaticResource Red}" />
-                                                <Setter Property="Foreground" Value="#FF08090B" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ScenarioRunning}" Value="True">
-                                                        <Setter Property="Content" Value="■ STOP" />
-                                                        <Setter Property="Background" Value="Transparent" />
-                                                        <Setter Property="Foreground" Value="{StaticResource Red}" />
-                                                        <Setter Property="BorderBrush" Value="{StaticResource Red}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                    <Button x:Name="StepsButton" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}"
-                                            HorizontalContentAlignment="Stretch" Click="Steps_Click">
-                                        <DockPanel>
-                                            <TextBlock Text="{Binding WhatHowText}" />
-                                            <TextBlock Text="⌃" DockPanel.Dock="Right" HorizontalAlignment="Right" />
-                                        </DockPanel>
-                                    </Button>
-                                    <!-- WHAT & HOW expander (inline; toggled by the button above) -->
-                                    <StackPanel x:Name="StepsExpander" Visibility="Collapsed" Margin="0,10,0,0">
-                                        <TextBlock Text="{Binding SelectedScenarioTitle}" FontSize="13" FontWeight="Black" Foreground="{StaticResource Text}" Margin="0,0,0,8" />
-                                        <TextBlock Text="WHAT IT DOES" Style="{StaticResource Sec}" Margin="0,0,0,3" />
-                                        <TextBlock Text="{Binding SelectedScenarioExpect}" FontSize="12" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,10" />
-                                        <Border Height="1" Background="{StaticResource Stroke}" Margin="0,0,0,10" />
-                                        <TextBlock Text="📋 DO THIS IN THE APP" FontSize="10" FontWeight="Black" Foreground="{StaticResource Amber}" Margin="0,0,0,8" />
-                                        <ItemsControl ItemsSource="{Binding SelectedScenarioSteps}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding}" FontSize="13" Foreground="{StaticResource Text}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding RunningScenario}" FontSize="11" Foreground="{StaticResource Dim}"
-                                               Margin="0,10,0,0" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Border>
-                        </Popup>
 
                         <Button x:Name="DtcButton" Content="{Binding DtcButtonText}" Style="{StaticResource NeonButton}" Padding="10,5"
                                 Foreground="{Binding DtcButtonBrush}" Click="Dtc_Click" Margin="0,0,8,0" />
@@ -1051,11 +992,6 @@
                            HorizontalAlignment="Center" Margin="0,34,0,0"
                            Visibility="{Binding SystemsNominalVisible, Converter={StaticResource BoolVis}}" />
             </StackPanel>
-        </Grid>
-
-        <!-- ================= GUIDED WALKTHROUGH OVERLAY (centered, dim full-window scrim) ================= -->
-        <Grid x:Name="GuidedOverlay" Background="#94000000" Visibility="Collapsed" MouseDown="GuidedBackdrop_MouseDown">
-            <ContentControl x:Name="GuidedHost" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Grid>
 
         <!-- ================= LOW-FUEL OVERLAY (centered, dim full-window scrim) ================= -->
