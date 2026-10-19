@@ -793,6 +793,12 @@ struct FaultPanel: View {
                                         probability: 0.2)
                 }
 
+                faultButton(title: "MALFORMED PACKET",
+                            subtitle: "One packet that is not valid at all.",
+                            look: "Phone: should reject it and carry on. A crash or a stalled stream is the bug.") {
+                    sim.sendMalformedPacket()
+                }
+
                 faultButton(title: "ODOMETER SOURCE → VIRTUAL",
                             subtitle: "The xO packet that tells the app the odometer source changed.",
                             look: "Phone: nothing at all. It parses this into a variable with no readers and posts a notification with no observers.") {

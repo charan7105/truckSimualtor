@@ -160,6 +160,8 @@ namespace MatrackSim.App
 
         private void FaultOdoSource_Click(object sender, RoutedEventArgs e) => Sim.SendOdoSourcePacket(true);
 
+        private void FaultMalformed_Click(object sender, RoutedEventArgs e) => Sim.SendMalformedPacket();
+
         private void VinZeros_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "00000000000000000";
         private void VinLast6_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "292058";
 

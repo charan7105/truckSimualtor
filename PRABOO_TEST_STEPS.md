@@ -127,6 +127,21 @@ stationary proves nothing.
 
 ---
 
+## Do you still need the Scenarios panel?
+
+For most of this, no. Engine on/off, idle, driving, stopping, duplicate and out-of-order packets are
+all dashboard controls — the scenario just presses them for you. Offline recording now happens
+automatically whenever the phone is disconnected, which covers the stored-packet cases too.
+
+Scenarios still earn their place for one thing: **packets that do not match what the simulator is
+currently doing** — a drive that supposedly happened hours ago, with timestamps you choose. That is
+what the stored-replay scenarios fabricate, and the dashboard cannot.
+
+The one capability that used to need a scenario — a deliberately malformed packet — is now a button
+in BAD DATA.
+
+---
+
 ## Three extras that DO alert
 
 Not on the list, found while checking it. These are the ones to use when you need to show the app

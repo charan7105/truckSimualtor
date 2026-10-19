@@ -470,13 +470,45 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <!-- TESTING -->
     <article class="doc" data-id="scn" data-grp="Testing">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h2>Scenarios</h2></div>
-      <p class="lead"><b>21 ready-made situations</b> you can replay with one click — no manual setup.</p>
+      <p class="lead"><b>12 ready-made situations</b> you can replay with one click — no manual setup.</p>
       <img class="partimg" src="assets/parts/scenario.png" alt="The SCENARIO panel: a scenario picker, a RUN button, and WHAT &amp; HOW"/>
       <h3>How to use it</h3>
       <ul class="wl">
         <li><span class="tg">Pick · RUN</span><div>Choose a scenario and press RUN — it replays the exact packet sequence.</div></li>
         <li><span class="tg">WHAT &amp; HOW</span><div>Opens step-by-step notes on what to check <b>in the ELD app</b> for that scenario.</div></li>
       </ul>
+      <h3>Do you need them?</h3>
+      <p>Mostly no. Engine on/off, idle, driving, stopping, duplicate and out-of-order packets are all
+      dashboard controls now — the scenario just presses them for you. Scenarios still earn their place
+      for one thing: <b>packets that do not match what the simulator is currently doing</b>, such as a
+      drive that supposedly happened hours ago with timestamps you choose. That is what the stored-replay
+      scenarios are for.</p>
+    </article>
+
+    <article class="doc" data-id="bad" data-grp="Testing">
+      <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>Bad data (fault injection)</h2></div>
+      <p class="lead">Send deliberately wrong telemetry and watch what the ELD app does about it — or
+      prove that it does nothing.</p>
+      <h3>How to use it</h3>
+      <ul class="wl">
+        <li><span class="tg">BAD DATA</span><div>Bottom bar. Turns red and reads <b>SENDING</b> whenever a fault is armed, so you can see it from the dashboard.</div></li>
+        <li><span class="tg">One at a time</span><div>Two faults at once makes it impossible to attribute what you see on the phone.</div></li>
+        <li><span class="tg">RESET TO CLEAN DATA</span><div>One button puts everything back. Faults never survive a restart either.</div></li>
+      </ul>
+      <h3>Grouped by what the phone actually does</h3>
+      <p>Not by which packet field changes. The grouping comes from reading the ELD app's own source,
+      and it is deliberately honest about the faults the app ignores — so nobody demos a button waiting
+      for an alert that cannot come.</p>
+      <ul class="wl">
+        <li><span class="tg">The phone warns</span><div>Engine sync lost (Diagnostic 2, ~3s) · Clock ahead (red <b>Malfunction(T)</b>, ~20s) · Odometer &amp; hours missing (Diagnostic 3, on the next duty change) · GPS lock lost</div></li>
+        <li><span class="tg">Wrong number, no warning</span><div>Two ECU odometers · Odometer jump · Odometer stuck · Bad time on 1 in 5 packets · Default odometer on 1 in 5 · Power cycle storm</div></li>
+        <li><span class="tg">The phone ignores it</span><div>Bad VIN (all zeros or last 6) · Default date · Odometer source switch · Malformed packet</div></li>
+      </ul>
+      <h3>Why some faults are intermittent</h3>
+      <p>Four controls fire on roughly 1 packet in 5 rather than every packet, because that is how real
+      trackers misbehave. A constant fault is trivially visible and tends to be caught by the first guard
+      it meets; a scattered one is what finds ordering and stale-state bugs. <b>GPS lock lost</b> is also
+      gated on motion — it only fires above 5 mph, because a parked truck legitimately has no fix.</p>
     </article>
 
     <article class="doc" data-id="signal" data-grp="Testing">
@@ -565,8 +597,14 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     </div>
     <div class="bcard">
       <div class="bi"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div>
-      <h3>21 ready scenarios <span class="tg">1-click</span></h3>
+      <h3>12 ready scenarios <span class="tg">1-click</span></h3>
       <p>Replay real situations — signal loss, idle &amp; shutdown, stored backlog, unassigned driving — in one click.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg></div>
+      <h3>Send bad data <span class="tg">on purpose</span></h3>
+      <p>Wrong clock, missing GPS lock, two conflicting ECU odometers, junk VIN, power-cycle storms —
+      grouped by what the phone <b>actually</b> does about each one, including the ones it ignores.</p>
     </div>
     <div class="bcard">
       <div class="bi"><svg viewBox="0 0 24 24"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M12 3v11m0 0l4-4m-4 4l-4-4"/></svg></div>
@@ -577,6 +615,12 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <div class="bi"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8 18c6-1 4-11 8-12"/></svg></div>
       <h3>DRIVE MY DAY</h3>
       <p>One click → a full <b>state-crossing day</b> at 30× with built-in speeding &amp; idle events, for IFTA mileage.</p>
+    </div>
+    <div class="bcard">
+      <div class="bi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></div>
+      <h3>Records while offline</h3>
+      <p>Drive with the phone disconnected and the simulator logs to flash like a real tracker, then
+      hands the whole trip over when the app reconnects.</p>
     </div>
     <div class="bcard">
       <div class="bi"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>

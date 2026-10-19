@@ -534,6 +534,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         mirror()
     }
 
+    /// A single deliberately broken packet. This is the one thing the live path genuinely cannot
+    /// produce on its own — every packet the engine builds is well formed by construction — so it
+    /// lives here rather than needing a scenario to exist for it.
+    func sendMalformedPacket() {
+        sendRaw("ZZ,not,a,valid,packet")
+        info("☠︎ malformed packet sent — the app should reject it and keep running")
+    }
+
     /// Send the odometer-source packet. Included because it is literally what was asked for — and
     /// because sending it PROVES the app does nothing with it.
     func sendOdoSourcePacket(virtual: Bool) {

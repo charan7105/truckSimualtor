@@ -63,6 +63,7 @@ them.
 | **SEND BAD VIN** (ALL ZEROS / LAST 6 ONLY) | Both fail the same check and behave identically. Only Troubleshoot → Run Diagnostic Check shows the VIN row red |
 | **DEFAULT DATE ON 1 IN 5 PACKETS** | Both the MT and PT parsers rewrite the packet date to phone time |
 | **ODOMETER SOURCE → VIRTUAL** | The app parses this packet into a variable with **zero readers** and posts a notification with **zero observers** |
+| **MALFORMED PACKET** | Sends one packet that is not valid at all. The app should reject it and carry on — a crash or a stalled stream is the bug. This is the only fault the live path cannot produce on its own, which is why it lives here rather than needing a scenario |
 
 ---
 

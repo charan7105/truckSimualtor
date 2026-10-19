@@ -551,6 +551,16 @@ namespace MatrackSim.App
             Mirror(); RefreshFaultBindings();
         }
 
+        /// <summary>
+        /// A single deliberately broken packet. The one thing the live path genuinely cannot produce
+        /// on its own — every packet the engine builds is well formed by construction.
+        /// </summary>
+        public void SendMalformedPacket()
+        {
+            SendRaw("ZZ,not,a,valid,packet");
+            Info("☠︎ malformed packet sent — the app should reject it and keep running");
+        }
+
         /// <summary>Send the odometer-source packet — sending it PROVES the app does nothing with it.</summary>
         public void SendOdoSourcePacket(bool virtualSource)
         {

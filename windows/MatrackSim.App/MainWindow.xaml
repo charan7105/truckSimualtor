@@ -779,6 +779,8 @@
                                     <TextBlock Text="All zeros and a 6-char VIN behave identically. Only Troubleshoot → Run Diagnostic Check shows it." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="DEFAULT DATE ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultDefaultDate_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="A tracker that lost its clock reports 01-01-00. Phone: nothing — both the MT and PT parsers rewrite it to phone time." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <Button Content="MALFORMED PACKET" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultMalformed_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="One packet that is not valid at all. Phone: should reject it and carry on; a crash or a stalled stream is the bug." Foreground="{StaticResource Dim}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="ODOMETER SOURCE → VIRTUAL" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultOdoSource_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="The xO packet that says the odometer source changed. Phone: nothing at all — it parses this into a variable with no readers." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
