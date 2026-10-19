@@ -949,7 +949,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     // MARK: - Logging
     private static let stampFormatter: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f }()
     private func stamp() -> String { Self.stampFormatter.string(from: Date()) }
-    private func info(_ s: String) { push(LogLine(time: stamp(), text: s, kind: .info)) }
+    func info(_ s: String) { push(LogLine(time: stamp(), text: s, kind: .info)) }
     private func push(_ l: LogLine) {
         log.append(l); if log.count > 250 { log.removeFirst(log.count - 250) }
         let sym = l.kind == .out ? "→" : (l.kind == .inbound ? "←" : (l.kind == .drop ? "⨯" : "•"))

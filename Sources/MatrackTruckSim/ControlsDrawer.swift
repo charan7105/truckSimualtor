@@ -476,21 +476,65 @@ struct NetworkPanel: View {
         NumberEntry(label: label, value: value, unit: unit, dec: dec, commit: commit)
     }
 
+    /// Same default-visible treatment as cfgSlider — see its doc comment for why it matters.
     private var countSlider: some View {
-        HStack(spacing: 8) {
-            Text("Count").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
-            Slider(value: Binding(get: { Double(sim.config.storedDumpCount) }, set: { sim.config.storedDumpCount = Int($0) }), in: 0...300).tint(Theme.ice)
-            Text("\(sim.config.storedDumpCount)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
+        let value = sim.config.storedDumpCount
+        let fallback = SimConfig.default.storedDumpCount
+        let changed = value != fallback
+        return VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 8) {
+                Text("Count").font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(changed ? Theme.amber : Theme.dim).frame(width: 56, alignment: .leading)
+                Slider(value: Binding(get: { Double(sim.config.storedDumpCount) }, set: { sim.config.storedDumpCount = Int($0) }), in: 0...300)
+                    .tint(changed ? Theme.amber : Theme.ice)
+                Text("\(value)").font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(changed ? Theme.amber : Theme.ice).frame(width: 42, alignment: .trailing)
+            }
+            if changed {
+                Button {
+                    sim.config.storedDumpCount = fallback
+                    sim.info("Count back to the default \(fallback)")
+                } label: {
+                    Text("↺ default \(fallback)").font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                }
+                .buttonStyle(.plain).padding(.leading, 64)
+            }
         }
     }
 
+    /// A tunable slider that always shows what the DEFAULT was and offers one click back to it.
+    ///
+    /// Without this a drawer full of sliders is unreadable after the first session: you cannot tell a
+    /// deliberate setting from something you dragged days ago, and a stale value silently changes
+    /// what every later test means. The default comes from `SimConfig.default`, so it can never
+    /// drift out of step with the real one.
     private func cfgSlider(_ label: String, _ kp: WritableKeyPath<SimConfig, Double>,
                            _ range: ClosedRange<Double>, _ unit: String, _ dec: Int) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
-            Slider(value: Binding(get: { sim.config[keyPath: kp] }, set: { sim.config[keyPath: kp] = $0 }), in: range).tint(Theme.ice)
-            Text("\(String(format: "%.\(dec)f", sim.config[keyPath: kp]))\(unit)")
-                .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
+        let value = sim.config[keyPath: kp]
+        let fallback = SimConfig.default[keyPath: kp]
+        let changed = abs(value - fallback) > 0.0001
+        return VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 8) {
+                Text(label).font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(changed ? Theme.amber : Theme.dim).frame(width: 56, alignment: .leading)
+                Slider(value: Binding(get: { sim.config[keyPath: kp] }, set: { sim.config[keyPath: kp] = $0 }), in: range)
+                    .tint(changed ? Theme.amber : Theme.ice)
+                Text("\(String(format: "%.\(dec)f", value))\(unit)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(changed ? Theme.amber : Theme.ice).frame(width: 42, alignment: .trailing)
+            }
+            if changed {
+                // Only shown once it differs, so a clean drawer stays quiet.
+                Button {
+                    sim.config[keyPath: kp] = fallback
+                    sim.info("\(label) back to the default \(String(format: "%.\(dec)f", fallback))\(unit)")
+                } label: {
+                    Text("↺ default \(String(format: "%.\(dec)f", fallback))\(unit)")
+                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 64)
+            }
         }
     }
 }
