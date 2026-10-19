@@ -231,3 +231,23 @@ observers**. `eventedit.odosource` is the hardcoded literal `"ECM"` (`ProcessAct
 `:5211`), and the server recomputes it from the event's `origin` regardless. A virtual↔ECU source
 switch is therefore invisible to the app by construction.
 
+### A7 — three FMCSA codes the app cannot or does not raise
+Checked every code in `MalfunctionEnum` for a live raiser, because "the app does not warn" turns out
+to have three different causes that need separating before anyone acts on them:
+
+| Code | State | Evidence |
+|---|---|---|
+| `P` Power Compliance | **never raised** | no `add…` helper exists anywhere; the code appears only in display/clear switch cases (`ProcessAction2.swift:5439`, `:5488`) and `HelpViewController`'s manual clear |
+| `O` via VIN mismatch | **orphaned** | `Util.addVinMalfunctionasOtherDataMalfunction` is live code at `Utils.swift:4209`, message already written, and has **zero callers**; an earlier copy at `:4108` sits inside a `/* */` block |
+| `L` Positioning | **inert** | see A4 — the accumulator can never leave zero |
+
+By contrast `R` (data recording) is genuinely live with 32 call sites, but every one fires on a
+**database write failure** (e.g. `LatestDB_New.swift:7396`), never on implausible telemetry.
+
+**Consequence for the simulator:** `POWER CYCLE STORM`, `SEND BAD VIN` and `GPS LOCK LOST` emit
+exactly the right wire data and can never produce a malfunction. App gap, not a simulator
+limitation; the controls are labelled accordingly.
+
+**Not a gap:** no odometer plausibility check exists, and FMCSA does not require one — the ECU is
+authoritative, so a wrong odometer is bad data rather than a malfunction. That silence is correct
+behaviour. A5 is still the defect, because the jump is booked as driven miles regardless.
