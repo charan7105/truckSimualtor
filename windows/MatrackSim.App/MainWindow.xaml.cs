@@ -162,6 +162,19 @@ namespace MatrackSim.App
 
         private void FaultMalformed_Click(object sender, RoutedEventArgs e) => Sim.SendMalformedPacket();
 
+        // ---- Stored-packet test cases (REQ-940 future dates, REQ-942 duplicates)
+        private void StoredFuture_Click(object sender, RoutedEventArgs e) =>
+            Sim.DumpStoredPackets(5, 1.0, true,
+                new WireBuilder.StoredDumpOptions { StampedAt = SimConfig.FutureStoredPacketDate },
+                "Stored dump · future dated");
+
+        private void StoredDuplicate_Click(object sender, RoutedEventArgs e) =>
+            Sim.DumpStoredPackets(5, 1.0, true,
+                new WireBuilder.StoredDumpOptions { RepeatEachPacket = true },
+                "Stored dump · duplicated");
+
+        private void StoredRepeat_Click(object sender, RoutedEventArgs e) => Sim.RepeatLastStoredDump(1.0);
+
         private void VinZeros_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "00000000000000000";
         private void VinLast6_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "292058";
 

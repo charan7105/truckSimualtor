@@ -137,6 +137,13 @@ namespace MatrackSim.Core
         public const string OdometerUnavailableSentinel = "4294967295";
         /// <summary>The app treats speed >= 5 mph as moving; motion-gated faults use the same line.</summary>
         public const double MovingThresholdMph = 5;
+        /// <summary>
+        /// The instant the "future dated" stored dump stamps every packet at. The app refuses a
+        /// stored packet whose time is a year or more from now (REQ-940), so this must sit well past
+        /// that line — 2030 is roughly four years out and unambiguous in a log.
+        /// </summary>
+        public static readonly DateTime FutureStoredPacketDate =
+            new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         /// <summary>The two ECU odometer series the ALTERNATING fault flips between (raw field-4, x10 km).</summary>
         public string OdoSeriesLowRaw = "402336";
         public string OdoSeriesHighRaw = "462336";

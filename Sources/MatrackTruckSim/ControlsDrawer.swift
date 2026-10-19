@@ -667,6 +667,28 @@ struct FaultPanel: View {
                                         probability: 0.2)
                 }
 
+                faultButton(title: "STORED: FUTURE DATE (2030)",
+                            subtitle: "Dumps stored packets all stamped 1 Jan 2030.",
+                            look: "Phone: each one should be SKIPPED, not recorded. Check Troubleshoot → support dump; the audit rows read \"Stored packet skipped: packet time ... is N days from now\".") {
+                    sim.dumpStoredPackets(count: 5, cadenceSec: 1.0,
+                                          options: .init(stampedAt: SimConfig.futureStoredPacketDate),
+                                          label: "Stored dump · future dated")
+                }
+
+                faultButton(title: "STORED: DUPLICATES, SAME CONNECTION",
+                            subtitle: "Each stored packet sent twice, back to back, in one dump.",
+                            look: "Phone: the second copy of each pair should be dropped — it only compares against the packet immediately before it.") {
+                    sim.dumpStoredPackets(count: 5, cadenceSec: 1.0,
+                                          options: .init(repeatEachPacket: true),
+                                          label: "Stored dump · duplicated")
+                }
+
+                faultButton(title: "STORED: REPEAT AFTER RECONNECT",
+                            subtitle: "Sends the previous dump again, byte for byte. Disconnect and reconnect first.",
+                            look: "Phone: whether it de-dups across a connection. Run a dump, drop the link, reconnect, then press this.") {
+                    sim.repeatLastStoredDump(cadenceSec: 1.0)
+                }
+
                 faultButton(title: "MALFORMED PACKET",
                             subtitle: "One packet that is not valid at all.",
                             look: "Phone: should reject it and carry on. A crash or a stalled stream is the bug.") {

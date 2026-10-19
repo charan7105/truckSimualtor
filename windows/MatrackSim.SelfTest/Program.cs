@@ -349,6 +349,43 @@ namespace MatrackSim.SelfTest
                 if (!plausible) allPass = false;
             }
 
+            // Stored-packet test cases. The app's guard (REQ-940) refuses a stored packet a year or
+            // more from now and requires fields 10/11 to be exactly 6 digits, so the dump must reach
+            // that check rather than failing an earlier one.
+            Console.WriteLine("Stored-packet test dumps:");
+            {
+                var cfg = SimConfig.Default;
+                var future = WireBuilder.StoredDump(5, cfg,
+                    new WireBuilder.StoredDumpOptions { StampedAt = SimConfig.FutureStoredPacketDate });
+                var futureStored = future.FindAll(x => x.ItemKind == Emitted.Kind.Stored);
+                bool fieldsOK = true, allFuture = true;
+                foreach (var em in futureStored)
+                {
+                    var f = em.Wire.Split(',');
+                    if (f.Length < 12 || f[10].Length != 6 || f[11].Length != 6) fieldsOK = false;
+                    var utc = WireBuilder.UtcOf(em.Wire);
+                    if (!utc.HasValue || (utc.Value - DateTime.UtcNow).TotalSeconds < 365 * 24 * 3600) allFuture = false;
+                }
+                bool futureOK = futureStored.Count == 5 && fieldsOK && allFuture;
+                Console.WriteLine("  [" + (futureOK ? "OK" : "FAIL") + "] future-dated dump: 5 stored packets, 6-digit time/date, all over a year ahead");
+                if (!futureOK) allPass = false;
+
+                var dup = WireBuilder.StoredDump(3, cfg, new WireBuilder.StoredDumpOptions { RepeatEachPacket = true });
+                var dupStored = dup.FindAll(x => x.ItemKind == Emitted.Kind.Stored);
+                int pairs = 0;
+                for (int i = 0; i + 1 < dupStored.Count; i += 2)
+                    if (dupStored[i].Wire == dupStored[i + 1].Wire) pairs++;
+                bool dupOK = dupStored.Count == 6 && pairs == 3;
+                Console.WriteLine("  [" + (dupOK ? "OK" : "FAIL") + "] duplicate dump: " + dupStored.Count + " packets, " + pairs + " adjacent identical pairs");
+                if (!dupOK) allPass = false;
+
+                // Emitted is a struct here, so Find returns a default rather than null — look it up by index.
+                int footerIdx = dup.FindIndex(x => x.Wire.StartsWith("SAVED PACKET COUNT:"));
+                bool footerOK = footerIdx >= 0 && dup[footerIdx].Wire == "SAVED PACKET COUNT:" + dupStored.Count;
+                Console.WriteLine("  [" + (footerOK ? "OK" : "FAIL") + "] footer reports the real count");
+                if (!footerOK) allPass = false;
+            }
+
             Console.WriteLine("────────────────────────────────────────────────────────────");
             Console.WriteLine(allPass ? "ALL CYCLES PASS ✓" : "FAILURES PRESENT ✗");
             return allPass ? 0 : 1;

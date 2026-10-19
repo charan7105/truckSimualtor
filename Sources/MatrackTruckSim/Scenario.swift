@@ -86,7 +86,24 @@ enum WireBuilder {
 
     /// F2: the exact wire sequence a real `readstr` dump produces — N stored 'S' packets + footers.
     /// Played back at a configurable cadence to reproduce the fast-dump disconnect (≈0.5s breaks, 1s is fine).
-    static func storedDump(count: Int, config: SimConfig) -> [Emitted] {
+    /// How a stored dump should deviate from a normal one, for the REQ-940 / REQ-942 test cases.
+    ///
+    /// `stampedAt` replaces the usual backdating so every packet carries one chosen instant — the
+    /// app refuses a stored packet whose time is a year or more from now, so a 2030 stamp is the
+    /// way to exercise that guard.
+    ///
+    /// `repeatEachPacket` emits every packet twice back to back. The app's only packet-level
+    /// de-dup is a comparison against the IMMEDIATELY previous stored packet, so a back-to-back
+    /// repeat is the case it should catch; a repeat with a different packet in between is the case
+    /// it will not.
+    struct StoredDumpOptions {
+        var stampedAt: Date?
+        var repeatEachPacket = false
+        static let normal = StoredDumpOptions()
+    }
+
+    static func storedDump(count: Int, config: SimConfig,
+                           options: StoredDumpOptions = .normal) -> [Emitted] {
         let e = EngineState()
         e.odometerMiles = config.startOdometerMiles
         e.engineHours = config.startEngineHours
@@ -99,10 +116,15 @@ enum WireBuilder {
         var out: [Emitted] = []
         for i in 0..<max(0, count) {
             e.advance(dt: dt)
-            out.append(Emitted(wire: toStored(MTPacket.livePosition(e, date: backdated(i, count, dt))), kind: .stored))
+            let at = options.stampedAt ?? backdated(i, count, dt)
+            let wire = toStored(MTPacket.livePosition(e, date: at))
+            out.append(Emitted(wire: wire, kind: .stored))
+            // Byte-identical repeat, immediately after — the only shape the app's de-dup looks for.
+            if options.repeatEachPacket { out.append(Emitted(wire: wire, kind: .stored)) }
         }
+        let sent = out.filter { $0.kind == .stored }.count
         out.append(Emitted(wire: "LAST_STORED_PACKET", kind: .raw))
-        out.append(Emitted(wire: "SAVED PACKET COUNT:\(count)", kind: .raw))
+        out.append(Emitted(wire: "SAVED PACKET COUNT:\(sent)", kind: .raw))
         return out
     }
 

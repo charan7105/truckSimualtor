@@ -552,6 +552,23 @@ namespace MatrackSim.App
         }
 
         /// <summary>
+        /// Re-send the previous dump byte for byte — the cross-connection duplicate case. The app's
+        /// packet-level de-dup only compares against the immediately previous stored packet and is
+        /// never reset on connect, so whether the repeat is caught depends on what it saw last.
+        /// </summary>
+        public void RepeatLastStoredDump(double cadenceSec)
+        {
+            if (lastStoredBatch.Count == 0) { Info("no previous stored dump to repeat"); return; }
+            int n = lastStoredBatch.FindAll(x => x.ItemKind == Emitted.Kind.Stored).Count;
+            lock (scenarioGate) { scenarioQueue = new List<Emitted>(lastStoredBatch); }
+            runningDump = $"Repeat stored dump ({n})";
+            Info($"▶ repeating the previous dump — {n} identical stored packets");
+            scenarioTimer?.Dispose();
+            long period = (long)(Math.Max(0.05, cadenceSec) * 1000);
+            scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+        }
+
+        /// <summary>
         /// A single deliberately broken packet. The one thing the live path genuinely cannot produce
         /// on its own — every packet the engine builds is well formed by construction.
         /// </summary>
@@ -1121,6 +1138,7 @@ namespace MatrackSim.App
         private Timer powerBurstTimer;                               // fault injection: rapid ignition storm
         private DateTime? outageStartedAt = null;                    // when the current offline window began
         private List<Emitted> undeliveredStored = new List<Emitted>(); // handed to the dump, not yet fully sent
+        private List<Emitted> lastStoredBatch = new List<Emitted>();   // so a dump can be repeated byte-for-byte
         private bool flashFullWarned = false;
 
         private string _runningDump;
@@ -1172,10 +1190,15 @@ namespace MatrackSim.App
         /// disconnect (≈0.5s breaks the app; 1.0s completes cleanly). The SIM never fails — it reproduces
         /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
         /// </summary>
-        public void DumpStoredPackets(int count, double cadenceSec, bool stopDrive = true)
+        public void DumpStoredPackets(int count, double cadenceSec, bool stopDrive = true,
+                                      WireBuilder.StoredDumpOptions options = null, string label = null)
         {
             if (stopDrive) { AutoDrive = false; DrivingRoute = false; DayDriving = false; }   // app-issued readstr keeps the drive (resumes when queue drains)
-            scenarioQueue = WireBuilder.StoredDump(count, Config);
+            var batch = WireBuilder.StoredDump(count, Config, options);
+            // Kept so the same bytes can be sent again after a reconnect — the cross-connection
+            // duplicate test needs the SECOND dump to be identical, not merely similar.
+            lastStoredBatch = batch;
+            scenarioQueue = batch;
             runningDump = $"Stored dump ({count} @ {(int)(cadenceSec * 1000)}ms)";
             Info($"▶ stored dump — {count} packets @ {(int)(cadenceSec * 1000)}ms cadence (≈500ms repros the disconnect)");
             scenarioTimer?.Dispose();
