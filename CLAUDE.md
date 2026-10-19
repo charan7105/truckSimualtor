@@ -42,7 +42,7 @@ the ESP32 is planned. See the audit doc.
 | Packet build + chunk framing | `MTPacket.swift` | `MatrackSim.Core/MTPacket.cs` |
 | Packet decode (self-test mirror of the app parser) | `MTPacketDecoder.swift` | `MatrackSim.Core/MTPacketDecoder.cs` |
 | Engine/telemetry model | `EngineState.swift` | `MatrackSim.Core/EngineState.cs` |
-| Scenarios | `Scenario.swift` | `MatrackSim.Core/Scenario.cs` |
+| Wire-packet builders | `Scenario.swift` (`WireBuilder`) | `MatrackSim.Core/Scenario.cs` |
 | Config (all tunables) | `SimConfig.swift` | `MatrackSim.Core/SimConfig.cs` |
 | Headless self-test | `SelfTest.swift` (`swift run MatrackTruckSim selftest`) | `MatrackSim.SelfTest/Program.cs` |
 

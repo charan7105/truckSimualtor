@@ -69,8 +69,6 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     @Published var routeVersion = 0          // bumps only when a new route is loaded (drives map redraw)
 
     // Guided scenario walkthrough — presented as a CENTERED overlay on the cockpit (not a corner sheet)
-    @Published var guidedScenario: Scenario?
-    @Published var guidedStep = 0
 
     // Low-fuel → "open the Fuel App / refuel" prompt, shown as a centered overlay. Edge-triggered so it
     // fires once when tank 1 crosses the warning level, and once more when both tanks run dry.
@@ -372,7 +370,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // MARK: - Manual controls
     func setEngine(_ on: Bool) {
-        if runningScenario != nil { stopScenario() }
+        if runningDump != nil { stopDump() }
         autoDrive = false; drivingRoute = false; dayDriving = false
         engine.ignitionOn = on
         if !on { engine.speedMph = 0 }
@@ -380,7 +378,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     func setSpeed(_ mph: Double) {
-        if runningScenario != nil { stopScenario() }
+        if runningDump != nil { stopDump() }
         dayDriving = false                          // a manual speed set ends DRIVE MY DAY automation
         if drivingRoute {
             if mph <= 0 { stopRouteDrive(); return }    // STOP pauses (keeps position)
@@ -396,7 +394,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// AUTO = automatic (cruise) speed control. It does NOT reset position or load a new route —
     /// it takes over speed on the *current* drive and gradually settles to a cruising speed.
     func setAutoDrive(_ on: Bool) {
-        if runningScenario != nil { stopScenario() }
+        if runningDump != nil { stopDump() }
         dayDriving = false                          // AUTO cruise takes over from DRIVE MY DAY automation
         autoDrive = on
         if on {
@@ -421,14 +419,6 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func injectFault(_ code: String) { if !device.dtcCodes.contains(code) { device.dtcCodes.append(code) }; faults = device.dtcCodes; info("fault \(code) armed (app sees it on next readdtc)") }
     func clearFaults() { device.dtcCodes = []; faults = []; info("faults cleared") }
 
-    // Guided walkthrough control (centered overlay)
-    func startGuided(_ s: Scenario) { guidedStep = 0; guidedScenario = s }
-    func advanceGuided() {
-        guard let s = guidedScenario else { return }
-        if s.appSteps[guidedStep].uppercased().contains("RUN") { runScenario(s) }   // the "Tap RUN" step fires the real sim action
-        if guidedStep + 1 < s.appSteps.count { guidedStep += 1 } else { guidedScenario = nil }
-    }
-    func cancelGuided() { guidedScenario = nil }
     func setFuel(_ pct: Double) { engine.fuelLevelPct = max(0, min(100, pct)); mirror() }
     func setFuel2(_ pct: Double) { engine.fuelLevel2Pct = max(0, min(100, pct)); mirror() }
 
@@ -710,7 +700,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// speed/auto/stop never teleports back to the start. Only a finished route restarts.
     private func beginDrive() {
         guard route.hasRoute else { info("load a route first"); return }
-        if runningScenario != nil { stopScenario() }
+        if runningDump != nil { stopDump() }
         if route.progressFraction >= 0.999 { route.reset() }   // re-drive a finished route from the start
         drivingRoute = true
         engine.ignitionOn = true
@@ -810,7 +800,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private var flashFullWarned = false
     private var pendingStored: [Emitted] = []     // stored packets, dumped on the app's next readstr (post-reconnect)
     private var pendingStoredCadence: Double = 1.0
-    @Published var runningScenario: String?
+    @Published var runningDump: String?
 
     // Live dashboard banner for a running scenario — so the user always sees what's happening,
     // even when the gauges are idle (stored-replay scenarios re-send a past drive, so speed stays 0).
@@ -833,64 +823,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         scenarioStatus = nil; scenarioActor = .working; scenarioProgress = nil; scenarioTotal = 0
     }
 
-    func runScenario(_ s: Scenario) {
-        autoDrive = false; drivingRoute = false; dayDriving = false   // step() pauses normal emission while a scenario runs
-        runningScenario = s.name
-        // Stored-replay / Unassigned-Driving scenarios must arrive as a real flash dump on RECONNECT:
-        // both apps run stored replay (and UDP classification) ONLY right after the readstr they send on
-        // reconnect. Replaying inline over the live link is silently ignored (storedEventsProcessed==true).
-        if Self.isStoredReplay(s) {
-            // The drive is recorded INSIDE the outage, and the outage outlasts the app's
-            // Driving→On-Duty close, so the app's open driving event ends before the recording
-            // starts. Both halves are required — see SimConfig.storedReplayMinOutageSec.
-            let dt = max(0.05, config.packetIntervalSec)
-            let start = Date().addingTimeInterval(config.storedReplayLeadInSec)
-            // Seed from the LIVE engine so the recorded drive continues from where the truck actually is.
-            let stored = ScenarioRunner.storedReplay(
-                for: s, config: config, from: start,
-                seed: (engine.odometerMiles, engine.engineHours, engine.latitude, engine.longitude))
-            // The truck really did drive during the outage: advance the live engine to the end of the
-            // recording, so the first live packet after the dump continues it instead of rewinding.
-            if let last = stored.last, let t = ScenarioRunner.telemetryOf(last.wire) {
-                engine.odometerMiles = max(engine.odometerMiles, t.odometerMiles)
-                engine.engineHours = max(engine.engineHours, t.engineHours)
-                engine.latitude = t.latitude; engine.longitude = t.longitude
-                engine.persisted.save()
-            }
-            let span = config.storedReplayLeadInSec + Double(stored.count) * dt
-            let outage = max(config.storedReplayMinOutageSec, span + 20)
-            info("▶ scenario '\(s.name)' — recording \(stored.count) stored packets during a \(Int(outage))s offline window; the app must stay logged in and reconnect on its own")
-            replayStored(stored, cadenceSec: dt, outageSec: outage)
-            return
-        }
-        scenarioQueue = ScenarioRunner.run(s, config: config)
-        scenarioTotal = scenarioQueue.count
-        banner("Streaming “\(s.name)” to the app…", .working, 0)
-        info("▶ scenario '\(s.name)' — \(scenarioQueue.count) packets (effects baked in)")
-        scenarioTimer?.invalidate()
-        scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, config.packetIntervalSec), repeats: true) { [weak self] _ in
-            self?.popScenario()
-        }
-    }
-
+    
     /// Scenarios whose `expect:` depends on the app processing STORED packets (replay or Unassigned Driving):
     /// they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
-    static func isStoredReplay(_ s: Scenario) -> Bool {
-        if s.id == 12 { return true }                                   // Unassigned Driving (UDP)
-        switch s.transport { case .disconnect, .storedBacklog: return true; default: return false }
-    }
-
+    
     /// Stash backdated stored packets and force a REAL BLE disconnect. When the app reconnects and sends
     /// readstr, the handler dumps them + LAST_STORED_PACKET + the true count — the only sequence that makes
     /// both apps run stored replay / UDP classification.
-    func replayStored(_ stored: [Emitted], cadenceSec: Double, outageSec: Double = 8) {
-        guard !stored.isEmpty else { return }
-        pendingStored = stored
-        pendingStoredCadence = cadenceSec
-        banner("Recording \(stored.count) packets offline for \(Int(outageSec))s — the app reconnects and claims them…", .working, nil)
-        forceDisconnect(seconds: outageSec)
-    }
-
+    
     /// Split the flash backlog into what is worth sending and what the app would silently discard.
     ///
     /// The app does NOT treat the disconnect as the boundary. It keeps the driver's Driving event open
@@ -902,7 +842,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     private func storedRecordsWorthSending() -> (deliverable: [Emitted], suppressed: Int) {
         guard !pendingStored.isEmpty else { return ([], 0) }
         guard let outageStart = outageStartedAt else { return (pendingStored, 0) }   // scenario-armed batch: already anchored
-        let (keep, dropped) = ScenarioRunner.deliverableStored(pendingStored, outageStart: outageStart,
+        let (keep, dropped) = WireBuilder.deliverableStored(pendingStored, outageStart: outageStart,
                                                                appDrivingCloseSec: config.appDrivingCloseSec)
         if keep.isEmpty {
             let gap = Int(Date().timeIntervalSince(outageStart))
@@ -913,8 +853,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         return (keep, dropped)
     }
 
-    func stopScenario() {
-        scenarioTimer?.invalidate(); scenarioQueue.removeAll(); runningScenario = nil; clearBanner(); info("scenario stopped")
+    func stopDump() {
+        scenarioTimer?.invalidate(); scenarioQueue.removeAll(); runningDump = nil; clearBanner(); info("scenario stopped")
     }
 
     /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
@@ -922,8 +862,8 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
     func dumpStoredPackets(count: Int, cadenceSec: Double, stopDrive: Bool = true) {
         if stopDrive { autoDrive = false; drivingRoute = false; dayDriving = false }   // app-issued readstr keeps the drive (resumes when queue drains)
-        scenarioQueue = ScenarioRunner.storedDump(count: count, config: config)
-        runningScenario = "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
+        scenarioQueue = WireBuilder.storedDump(count: count, config: config)
+        runningDump = "Stored dump (\(count) @ \(Int(cadenceSec * 1000))ms)"
         info("▶ stored dump — \(count) packets @ \(Int(cadenceSec * 1000))ms cadence (≈500ms repros the disconnect)")
         scenarioTimer?.invalidate()
         scenarioTimer = Timer.scheduledTimer(withTimeInterval: max(0.05, cadenceSec), repeats: true) { [weak self] _ in
@@ -933,7 +873,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     private func popScenario() {
         guard !scenarioQueue.isEmpty else {
-            scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil
+            scenarioTimer?.invalidate(); scenarioTimer = nil; runningDump = nil
             // The dump finished, so the flash records really did go out — only now is it safe to
             // forget them. If the app had dropped mid-dump they would still be in pendingStored.
             if !undeliveredStored.isEmpty { undeliveredStored = []; pendingStored = [] }
@@ -1111,7 +1051,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// One simulation step. Always advances motion + telemetry (so the map moves standalone);
     /// only transmits packets while the app is subscribed.
     private func step() {
-        guard runningScenario == nil else { return }        // scenario playback owns the stream
+        guard runningDump == nil else { return }        // scenario playback owns the stream
         let dt = uiTickSec
         if autoSignal && !linkDown {                        // AUTO: sweep signal strength on its own (skip while out of range)
             autoSignalCountdown -= dt
@@ -1181,7 +1121,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             if sinceLastStored >= config.storedRecordIntervalSec {
                 sinceLastStored = 0
                 if pendingStored.count < config.storedFlashCapacity {
-                    pendingStored.append(Emitted(wire: ScenarioRunner.toStored(MTPacket.livePosition(engine)), kind: .stored))
+                    pendingStored.append(Emitted(wire: WireBuilder.toStored(MTPacket.livePosition(engine)), kind: .stored))
                     // Tell the operator it is recording — otherwise an offline drive looks like the sim
                     // is doing nothing, which is exactly how the missing recorder went unnoticed.
                     if pendingStored.count % 20 == 0 {
@@ -1261,7 +1201,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
                 pendingStoredCadence = max(1.0, pendingStoredCadence)   // never dump faster than the app tolerates
                 scenarioQueue = q
                 scenarioTotal = q.count
-                runningScenario = "Stored replay (\(n))"
+                runningDump = "Stored replay (\(n))"
                 banner("Reconnected — sending the recorded trip to the app…", .working, 0)
                 scenarioTimer?.invalidate()
                 scenarioTimer = Timer.scheduledTimer(withTimeInterval: pendingStoredCadence, repeats: true) { [weak self] _ in self?.popScenario() }
@@ -1326,12 +1266,12 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if !undeliveredStored.isEmpty {
             pendingStored = undeliveredStored + pendingStored
             undeliveredStored = []
-            scenarioQueue.removeAll(); scenarioTimer?.invalidate(); scenarioTimer = nil; runningScenario = nil
+            scenarioQueue.removeAll(); scenarioTimer?.invalidate(); scenarioTimer = nil; runningDump = nil
             info("↩︎ link dropped mid-dump — \(pendingStored.count) stored packets kept for the next readstr")
         }
         connected = false; streaming = false; heldPacket = nil; pending.removeAll()   // drop stale out-of-order hold + unsent chunks
         awaitingAck = false; awaitingAckSince = nil                                    // F1: clear ack-gate so reconnect streams cleanly
-        if runningScenario != nil { stopScenario() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
+        if runningDump != nil { stopDump() }             // a disconnect mid-dump clears it so live streaming resumes on reconnect
         dropTimer?.invalidate(); dropTimer = nil; linkDown = false; dropEndsAt = nil   // out-of-range ends when the link actually drops → reconnect resumes streaming
         status = "Advertising as \(advertisedName)"; statusColor = Theme.amber
         info("Device disconnected")

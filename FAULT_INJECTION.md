@@ -67,6 +67,27 @@ them.
 
 ---
 
+## Getting an Unassigned Driving Period
+
+This used to be a scenario button. It is now just how the simulator behaves, so there is nothing to
+press — but the timing matters and it is easy to conclude it is broken when it is working.
+
+1. Connect the phone and drive normally for a minute so the app has a live stream.
+2. **Disconnect the phone** (or press DROP). The simulator keeps recording to flash, exactly like a
+   real tracker with no phone in range — you will see `⏺ recording offline — N packets buffered`.
+3. Keep driving for **at least 10 minutes**. This cannot be sped up, and the reason is on the app's
+   side: it holds your Driving event open for about 6 minutes after the link drops (5 minutes of no
+   movement plus a grace period). Anything recorded inside that window is filed against *you*, not
+   as unassigned. The simulator withholds those packets rather than sending data the app will
+   silently discard.
+4. Reconnect. The backlog goes over automatically on the app's `readstr`.
+5. Open **Unidentified / Unassigned Driving** and claim or reject the period.
+
+**If nothing appears:** the app only files this when the drive falls outside *your* duty windows. Set
+yourself **Off Duty** before disconnecting — a Driving event that is still the newest event can read
+as open-ended and absorb the whole recording. Also confirm the test account has a vehicle assigned;
+without one the app discards the entire batch silently.
+
 ## Why some faults are intermittent
 
 Four controls fire on roughly 1 packet in 5 rather than on every packet. That is deliberate and it

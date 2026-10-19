@@ -42,10 +42,6 @@ namespace MatrackSim.App
                 };
                 _uiTimer.Start();
             }
-
-            // Default the scenario picker to #12 (Unassigned Driving), like the Swift ScenarioPanel.
-            foreach (var s in MatrackSim.Core.Scenarios.All)
-                if (s.Id == 12) { _selectedScenario = s; break; }   // Unassigned Driving — the one worth demoing
         }
 
         private void RaiseActiveStates()
@@ -89,10 +85,9 @@ namespace MatrackSim.App
                 case nameof(AutoDrive):
                 case nameof(DrivingRoute):
                 case nameof(DayDriving):
-                case nameof(RunningScenario):
+                case nameof(RunningDump):
                     Raise(nameof(ModeText)); Raise(nameof(ModeBrush)); Raise(nameof(IsDumping)); Raise(nameof(FooterStatusText));
-                    Raise(nameof(GearValue)); Raise(nameof(ScenarioRunning));
-                    Raise(nameof(ScenarioButtonText)); Raise(nameof(ScenarioButtonBrush));
+                    Raise(nameof(GearValue));
                     Raise(nameof(SetupHint));   // TEST SETUP hint flips with the connection
                     break;
                 case nameof(LinkDown):
@@ -111,10 +106,6 @@ namespace MatrackSim.App
                     break;
                 case nameof(Vin):
                     Raise(nameof(VinDisplay)); Raise(nameof(VinBadge)); Raise(nameof(VinBadgeBrush));
-                    break;
-                case nameof(SelectedScenario):
-                    Raise(nameof(SelectedScenarioTitle)); Raise(nameof(SelectedScenarioExpect)); Raise(nameof(SelectedScenarioSteps));
-                    Raise(nameof(WhatHowText));
                     break;
                 case nameof(OdometerMiles): Raise(nameof(OdometerText)); Raise(nameof(TripText)); Raise(nameof(OdometerInput)); break;
                 case nameof(EngineHours): Raise(nameof(EngineHoursText)); Raise(nameof(EngineHoursInput)); break;
@@ -183,27 +174,6 @@ namespace MatrackSim.App
         }
 
         // ---- SCENARIO -----------------------------------------------------------------------------
-        public List<Scenario> Scenarios => MatrackSim.Core.Scenarios.All;
-
-        private Scenario? _selectedScenario;
-        public Scenario? SelectedScenario
-        {
-            get => _selectedScenario;
-            set => Set(ref _selectedScenario, value);
-        }
-
-        /// <summary>Nullable overload so the code-behind can forward the picker selection directly.</summary>
-        public void RunScenario(Scenario? s)
-        {
-            if (s.HasValue) RunScenario(s.Value);
-        }
-
-        public string SelectedScenarioTitle =>
-            _selectedScenario.HasValue ? $"{_selectedScenario.Value.Id}. {_selectedScenario.Value.Name}" : "";
-        public string SelectedScenarioExpect => _selectedScenario?.Expect ?? "";
-        public List<string> SelectedScenarioSteps => _selectedScenario?.AppSteps ?? new List<string>();
-        /// <summary>"ⓘ WHAT & HOW (n)" — includes the step count like the Mac ScenarioPanel.</summary>
-        public string WhatHowText => $"ⓘ WHAT & HOW ({SelectedScenarioSteps.Count})";
 
         // ---- Active button states (filled highlight, mirrors NeonButton filled:) ------------------
         private double Kmh => SpeedMph * 1.60934;
@@ -457,12 +427,7 @@ namespace MatrackSim.App
             }
         }
         public bool LinkDownVisible => LinkDown;
-        public bool IsDumping => RunningScenario != null && RunningScenario.StartsWith("Stored dump", StringComparison.Ordinal);
-        /// <summary>True while a scenario is playing — drives the single RUN/STOP scenario button (Mac parity).</summary>
-        public bool ScenarioRunning => RunningScenario != null;
-        /// <summary>Footer SCENARIO button label/tint (Mac tucks scenarios behind a footer button, like DTC).</summary>
-        public string ScenarioButtonText => RunningScenario == null ? "🎬 SCENARIO" : "🎬 SCENARIO ▸ RUNNING";
-        public Brush ScenarioButtonBrush => RunningScenario == null ? ThemeBrushes.Dim : ThemeBrushes.Amber;
+        public bool IsDumping => RunningDump != null && RunningDump.StartsWith("Stored dump", StringComparison.Ordinal);
 
         // ---- Diagnostics --------------------------------------------------------------------------
         public bool FaultsEmpty => Faults == null || Faults.Count == 0;

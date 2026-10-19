@@ -150,132 +150,6 @@ struct RoutePanel: View {
     }
 }
 
-struct ScenarioPanel: View {
-    @EnvironmentObject var sim: SimController
-    @State private var selectedScenarioId = 12  // Unassigned Driving — the one worth demoing
-    @State private var showSteps = false
-    var body: some View {
-        let sel = Scenarios.all.first { $0.id == selectedScenarioId }
-        return Card(title: "SCENARIO", icon: "film.fill", tint: Theme.red) {
-            Menu {
-                ForEach(Scenarios.all, id: \.id) { s in
-                    Button("\(s.id). \(s.name)") { selectedScenarioId = s.id }
-                }
-            } label: {
-                Text("\(selectedScenarioId). \(sel?.name ?? "Pick")")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.text).frame(maxWidth: .infinity, alignment: .leading)
-            }.menuStyle(.borderlessButton)
-            if sim.runningScenario != nil {
-                NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopScenario() }
-            } else {
-                NeonButton(title: "RUN", icon: "play.fill", tint: Theme.red, filled: true) {
-                    if let s = sel { sim.startGuided(s) }   // opens the centered guided walkthrough overlay
-                }
-            }
-            if let steps = sel?.appSteps, !steps.isEmpty {
-                Button { showSteps.toggle() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "info.circle")
-                        Text("WHAT & HOW (\(steps.count))").font(.system(size: 11, weight: .bold, design: .rounded))
-                        Spacer()
-                        Image(systemName: "chevron.up").font(.system(size: 10, weight: .bold))
-                    }
-                    .foregroundStyle(Theme.amber)
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .frame(maxWidth: .infinity)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.amber.opacity(0.14)))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.amber.opacity(0.5), lineWidth: 1))
-                }
-                .buttonStyle(.plain).hoverGlow()
-                .popover(isPresented: $showSteps, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("\(selectedScenarioId). \(sel?.name ?? "")")
-                            .font(.system(size: 13, weight: .heavy, design: .rounded)).foregroundStyle(Theme.text)
-                        if let ex = sel?.expect, !ex.isEmpty {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("WHAT IT DOES").font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1.5).foregroundStyle(Theme.dim)
-                                Text(ex).font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        Divider().overlay(Theme.stroke)
-                        Label("DO THIS IN THE APP", systemImage: "list.bullet.clipboard")
-                            .font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(Theme.amber)
-                        ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
-                            HStack(alignment: .top, spacing: 10) {
-                                Text("\(i + 1)").font(.system(size: 13, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(Theme.amber).frame(width: 18, alignment: .trailing)
-                                Text(s).font(.system(size: 13, design: .rounded)).foregroundStyle(Theme.text)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        Divider().overlay(Theme.stroke)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label("SETUP (ONCE)", systemImage: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.ice)
-                            Text("In the ELD app, open the Bluetooth / ELD-device screen, select \"ELD-MA\", and connect. A vehicle must be assigned to the driver first.")
-                                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(18).frame(width: 360)
-                    .background(Theme.bg1)
-                }
-            }
-        }
-    }
-}
-
-/// Step-by-step guided walkthrough for a scenario: shows one instruction at a time and, on the
-/// "Tap RUN" step, fires the real sim action (which for the disconnect/UDP scenarios drops the link,
-/// records the drive, and dumps it on the app's reconnect — so the tester knows exactly what to do
-/// in the app at each moment).
-struct GuidedStepView: View {
-    let scenario: Scenario
-    let step: Int
-    let onAdvance: () -> Void
-    let onCancel: () -> Void
-    var body: some View {
-        let steps = scenario.appSteps
-        let isLast = step + 1 >= steps.count
-        let isRun = steps[step].uppercased().contains("RUN")
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Label("GUIDED RUN", systemImage: "list.number")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1.2).foregroundStyle(Theme.amber)
-                Spacer()
-                Text("Step \(step + 1) of \(steps.count)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.dim)
-            }
-            Text("\(scenario.id). \(scenario.name)")
-                .font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
-            Text(steps[step])
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 7) {
-                ForEach(0..<steps.count, id: \.self) { i in
-                    Capsule().fill(i <= step ? Theme.amber : Theme.stroke)
-                        .frame(width: i == step ? 22 : 9, height: 6)
-                }
-            }
-            HStack {
-                Button(action: onCancel) {
-                    Text("Cancel").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
-                }.buttonStyle(.plain)
-                Spacer()
-                NeonButton(title: isLast ? "Done" : (isRun ? "Run it" : "Next"),
-                           icon: isLast ? "checkmark" : (isRun ? "play.fill" : "arrow.right"),
-                           tint: isRun ? Theme.red : Theme.ice, filled: true) { onAdvance() }
-                    .frame(width: 170)
-            }
-        }
-        .padding(26).frame(width: 440)
-        .background(Theme.bg1)
-    }
-}
-
 struct DiagnosticsPanel: View {
     @EnvironmentObject var sim: SimController
     var body: some View {
@@ -410,7 +284,7 @@ struct NetworkPanel: View {
         }
     }
 
-    private var isDumping: Bool { sim.runningScenario?.hasPrefix("Stored dump") == true }
+    private var isDumping: Bool { sim.runningDump?.hasPrefix("Stored dump") == true }
 
     private var signalTint: Color {
         if sim.linkDown || sim.config.signalPct < 20 { return Theme.red }

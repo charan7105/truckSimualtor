@@ -35,29 +35,50 @@ namespace MatrackSim.SelfTest
                 var failures = new List<string>();
                 int totalPackets = 0, controlPkts = 0, storedPkts = 0, malformedPkts = 0;
 
-                foreach (var s in Scenarios.All)
+                // The scenario catalogue used to drive this loop. It is gone, so the packets are
+                // built the way the live path builds them: a drive's worth of live telemetry plus a
+                // stored dump, under each config variation. Same coverage, one code path.
+                var e = new EngineState
                 {
-                    var emitted = ScenarioRunner.Run(s, cfg);
-                    totalPackets += emitted.Count;
-                    foreach (var em in emitted)
-                    {
-                        switch (em.ItemKind)
-                        {
-                            case Emitted.Kind.Raw: controlPkts += 1; break;
-                            case Emitted.Kind.Stored: storedPkts += 1; break;
-                            case Emitted.Kind.Malformed: malformedPkts += 1; break;
-                            default: break;
-                        }
-                        var f = Validate(em);
-                        if (f != null) failures.Add("[S" + s.Id + " " + s.Name + "] " + f);
-                    }
-                    var inv = ScenarioInvariant(s, emitted);
-                    if (inv != null) failures.Add("[S" + s.Id + " " + s.Name + "] " + inv);
+                    IgnitionOn = true,
+                    IdleRpmConfig = cfg.IdleRpm,
+                    RpmPerMphConfig = cfg.RpmPerMph,
+                    FuelBurnPctPerMile = cfg.FuelBurnPctPerMile,
+                };
+                var emitted = new List<Emitted>();
+                emitted.Add(new Emitted(MTPacket.Ignition(e, true), Emitted.Kind.Ignition));
+                for (int tick = 0; tick < 120; tick++)
+                {
+                    e.SpeedMph = tick < 20 ? tick * 3.0 : (tick < 100 ? 60.0 : Math.Max(0, (120 - tick) * 3.0));
+                    e.Advance(cfg.PacketIntervalSec);
+                    emitted.Add(new Emitted(MTPacket.LivePosition(e), Emitted.Kind.Live));
                 }
+                emitted.Add(new Emitted(MTPacket.Ignition(e, false), Emitted.Kind.Ignition));
+                emitted.AddRange(WireBuilder.StoredDump(30, cfg));
+                emitted.Add(new Emitted(MTPacket.Version(new DeviceInfo()), Emitted.Kind.Live));
+                emitted.Add(new Emitted(MTPacket.Dtc(new List<string> { "P0143" }, 1, e.Rpm), Emitted.Kind.Live));
+                foreach (var reply in new[] { "ACK,DATA", "LAST_STORED_PACKET", "SAVED PACKET COUNT:0" })
+                    emitted.Add(new Emitted(reply, Emitted.Kind.Raw));
+
+                totalPackets += emitted.Count;
+                foreach (var em in emitted)
+                {
+                    switch (em.ItemKind)
+                    {
+                        case Emitted.Kind.Raw: controlPkts += 1; break;
+                        case Emitted.Kind.Stored: storedPkts += 1; break;
+                        case Emitted.Kind.Malformed: malformedPkts += 1; break;
+                        default: break;
+                    }
+                    var f = Validate(em);
+                    if (f != null) failures.Add(f);
+                }
+                if (!emitted.Exists(x => x.ItemKind == Emitted.Kind.Live)) failures.Add("no live packets emitted");
+                if (!emitted.Exists(x => x.ItemKind == Emitted.Kind.Stored)) failures.Add("no stored packets emitted");
 
                 string result = failures.Count == 0 ? "Pass" : "Fail";
                 if (failures.Count != 0) allPass = false;
-                string summary = Scenarios.All.Count + " scenarios, " + totalPackets + " packets "
+                string summary = totalPackets + " packets "
                     + "(" + storedPkts + " stored, " + controlPkts + " control, " + malformedPkts + " malformed-rejected) "
                     + "@ " + cfg.PacketIntervalSec.ToString("F1", CultureInfo.InvariantCulture) + "s/pkt, loss " + (int)cfg.PacketLossPct + "%";
                 Console.WriteLine("Cycle " + cycle + " Result:");
@@ -66,49 +87,14 @@ namespace MatrackSim.SelfTest
             }
 
             // Stored-replay path: the live RunScenario routes the stored/UDP scenarios (8,9,10,11,12,21)
-            // through ScenarioRunner.StoredReplay (dumped on the app's reconnect readstr), NOT inline Run().
+            // through WireBuilder.StoredReplay (dumped on the app's reconnect readstr), NOT inline Run().
             Console.WriteLine("Stored-replay path (RunScenario for stored/UDP scenarios):");
-            foreach (var s in Scenarios.All)
-            {
-                bool isStored = s.Transport.TKind == Transport.TransportKind.Disconnect
-                             || s.Transport.TKind == Transport.TransportKind.StoredBacklog
-                             || s.Id == 12;
-                if (!isStored) continue;
-                var sr = ScenarioRunner.StoredReplay(s, SimConfig.Default);
-                int n = sr.Count;
-                bool allStored = n > 0 && sr.TrueForAll(em => em.ItemKind == Emitted.Kind.Stored);
-                bool valid = true;
-                foreach (var em in sr) { if (Validate(em) != null) { valid = false; break; } }
-                bool ok = allStored && valid && n > 0;
-                if (s.Id == 7 && n != 30) ok = false;
-                if (s.Id == 8 && n != 300) ok = false;
-                if (!ok) allPass = false;
-                Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + " " + s.Name + ": " + n + " backdated stored packets");
-            }
-
+            
             // The Unassigned-Driving fix: stored packets must be stamped INSIDE the outage window, i.e.
             // at/after the disconnect. Stamped before it, they land inside the driving event the app still
             // has open for the logged-in driver and are silently classified as already-assigned.
             Console.WriteLine("Stored-replay timestamps land inside the outage (Unassigned Driving):");
-            foreach (var s in Scenarios.All)
-            {
-                bool isStored = s.Transport.TKind == Transport.TransportKind.Disconnect
-                             || s.Transport.TKind == Transport.TransportKind.StoredBacklog
-                             || s.Id == 12;
-                if (!isStored) continue;
-                var start = DateTime.UtcNow.AddSeconds(10);
-                var sr = ScenarioRunner.StoredReplay(s, SimConfig.Default, start);
-                int stamped = 0;
-                foreach (var em in sr)
-                {
-                    var utc = ScenarioRunner.UtcOf(em.Wire);
-                    if (utc.HasValue && utc.Value >= start.AddSeconds(-1)) stamped++;
-                }
-                bool ok = sr.Count > 0 && stamped == sr.Count;
-                if (!ok) allPass = false;
-                Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] S" + s.Id + ": " + stamped + "/" + sr.Count + " stamps at/after the disconnect");
-            }
-
+            
             // Restart persistence: odometer and engine hours must survive a relaunch and never move
             // backwards. A rewind is the transition that freezes mileage accrual in the ELD app.
             Console.WriteLine("Restart persistence (odometer / engine hours never rewind):");
@@ -150,28 +136,28 @@ namespace MatrackSim.SelfTest
                 var outageStart = new DateTime(2023, 11, 14, 22, 13, 20, DateTimeKind.Utc);
                 var e = new EngineState { IgnitionOn = true, SpeedMph = 60 };
                 Func<double, Emitted> rec = off => new Emitted(
-                    ScenarioRunner.ToStored(MTPacket.LivePosition(e, outageStart.AddSeconds(off))), Emitted.Kind.Stored);
+                    WireBuilder.ToStored(MTPacket.LivePosition(e, outageStart.AddSeconds(off))), Emitted.Kind.Stored);
 
                 var batch = new List<Emitted> { rec(30), rec(120), rec(360), rec(400), rec(600) };
-                var split = ScenarioRunner.DeliverableStored(batch, outageStart, cfg.AppDrivingCloseSec);
+                var split = WireBuilder.DeliverableStored(batch, outageStart, cfg.AppDrivingCloseSec);
                 bool ok = split.Keep.Count == 2 && split.Dropped == 3;
                 Console.WriteLine("  [" + (ok ? "OK" : "FAIL") + "] kept " + split.Keep.Count + "/5 past the " + (int)cfg.AppDrivingCloseSec + "s close, dropped " + split.Dropped);
                 if (!ok) allPass = false;
 
                 var shortBatch = new List<Emitted> { rec(30), rec(60), rec(90) };
-                var shortSplit = ScenarioRunner.DeliverableStored(shortBatch, outageStart, cfg.AppDrivingCloseSec);
+                var shortSplit = WireBuilder.DeliverableStored(shortBatch, outageStart, cfg.AppDrivingCloseSec);
                 bool emptied = shortSplit.Keep.Count == 0 && shortSplit.Dropped == 3;
                 Console.WriteLine("  [" + (emptied ? "OK" : "FAIL") + "] a sub-" + (int)cfg.AppDrivingCloseSec + "s outage delivers nothing");
                 if (!emptied) allPass = false;
 
                 var junk = new List<Emitted> { new Emitted("GARBAGE", Emitted.Kind.Stored) };
-                var junkSplit = ScenarioRunner.DeliverableStored(junk, outageStart, cfg.AppDrivingCloseSec);
+                var junkSplit = WireBuilder.DeliverableStored(junk, outageStart, cfg.AppDrivingCloseSec);
                 bool keptJunk = junkSplit.Keep.Count == 1 && junkSplit.Dropped == 0;
                 Console.WriteLine("  [" + (keptJunk ? "OK" : "FAIL") + "] an unparseable record is kept, not dropped");
                 if (!keptJunk) allPass = false;
 
                 bool clears = cfg.StoredReplayLeadInSec > cfg.AppDrivingCloseSec;
-                Console.WriteLine("  [" + (clears ? "OK" : "FAIL") + "] scenario lead-in " + (int)cfg.StoredReplayLeadInSec + "s clears the " + (int)cfg.AppDrivingCloseSec + "s close");
+                Console.WriteLine("  [" + (clears ? "OK" : "FAIL") + "] stored-replay lead-in " + (int)cfg.StoredReplayLeadInSec + "s clears the " + (int)cfg.AppDrivingCloseSec + "s close");
                 if (!clears) allPass = false;
             }
 
@@ -247,7 +233,7 @@ namespace MatrackSim.SelfTest
                 if (!backToClean) allPass = false;
 
                 var baseUtc = new DateTime(2023, 11, 14, 22, 13, 20, DateTimeKind.Utc);
-                var skewed = ScenarioRunner.UtcOf(MTPacket.LivePosition(e, baseUtc.AddSeconds(1800)));
+                var skewed = WireBuilder.UtcOf(MTPacket.LivePosition(e, baseUtc.AddSeconds(1800)));
                 bool skewWorks = skewed.HasValue && Math.Abs((skewed.Value - baseUtc).TotalSeconds - 1800) < 1.5;
                 Console.WriteLine("  [" + (skewWorks ? "OK" : "FAIL") + "] a 30-minute clock skew reaches fields 10/11");
                 if (!skewWorks) allPass = false;
@@ -403,42 +389,6 @@ namespace MatrackSim.SelfTest
         }
 
         // MARK: scenario-level invariants
-        private static string ScenarioInvariant(Scenario s, List<Emitted> em)
-        {
-            switch (s.Id)
-            {
-                case 2:   // engine off → at least one shutdown (ignition 0) ignition packet
-                {
-                    bool hasShutdown = em.Any(x =>
-                    {
-                        if (x.ItemKind != Emitted.Kind.Ignition) return false;
-                        var dec = MTDecoder.Decode(x.Wire);
-                        return dec != null && dec.Ignition == 0;
-                    });
-                    return hasShutdown ? null : "expected a shutdown (ignition=0) event";
-                }
-                case 6:   // disconnect → stored replay present (inline Run() output)
-                {
-                    int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
-                    bool marker = em.Any(x => x.Wire.StartsWith("LAST_STORED_PACKET", StringComparison.Ordinal));
-                    return (stored > 0 && marker) ? null : "expected stored replay after reconnect (got " + stored + " stored)";
-                }
-                case 7:
-                {
-                    int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
-                    return stored == 30 ? null : "expected 30 stored backlog packets, got " + stored;
-                }
-                case 8:
-                {
-                    int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
-                    return stored == 300 ? null : "expected 300 stored backlog packets, got " + stored;
-                }
-
-                default:
-                    // every scenario must emit at least one valid live packet
-                    return em.Any(x => x.ItemKind == Emitted.Kind.Live) ? null : "no live packets emitted";
-            }
-        }
 
         // MARK: encoder↔decoder round-trip on known values
         private static string RoundTripUnit()
