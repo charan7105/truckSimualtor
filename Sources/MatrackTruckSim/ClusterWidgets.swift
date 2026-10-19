@@ -65,7 +65,7 @@ struct VINChip: View {
                     .font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1)
             }
             Text(sim.vin.count == 17 ? "VALID" : "TEST")
-                .font(.system(size: 8, weight: .bold, design: .rounded)).tracking(1)
+                .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1)
                 .foregroundStyle(sim.vin.count == 17 ? Theme.green : Theme.amber)
             Image(systemName: "pencil").font(.system(size: 10)).foregroundStyle(Theme.dim)
         }
@@ -178,7 +178,9 @@ struct GearIndicator: View {
                 let on = g == sim.gear
                 Text(g)
                     .font(.system(size: 13, weight: .heavy, design: .rounded)).tracking(2)
-                    .foregroundStyle(on ? Theme.bg0 : Theme.dimmer)
+                    // Theme.dimmer is 2.22:1 on the panel — fine for a decorative arc, not for a
+                    // letter someone has to read. Theme.dim is 5.38:1 and still clearly "inactive".
+                    .foregroundStyle(on ? Theme.bg0 : Theme.dim)
                     .frame(width: 32, height: 28)
                     .background(
                         ZStack {
@@ -265,10 +267,11 @@ struct NumberEntry: View {
                 Text(String(format: "%.\(dec)f", value) + " " + unit)
                     .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice)
                 Spacer()
-                Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(Theme.dim)
+                Image(systemName: "pencil").font(.system(size: 10)).foregroundStyle(Theme.dim)
             }
         }
-        .padding(.vertical, 2)
+        // >= 24pt click target: the row was only as tall as its 10pt text.
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture {
             text = String(format: "%.\(dec)f", value)

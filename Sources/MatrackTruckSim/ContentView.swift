@@ -205,7 +205,7 @@ struct ContentView: View {
                 Text("FUEL").font(.system(size: 12, weight: .semibold, design: .rounded))
                     .tracking(2).foregroundStyle(Theme.text.opacity(0.92))
                 Spacer()
-                Text("DUAL TANK").font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                Text("DUAL TANK").font(.system(size: 10, weight: .semibold, design: .rounded))
                     .tracking(1.5).foregroundStyle(Theme.dim)
             }
             HStack(spacing: 18) {
@@ -256,7 +256,7 @@ struct ContentView: View {
                         Text("FUEL LINK \(bridge.linkIP)")
                             .font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.green)
                         Image(systemName: linkCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.green.opacity(0.8))
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.green.opacity(0.8))
                     }
                     .padding(.horizontal, 9).padding(.vertical, 3)
                     .background(Capsule().fill(Theme.green.opacity(0.12)))

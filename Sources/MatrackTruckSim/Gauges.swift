@@ -248,7 +248,7 @@ struct FuelCylinder: View {
             .frame(width: width, height: height)
             VStack(spacing: 1) {
                 Text("\(Int(value))%").font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(tint)
-                Text(caption).font(.system(size: 9, weight: .semibold, design: .rounded)).tracking(1).foregroundStyle(Theme.dim)
+                Text(caption).font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(1).foregroundStyle(Theme.dim)
             }
         }
     }

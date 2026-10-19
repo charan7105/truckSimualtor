@@ -21,6 +21,8 @@ enum Theme {
     static let glassTop = Color(hex: 0x171A20)     // top-lit glass panel gradient
     static let glassBot = Color(hex: 0x0E1014)
 
+    /// 3.68:1 on the panel — passes for LARGE text (18pt+) and for shapes/badges, fails the 4.5:1
+    /// body-text minimum. For small red text use `amber` (8.75:1) or pair it with an icon.
     static let red = Color(hex: 0xE2122B)          // signature accent / redline / fault / STOP
     static let ice = Color(hex: 0x6FD3FF)          // the single cool accent
     static let blue = Color(hex: 0x3E7BFA)
@@ -29,7 +31,9 @@ enum Theme {
     static let text = Color(hex: 0xF4F6FA)
     static let dim = Color(hex: 0x868E9C)
     static let iceDim = Color(hex: 0x2E5A6E)        // empty HUD segment, inactive gear
-    static let dimmer = Color(hex: 0x4A515E)        // ghost-tach arc / inactive glyph
+    /// DECORATIVE ONLY — 2.22:1 on the panel, below even the 3:1 large-text floor. Never put text
+    /// or a glyph someone has to read in this colour; use `dim` (5.38:1) for inactive-but-legible.
+    static let dimmer = Color(hex: 0x4A515E)        // ghost-tach arc only
 
     static let redlineBand = Color(hex: 0xE2122B, alpha: 0.9)
     static let glassScrim = Color(hex: 0x08090B, alpha: 0.55)

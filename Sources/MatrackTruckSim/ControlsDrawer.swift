@@ -179,7 +179,7 @@ struct ScenarioPanel: View {
                         Image(systemName: "info.circle")
                         Text("WHAT & HOW (\(steps.count))").font(.system(size: 11, weight: .bold, design: .rounded))
                         Spacer()
-                        Image(systemName: "chevron.up").font(.system(size: 9, weight: .bold))
+                        Image(systemName: "chevron.up").font(.system(size: 10, weight: .bold))
                     }
                     .foregroundStyle(Theme.amber)
                     .padding(.horizontal, 12).padding(.vertical, 9)
@@ -194,7 +194,7 @@ struct ScenarioPanel: View {
                             .font(.system(size: 13, weight: .heavy, design: .rounded)).foregroundStyle(Theme.text)
                         if let ex = sel?.expect, !ex.isEmpty {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("WHAT IT DOES").font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.5).foregroundStyle(Theme.dim)
+                                Text("WHAT IT DOES").font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1.5).foregroundStyle(Theme.dim)
                                 Text(ex).font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -212,7 +212,7 @@ struct ScenarioPanel: View {
                         Divider().overlay(Theme.stroke)
                         VStack(alignment: .leading, spacing: 3) {
                             Label("SETUP (ONCE)", systemImage: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.ice)
+                                .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1).foregroundStyle(Theme.ice)
                             Text("In the ELD app, open the Bluetooth / ELD-device screen, select \"ELD-MA\", and connect. A vehicle must be assigned to the driver first.")
                                 .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -309,7 +309,9 @@ struct NetworkPanel: View {
     @State private var showSignalInfo = false
     var body: some View {
         Card(title: "CONNECTION · SIGNAL", icon: "antenna.radiowaves.left.and.right", tint: Theme.blue) {
-            ScrollView(.vertical, showsIndicators: false) {
+            // Indicators ON: this card stacks SIGNAL, ESP32, TEST SETUP, RAW EFFECTS and STORED
+            // DUMP, and with them hidden there was nothing to tell you the lower sections existed.
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 12) {
 
                     // F1 — signal / out-of-range: one clean row of presets
@@ -402,7 +404,7 @@ struct NetworkPanel: View {
                         sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
                     }
                     Text("≈500ms reproduces the disconnect · 1s is safe.")
-                        .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                        .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
                 }
             }
         }
@@ -466,7 +468,7 @@ struct NetworkPanel: View {
             // Must track the same flag the setter gates on (`connected`), or the caption promises
             // "any value" during a watchdog lapse while the app is still attached.
             Text(sim.connected ? "forward only while the app is connected" : "any value — no app connected")
-                .font(.system(size: 9, design: .rounded))
+                .font(.system(size: 10, design: .rounded))
                 .foregroundStyle(sim.connected ? Theme.amber : Theme.dim)
         }
     }
@@ -492,7 +494,7 @@ struct NetworkPanel: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("\(value)").font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(changed ? Theme.amber : Theme.ice)
-                    Text("def \(fallback)").font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.dim)
+                    Text("def \(fallback)").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
                 }.fixedSize()
             }
             if changed {
@@ -501,9 +503,12 @@ struct NetworkPanel: View {
                     sim.info("Count back to the default \(fallback)")
                 } label: {
                     Text("↺ back to default \(fallback)")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
-                .buttonStyle(.plain).padding(.leading, 64)
+                // Desktop click targets want >= 24pt; the bare label was about 12pt tall.
+                .buttonStyle(.plain)
+                .padding(.vertical, 5).contentShape(Rectangle())
+                .padding(.leading, 64)
             }
         }
     }
@@ -534,7 +539,7 @@ struct NetworkPanel: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(changed ? Theme.amber : Theme.ice)
                     Text("def \(String(format: "%.\(dec)f", fallback))")
-                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.dim)
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
                 }.fixedSize()
             }
             // ALWAYS visible, not just once it differs: you need to know what normal looks like
@@ -545,9 +550,12 @@ struct NetworkPanel: View {
                     sim.info("\(label) back to the default \(String(format: "%.\(dec)f", fallback))\(unit)")
                 } label: {
                     Text("↺ back to default \(String(format: "%.\(dec)f", fallback))\(unit)")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
-                .buttonStyle(.plain).padding(.leading, 64)
+                // Desktop click targets want >= 24pt; the bare label was about 12pt tall.
+                .buttonStyle(.plain)
+                .padding(.vertical, 5).contentShape(Rectangle())
+                .padding(.leading, 64)
             }
         }
     }
@@ -661,7 +669,7 @@ struct FaultPanel: View {
 
     private var legend: some View {
         Text("⚠ phone warns     ◐ bad data, no warning     ∅ phone ignores it")
-            .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+            .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
     }
 
     // Ordered fastest-to-fire first, so a demo runs straight down the list.
@@ -751,14 +759,14 @@ struct FaultPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             Button { withAnimation { showIgnored.toggle() } } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: showIgnored ? "chevron.down" : "chevron.right").font(.system(size: 9))
+                    Image(systemName: showIgnored ? "chevron.down" : "chevron.right").font(.system(size: 10))
                     Text("∅ SHOW THE FAULTS THE APP IGNORES").font(.system(size: 10, weight: .bold, design: .rounded))
                 }.foregroundStyle(Theme.dim)
             }.buttonStyle(.plain)
 
             if showIgnored {
                 Text("Verified against the app source. These are worth sending to PROVE the app ignores them — not to wait for an alert.")
-                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                    .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
 
                 HStack(spacing: 6) {
                     TextField("VIN", text: $customVin)
@@ -770,7 +778,7 @@ struct FaultPanel: View {
                     }
                 }
                 Text("All zeros and a 6-character VIN behave identically. Only visible in Troubleshoot → Run Diagnostic Check.")
-                    .font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+                    .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
 
                 HStack(spacing: 6) {
                     NeonButton(title: "ALL ZEROS", tint: Theme.dim, filled: false) { customVin = "00000000000000000" }
@@ -800,8 +808,8 @@ struct FaultPanel: View {
                              action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             NeonButton(title: on ? "\(title)  ● ON" : title, tint: on ? Theme.red : Theme.ice, filled: on, action: action)
-            Text(subtitle).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
-            Text(look).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+            Text(subtitle).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
         }
     }
 
@@ -809,8 +817,8 @@ struct FaultPanel: View {
                              action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             NeonButton(title: title, tint: Theme.amber, filled: false, action: action)
-            Text(subtitle).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
-            Text(look).font(.system(size: 9, design: .rounded)).foregroundStyle(Theme.dim)
+            Text(subtitle).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
         }
     }
 }
