@@ -19,3 +19,6 @@ dist-notarized/
 MatrackTruckSim-mac.zip
 MatrackSim-win-x64.zip
 MatrackSim-for-ESP32.zip
+
+# Build artifacts that were committed by accident — they belong on the Release, not in git
+*.zip
