@@ -295,6 +295,13 @@ enum SelfTest {
             print("  [\(moving && parked ? "OK" : "FAIL")] a motion-gated fault fires while driving and not while parked")
             if !(moving && parked) { allPass = false }
 
+            // The malformed packet used to be covered by scenario 11. That scenario is gone, so the
+            // button is now the only path — assert the wire here or nothing checks it at all.
+            let junkWire = "ZZ,not,a,valid,packet"
+            let rejected = !MTDecoder.isValid(junkWire)
+            print("  [\(rejected ? "OK" : "FAIL")] the malformed packet is genuinely invalid")
+            if !rejected { allPass = false }
+
             // The odometer-source packet must match the shape the app's parser demands (>= 10 comma
             // fields, xO prefix, $$ terminator) or it is dropped before reaching the dead code path
             // we are trying to demonstrate.
@@ -437,12 +444,6 @@ enum SelfTest {
         case 8:
             let stored = em.filter { $0.kind == .stored }.count
             return stored == 300 ? nil : "expected 300 stored backlog packets, got \(stored)"
-        case 9:   // duplicates: some consecutive identical wires
-            var dup = false
-            for i in 1..<max(1, em.count) where em[i].wire == em[i-1].wire && em[i].kind == .live { dup = true; break }
-            return dup ? nil : "expected duplicate packets"
-        case 11:   // parse failure injected + rejected
-            return em.contains { $0.kind == .malformed } ? nil : "expected an injected malformed packet"
         default:
             // every scenario must emit at least one valid live packet
             return em.contains { $0.kind == .live } ? nil : "no live packets emitted"

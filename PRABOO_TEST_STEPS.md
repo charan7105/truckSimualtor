@@ -140,6 +140,10 @@ what the stored-replay scenarios fabricate, and the dashboard cannot.
 The one capability that used to need a scenario — a deliberately malformed packet — is now a button
 in BAD DATA.
 
+The panel is down from twelve scenarios to four: **BLE disconnect during drive**, **Stored packets
+later**, **Large stored backlog**, and **Unassigned Driving**. The eight that were deleted were each
+a dashboard control with extra steps.
+
 ---
 
 ## Three extras that DO alert

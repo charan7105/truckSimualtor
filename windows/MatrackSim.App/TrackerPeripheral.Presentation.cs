@@ -43,9 +43,9 @@ namespace MatrackSim.App
                 _uiTimer.Start();
             }
 
-            // Default the scenario picker to #5 (Driving highway), like the Swift ScenarioPanel.
+            // Default the scenario picker to #12 (Unassigned Driving), like the Swift ScenarioPanel.
             foreach (var s in MatrackSim.Core.Scenarios.All)
-                if (s.Id == 5) { _selectedScenario = s; break; }
+                if (s.Id == 12) { _selectedScenario = s; break; }   // Unassigned Driving — the one worth demoing
         }
 
         private void RaiseActiveStates()

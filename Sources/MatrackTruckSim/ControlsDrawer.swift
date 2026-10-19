@@ -152,7 +152,7 @@ struct RoutePanel: View {
 
 struct ScenarioPanel: View {
     @EnvironmentObject var sim: SimController
-    @State private var selectedScenarioId = 4   // Driving highway — a good default demo
+    @State private var selectedScenarioId = 12  // Unassigned Driving — the one worth demoing
     @State private var showSteps = false
     var body: some View {
         let sel = Scenarios.all.first { $0.id == selectedScenarioId }

@@ -22,7 +22,6 @@ enum Transport: Equatable {
     case outOfOrder(everyN: Int)
     case disconnect(afterSec: Double, gapSec: Double)   // buffer during outage → replay as stored on reconnect (interval-independent)
     case storedBacklog(count: Int)                // pre-existing stored packets delivered up front
-    case parseFailure(atTick: Int)                // inject a malformed packet the app must reject
 }
 
 struct Scenario {
@@ -94,11 +93,6 @@ enum ScenarioRunner {
                     let li = MTPacket.ignition(e, on: e.ignitionOn)
                     routeEmit(li, kind: .ignition, disconnected: disconnected, buffer: &buffer, out: &out, held: &held, tick: tick, transport: s.transport)
                     lastIgn = e.ignitionOn
-                }
-
-                // parse-failure injection
-                if case .parseFailure(let at) = s.transport, tick == at {
-                    out.append(Emitted(wire: "ZZ,not,a,valid,packet", kind: .malformed))
                 }
 
                 let lp = MTPacket.livePosition(e)
@@ -278,25 +272,18 @@ enum ScenarioRunner {
 // MARK: - The 20 required scenarios
 
 enum Scenarios {
+    /// The scenarios that still earn their place.
+    ///
+    /// Engine on/off, idle, driving, stopping, duplicate and out-of-order packets used to live here
+    /// and were deleted: every one of them is a dashboard control now, so the scenario was just
+    /// pressing a button for you — and a second code path doing the same job is how scenario 12
+    /// shipped broken for weeks while looking green. The malformed-packet case moved to the BAD DATA
+    /// panel, which is where a one-shot fault belongs.
+    ///
+    /// What is left is the one thing the dashboard genuinely cannot do: fabricate packets that do
+    /// NOT match what the simulator is currently doing — a drive that supposedly happened hours ago,
+    /// with timestamps we choose. IDs are deliberately NOT renumbered; test notes reference them.
     static let all: [Scenario] = [
-        Scenario(id: 1, name: "Engine ON", expect: "PowerUp event, engine on",
-                 phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true)],
-                 appSteps: ["Connect the ELD app to ELD-MA", "Tap RUN", "App shows engine power-up → On-Duty"]),
-        Scenario(id: 2, name: "Engine OFF", expect: "Shutdown event",
-                 phases: [Phase(seconds: 3, targetSpeedMph: 0, ignition: true),
-                          Phase(seconds: 3, targetSpeedMph: 0, ignition: false)],
-                 appSteps: ["Tap RUN", "App logs an engine shutdown / power-off event"]),
-        Scenario(id: 3, name: "Idle", expect: "On-duty, no driving",
-                 phases: [Phase(seconds: 30, targetSpeedMph: 0, ignition: true)],
-                 appSteps: ["Tap RUN", "Engine on but not moving → app stays On-Duty (not Driving)"]),
-        Scenario(id: 4, name: "Driving highway", expect: "Auto-driving at ~65 mph",
-                 phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),
-                          Phase(seconds: 40, targetSpeedMph: 65, ignition: true)],
-                 appSteps: ["Tap RUN", "At ~65 mph the app shows Driving; speed & location update live"]),
-        Scenario(id: 5, name: "Stop after drive", expect: "Driving → stop → on-duty",
-                 phases: [Phase(seconds: 30, targetSpeedMph: 60, ignition: true),
-                          Phase(seconds: 370, targetSpeedMph: 0, ignition: true)],   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible)
-                 appSteps: ["Tap RUN", "Drive, then stay stopped (engine on) ~6 min → app moves Driving → On-Duty"]),
         Scenario(id: 6, name: "BLE disconnect during drive", expect: "Buffer then stored replay",
                  phases: [Phase(seconds: 60, targetSpeedMph: 60, ignition: true)],
                  transport: .disconnect(afterSec: 15, gapSec: 20),
@@ -309,18 +296,6 @@ enum Scenarios {
                  phases: [Phase(seconds: 10, targetSpeedMph: 50, ignition: true)],
                  transport: .storedBacklog(count: 300),
                  appSteps: ["Tap RUN", "300 stored packets delivered → app stays stable, no corruption"]),
-        Scenario(id: 9, name: "Duplicate packets", expect: "Duplicates dropped by app dedup",
-                 phases: [Phase(seconds: 40, targetSpeedMph: 60, ignition: true)],
-                 transport: .duplicate(everyN: 5),
-                 appSteps: ["Tap RUN", "Duplicate packets are sent → app de-dupes (no double miles)"]),
-        Scenario(id: 10, name: "Out-of-order packets", expect: "App tolerates reordering",
-                 phases: [Phase(seconds: 40, targetSpeedMph: 60, ignition: true)],
-                 transport: .outOfOrder(everyN: 6),
-                 appSteps: ["Tap RUN", "Packets arrive reordered → app tolerates it without errors"]),
-        Scenario(id: 11, name: "Packet parsing failure", expect: "Malformed packet rejected, no crash",
-                 phases: [Phase(seconds: 30, targetSpeedMph: 55, ignition: true)],
-                 transport: .parseFailure(atTick: 10),
-                 appSteps: ["Tap RUN", "A malformed packet is sent → app rejects it and keeps running (no crash)"]),
         Scenario(id: 12, name: "Unassigned Driving (~7 min)",
                  expect: "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
                  phases: [Phase(seconds: 5, targetSpeedMph: 0, ignition: true),

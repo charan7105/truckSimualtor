@@ -449,27 +449,21 @@ namespace MatrackSim.Core
     // MARK: - The 20 required scenarios
     public static class Scenarios
     {
-        public static readonly List<Scenario> All = BuildAll();
+                /// <summary>
+        /// The scenarios that still earn their place. Engine on/off, idle, driving, stopping,
+        /// duplicate and out-of-order packets were deleted — every one is a dashboard control now, so
+        /// the scenario was just pressing a button for you, and a second code path doing the same job
+        /// is how scenario 12 shipped broken for weeks while looking green. The malformed-packet case
+        /// moved to the BAD DATA panel. What remains is the one thing the dashboard cannot do:
+        /// fabricate packets that do NOT match what the simulator is currently doing. IDs are
+        /// deliberately NOT renumbered; test notes reference them.
+        /// </summary>
+public static readonly List<Scenario> All = BuildAll();
 
         private static List<Scenario> BuildAll()
         {
             var list = new List<Scenario>
             {
-                new Scenario(1, "Engine ON", "PowerUp event, engine on",
-                    new List<Phase> { new Phase(5, 0, true) },
-                    appSteps: new List<string> { "Connect the ELD app to ELD-MA", "Tap RUN", "App shows engine power-up → On-Duty" }),
-                new Scenario(2, "Engine OFF", "Shutdown event",
-                    new List<Phase> { new Phase(3, 0, true), new Phase(3, 0, false) },
-                    appSteps: new List<string> { "Tap RUN", "App logs an engine shutdown / power-off event" }),
-                new Scenario(3, "Idle", "On-duty, no driving",
-                    new List<Phase> { new Phase(30, 0, true) },
-                    appSteps: new List<string> { "Tap RUN", "Engine on but not moving → app stays On-Duty (not Driving)" }),
-                new Scenario(4, "Driving highway", "Auto-driving at ~65 mph",
-                    new List<Phase> { new Phase(5, 0, true), new Phase(40, 65, true) },
-                    appSteps: new List<string> { "Tap RUN", "At ~65 mph the app shows Driving; speed & location update live" }),
-                new Scenario(5, "Stop after drive", "Driving → stop → on-duty",
-                    new List<Phase> { new Phase(30, 60, true), new Phase(370, 0, true) },   // stop must outlast the app's ~6-min zero-speed grace (wall-clock, uncompressible)
-                    appSteps: new List<string> { "Tap RUN", "Drive, then stay stopped (engine on) ~6 min → app moves Driving → On-Duty" }),
                 new Scenario(6, "BLE disconnect during drive", "Buffer then stored replay",
                     new List<Phase> { new Phase(60, 60, true) },
                     transport: Transport.Disconnect(15, 20),
@@ -482,18 +476,6 @@ namespace MatrackSim.Core
                     new List<Phase> { new Phase(10, 50, true) },
                     transport: Transport.StoredBacklog(300),
                     appSteps: new List<string> { "Tap RUN", "300 stored packets delivered → app stays stable, no corruption" }),
-                new Scenario(9, "Duplicate packets", "Duplicates dropped by app dedup",
-                    new List<Phase> { new Phase(40, 60, true) },
-                    transport: Transport.Duplicate(5),
-                    appSteps: new List<string> { "Tap RUN", "Duplicate packets are sent → app de-dupes (no double miles)" }),
-                new Scenario(10, "Out-of-order packets", "App tolerates reordering",
-                    new List<Phase> { new Phase(40, 60, true) },
-                    transport: Transport.OutOfOrder(6),
-                    appSteps: new List<string> { "Tap RUN", "Packets arrive reordered → app tolerates it without errors" }),
-                new Scenario(11, "Packet parsing failure", "Malformed packet rejected, no crash",
-                    new List<Phase> { new Phase(30, 55, true) },
-                    transport: Transport.ParseFailure(10),
-                    appSteps: new List<string> { "Tap RUN", "A malformed packet is sent → app rejects it and keeps running (no crash)" }),
                 new Scenario(12, "Unassigned Driving (log out first)",
                     "Drive with NO driver logged in → app files Unassigned Driving (UDP) to claim",
                     new List<Phase> { new Phase(5, 0, true), new Phase(300, 60, true) },
@@ -506,6 +488,7 @@ namespace MatrackSim.Core
                     }),
             };
             return list;
+        
         }
     }
 }

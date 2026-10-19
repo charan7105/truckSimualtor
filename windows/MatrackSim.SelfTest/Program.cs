@@ -282,6 +282,12 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (movingHit && parkedClean ? "OK" : "FAIL") + "] a motion-gated fault fires while driving and not while parked");
                 if (!(movingHit && parkedClean)) allPass = false;
 
+                // The malformed packet used to be covered by scenario 11. That scenario is gone, so
+                // the button is now the only path — assert the wire here or nothing checks it.
+                bool junkRejected = !MTDecoder.IsValid("ZZ,not,a,valid,packet");
+                Console.WriteLine("  [" + (junkRejected ? "OK" : "FAIL") + "] the malformed packet is genuinely invalid");
+                if (!junkRejected) allPass = false;
+
                 // The odometer-source packet must match the shape the app's parser demands.
                 var xo = MTPacket.OdoSource(true, 1);
                 bool xoOk = xo.StartsWith("xO,") && xo.EndsWith("$$")
@@ -427,17 +433,7 @@ namespace MatrackSim.SelfTest
                     int stored = em.Count(x => x.ItemKind == Emitted.Kind.Stored);
                     return stored == 300 ? null : "expected 300 stored backlog packets, got " + stored;
                 }
-                case 9:   // duplicates: some consecutive identical wires
-                {
-                    bool dup = false;
-                    for (int i = 1; i < Math.Max(1, em.Count); i++)
-                    {
-                        if (em[i].Wire == em[i - 1].Wire && em[i].ItemKind == Emitted.Kind.Live) { dup = true; break; }
-                    }
-                    return dup ? null : "expected duplicate packets";
-                }
-                case 11:   // parse failure injected + rejected
-                    return em.Any(x => x.ItemKind == Emitted.Kind.Malformed) ? null : "expected an injected malformed packet";
+
                 default:
                     // every scenario must emit at least one valid live packet
                     return em.Any(x => x.ItemKind == Emitted.Kind.Live) ? null : "no live packets emitted";

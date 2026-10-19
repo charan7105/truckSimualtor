@@ -470,19 +470,19 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     <!-- TESTING -->
     <article class="doc" data-id="scn" data-grp="Testing">
       <div class="dhead"><div class="dic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h2>Scenarios</h2></div>
-      <p class="lead"><b>12 ready-made situations</b> you can replay with one click — no manual setup.</p>
+      <p class="lead"><b>4 focused situations</b> you can replay with one click — no manual setup.</p>
       <img class="partimg" src="assets/parts/scenario.png" alt="The SCENARIO panel: a scenario picker, a RUN button, and WHAT &amp; HOW"/>
       <h3>How to use it</h3>
       <ul class="wl">
         <li><span class="tg">Pick · RUN</span><div>Choose a scenario and press RUN — it replays the exact packet sequence.</div></li>
         <li><span class="tg">WHAT &amp; HOW</span><div>Opens step-by-step notes on what to check <b>in the ELD app</b> for that scenario.</div></li>
       </ul>
-      <h3>Do you need them?</h3>
-      <p>Mostly no. Engine on/off, idle, driving, stopping, duplicate and out-of-order packets are all
-      dashboard controls now — the scenario just presses them for you. Scenarios still earn their place
-      for one thing: <b>packets that do not match what the simulator is currently doing</b>, such as a
-      drive that supposedly happened hours ago with timestamps you choose. That is what the stored-replay
-      scenarios are for.</p>
+      <h3>Why only four?</h3>
+      <p>There used to be twelve. Engine on/off, idle, driving, stopping, duplicate and out-of-order
+      packets were all just pressing a dashboard button for you, and a malformed packet is now a
+      control in <b>Bad data</b>. What is left is the one thing the dashboard genuinely cannot do:
+      <b>fabricate packets that do not match what the simulator is currently doing</b> — a drive that
+      supposedly happened hours ago, with timestamps we choose. That is what stored replay is for.</p>
     </article>
 
     <article class="doc" data-id="bad" data-grp="Testing">
@@ -597,7 +597,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
     </div>
     <div class="bcard">
       <div class="bi"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div>
-      <h3>12 ready scenarios <span class="tg">1-click</span></h3>
+      <h3>4 focused scenarios <span class="tg">1-click</span></h3>
       <p>Replay real situations — signal loss, idle &amp; shutdown, stored backlog, unassigned driving — in one click.</p>
     </div>
     <div class="bcard">
