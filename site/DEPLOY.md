@@ -24,7 +24,10 @@ git push -u origin feature/vijay-disconnect-driveday
 3. **Root Directory:** set to **`site`** (so Vercel serves this folder, not the whole repo).
 4. Leave Build Command empty / Output Directory empty. Click **Deploy**.
 
-You'll get a URL like `https://matrack-sim-setup.vercel.app`. Share that with the team.
+The live site is **https://truck-simualtor.vercel.app** — that is the URL to share.
+
+(The `matrack-sim-setup` name above is only the example repo name in the setup steps; it is NOT the
+deployed host. Using it as a link gives a 404.)
 
 ### 3. Updates
 Every `git push` to the connected branch → Vercel **auto-redeploys**. To change text or swap in the
