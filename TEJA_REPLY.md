@@ -5,7 +5,7 @@ Hi Teja,
 I checked the `storepacketchanges` branch and added both test cases to the simulator as per the
 requirement. Built and tested, and it is live now:
 
-**https://matrack-sim-setup.vercel.app** (Mac and Windows)
+**https://truck-simualtor.vercel.app** (Mac and Windows)
 
 Open **BAD DATA** in the bottom bar, then expand the last section.
 
