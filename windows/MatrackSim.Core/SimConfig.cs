@@ -142,6 +142,13 @@ namespace MatrackSim.Core
         /// stored packet whose time is a year or more from now (REQ-940), so this must sit well past
         /// that line — 2030 is roughly four years out and unambiguous in a log.
         /// </summary>
+        /// <summary>
+        /// Speed the stored dump drives at, in mph. Must be above the app's 5 mph movement line: the
+        /// dump used to leave the engine at 0, so every stored packet took the app's
+        /// `speed &lt;= 5 &amp;&amp; ignition == 1` on-duty branch and the driving branch was never exercised.
+        /// </summary>
+        public double StoredDumpSpeedMph = 60;
+
         public static readonly DateTime FutureStoredPacketDate =
             new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         /// <summary>The two ECU odometer series the ALTERNATING fault flips between (raw field-4, x10 km).</summary>

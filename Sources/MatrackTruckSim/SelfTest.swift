@@ -420,6 +420,16 @@ enum SelfTest {
             print("  [\(footerOK ? "OK" : "FAIL")] footer reports the real count (\(footer))")
             if !footerOK { allPass = false }
 
+            // Speed must clear the app's 5 mph line, or every stored packet takes the on-duty branch
+            // and the driving branch is never tested. Field 3 is km/h; the app divides by 1.60934.
+            let speeds = WireBuilder.storedDump(count: 4, config: cfg)
+                .filter { $0.kind == .stored }
+                .compactMap { Double($0.wire.components(separatedBy: ",")[3]) }
+            let allMoving = speeds.count == 4 && speeds.allSatisfy { $0 / 1.60934 > SimConfig.movingThresholdMph }
+            let mph = speeds.first.map { $0 / 1.60934 } ?? 0
+            print("  [\(allMoving ? "OK" : "FAIL")] stored packets carry \(Int(mph)) mph — above the app's \(Int(SimConfig.movingThresholdMph)) mph driving line")
+            if !allMoving { allPass = false }
+
             // A normal dump must stay normal — no duplicates, not future dated.
             let normal = WireBuilder.storedDump(count: 4, config: cfg).filter { $0.kind == .stored }
             let noDupes = Set(normal.map { $0.wire }).count == normal.count

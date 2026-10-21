@@ -147,6 +147,9 @@ namespace MatrackSim.Core
             e.RpmPerMphConfig = config.RpmPerMph;
             e.FuelBurnPctPerMile = config.FuelBurnPctPerMile;
             e.IgnitionOn = true;
+            // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
+            // speed >= 5. Without this every dump exercised only half the stored-packet handling.
+            e.SpeedMph = config.StoredDumpSpeedMph;
             double dt = config.PacketIntervalSec;
             var opts = options ?? StoredDumpOptions.Normal;
             var output = new List<Emitted>();

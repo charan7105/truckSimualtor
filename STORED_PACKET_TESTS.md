@@ -85,6 +85,16 @@ different de-dup, and the simulator would need a control for it.
 
 ---
 
+## Stored packets now drive at 60 mph
+
+Teja flagged this: the dump used to leave the engine at 0 mph, so every stored packet carried
+speed 0 and took the app's `speed <= 5 && ignition == 1` on-duty branch. The driving branch
+(`speed >= 5`) was never exercised at all.
+
+The dump now drives at 60 mph (`SimConfig.storedDumpSpeedMph`), which is well clear of the app's
+5 mph movement line. All three test controls inherit it, so the future-dated and duplicate dumps are
+driving packets too.
+
 ## Verified in the simulator
 
 Self-test assertions on both macOS and Windows:

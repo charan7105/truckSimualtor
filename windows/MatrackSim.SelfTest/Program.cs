@@ -380,6 +380,19 @@ namespace MatrackSim.SelfTest
                 if (!dupOK) allPass = false;
 
                 // Emitted is a struct here, so Find returns a default rather than null — look it up by index.
+                // Speed must clear the app's 5 mph line or only the on-duty branch is ever tested.
+                var speedPkts = WireBuilder.StoredDump(4, cfg).FindAll(x => x.ItemKind == Emitted.Kind.Stored);
+                bool allMoving = speedPkts.Count == 4;
+                double mph = 0;
+                foreach (var em in speedPkts)
+                {
+                    double kmh = double.Parse(em.Wire.Split(',')[3], CultureInfo.InvariantCulture);
+                    mph = kmh / 1.60934;
+                    if (mph <= SimConfig.MovingThresholdMph) allMoving = false;
+                }
+                Console.WriteLine("  [" + (allMoving ? "OK" : "FAIL") + "] stored packets carry " + (int)mph + " mph — above the app's " + (int)SimConfig.MovingThresholdMph + " mph driving line");
+                if (!allMoving) allPass = false;
+
                 int footerIdx = dup.FindIndex(x => x.Wire.StartsWith("SAVED PACKET COUNT:"));
                 bool footerOK = footerIdx >= 0 && dup[footerIdx].Wire == "SAVED PACKET COUNT:" + dupStored.Count;
                 Console.WriteLine("  [" + (footerOK ? "OK" : "FAIL") + "] footer reports the real count");

@@ -126,6 +126,13 @@ struct SimConfig: Codable, Equatable {
     /// The app refuses a stored packet whose time is a year or more from now (REQ-940), so this has
     /// to be comfortably past that line — 2030 is roughly four years out and unambiguous in a log.
     static let futureStoredPacketDate = Date(timeIntervalSince1970: 1_893_456_000)   // 2030-01-01 00:00:00 UTC
+    /// Speed the stored dump drives at, in mph.
+    ///
+    /// Must be above the app's 5 mph movement line. The dump used to leave the engine at 0, so every
+    /// stored packet took the app's `speed <= 5 && ignition == 1` on-duty branch and the driving
+    /// branch (`speed >= 5`) was never exercised at all. 60 is a normal highway speed and well clear
+    /// of the threshold.
+    var storedDumpSpeedMph: Double = 60
     /// The two ECU odometer series the ALTERNATING fault flips between, as raw field-4 values
     /// (x10 km). ~3,700 miles apart, which is large enough to be obvious in the app's day log.
     var odoSeriesLowRaw = "402336"

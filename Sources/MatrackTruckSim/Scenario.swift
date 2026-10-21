@@ -112,6 +112,9 @@ enum WireBuilder {
         e.rpmPerMphConfig = config.rpmPerMph
         e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
         e.ignitionOn = true
+        // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
+        // speed >= 5. Without this every dump exercised only half the stored-packet handling.
+        e.speedMph = config.storedDumpSpeedMph
         let dt = config.packetIntervalSec
         var out: [Emitted] = []
         for i in 0..<max(0, count) {
