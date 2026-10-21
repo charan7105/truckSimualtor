@@ -1,31 +1,25 @@
-# Reply to Teja — stored packet test cases
+# Reply to Teja — speed fix in stored packets
 
 Hi Teja,
 
-I checked the `storepacketchanges` branch and added both test cases to the simulator as per the
-requirement. Built and tested, and it is live now:
+Good catch. You were right.
 
-**https://truck-simualtor.vercel.app** (Mac and Windows)
+The stored dump had ignition on but speed was 0 in all the packets. So every stored packet was
+going into the app's on-duty branch (`speed <= 5 && ignition == 1`) and the driving branch
+(`speed >= 5`) was never tested at all.
 
-Open **BAD DATA** in the bottom bar, then expand the last section.
+Fixed now — stored packets go at 60 mph.
 
-**Test 1 — future date**
-Press **STORED: FUTURE DATE (2030)**. Sends 5 stored packets dated 1 Jan 2030.
-The app should skip all of them. Check Troubleshoot → support dump → `audit` table:
-`Stored packet skipped: packet time ... is N days from now`
+One thing to note: the two new buttons I added yesterday (future date and duplicates) use the same
+builder, so they were also sending speed 0 packets. If you already tested them, please test again.
 
-**Test 2a — same connection**
-Press **STORED: DUPLICATES, SAME CONNECTION**. Each packet goes twice, one after the other.
-The second one should be dropped.
+Build is live, please take the latest:
+**https://truck-simualtor.vercel.app**
 
-**Test 2b — different connection**
-DUMP STORED → press DROP → wait for reconnect → press **STORED: REPEAT AFTER RECONNECT**.
-Sends the same packets again, byte for byte.
+Test steps are the same as before:
 
-One thing on 2b — I think it will be dropped, but only by luck. `prevStoredMD5Packet` is never
-reset on connect or disconnect, so the old value survives the reconnect and catches the duplicate.
-If the app is restarted in between, the value resets and the duplicate will be accepted.
+- **STORED: FUTURE DATE (2030)** — 5 stored packets dated 1 Jan 2030, app should skip all of them
+- **STORED: DUPLICATES, SAME CONNECTION** — each packet sent twice, second one should be dropped
+- **STORED: REPEAT AFTER RECONNECT** — dump, press DROP, wait for reconnect, then press this
 
-**One case we are not covering:** `ss(A) → ss(B) → ss(A)`. The app only checks the previous packet,
-so a duplicate with a different packet in between will pass through. Tell me if you want this added
-— it is a small change.
+All three are in **BAD DATA** in the bottom bar, last section.
