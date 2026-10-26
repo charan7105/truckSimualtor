@@ -1,7 +1,8 @@
 # Stored-packet test cases — future dates and duplicates
 
 Covers the `storepacketchanges` branch of the ELD app (REQ-940, REQ-942).
-Controls are in the simulator's **BAD DATA** panel, under *THE PHONE IGNORES THIS* (expand it).
+Controls are in the simulator's **Bad data** tab (CONNECTION panel, or the footer BAD DATA button),
+under *THE PHONE IGNORES THIS* (expand it).
 
 ---
 

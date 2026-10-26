@@ -24,7 +24,7 @@ In the serial monitor type `#txpower -12`, then `#txpower 9`.
 ❌ If the signal doesn't change → stop and tell us. Nothing else matters until this works.
 
 ### 4. Connect the PC app to the board
-Plug the board into the PC. Open the app. In the **CONNECTION · SIGNAL** box, pick the board's port and click **LINK**.
+Plug the board into the PC. Open the app. In **CONNECTION → Setup**, pick the board's port and click **LINK**.
 ✅ Good: it says `ESP32 on COM…`.
 
 ### 5. Connect the phone

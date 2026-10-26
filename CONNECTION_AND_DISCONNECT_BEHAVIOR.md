@@ -1,6 +1,6 @@
 # Connection, Signal & Disconnect Behaviour (Simulator)
 
-How the **CONNECTION · SIGNAL** controls work, what the phone (the unmodified Matrack ELD app)
+How the **CONNECTION → Signal** controls work, what the phone (the unmodified Matrack ELD app)
 actually experiences, and which real-world tracker conditions each one reproduces.
 
 Everything here is **at the application/Bluetooth layer** — the Mac cannot change its real radio
@@ -9,7 +9,7 @@ genuine BLE teardown (a real disconnect).
 
 ---
 
-## The controls (CONNECTION · SIGNAL panel)
+## The controls (CONNECTION panel → Signal tab)
 
 | Control | What the sim does | What the phone sees | Real-world equivalent |
 |---|---|---|---|
@@ -68,7 +68,7 @@ disconnect. The forced **DROP** has no such wait — it drops immediately.
 
 ## Reproducing the stored-packet-dump disconnect (Harshith's bug)
 
-Separate from signal/range — this is the **STORED DUMP** control in the same panel.
+Separate from signal/range — this is **DUMP STORED**, in the same panel's **Stored** tab.
 
 - **Cause (identified):** the app pulls stored packets after connect (`readstr`); when they are dumped
   too fast, the tracker disconnects. ~**500 ms** cadence breaks it; **1 s** is safe.

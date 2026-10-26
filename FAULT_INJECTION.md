@@ -1,6 +1,7 @@
 # Fault injection — sending bad data on purpose
 
-Open the **BAD DATA** button in the simulator's footer. The button turns red and reads
+Open the **Bad data** tab in the simulator's CONNECTION panel (or press **BAD DATA** in the
+footer, which jumps there). The footer button turns red and reads
 `BAD DATA ▸ SENDING` whenever anything is armed, so you can see from the dashboard that the wire is
 dirty without opening the panel.
 
@@ -74,7 +75,7 @@ disconnected and the engine is on, the simulator writes a flash record at that r
 whole backlog over on the app's next `readstr`.
 
 Thirty minutes per packet is slow if you only want to see the recorder working, so the rate is
-adjustable: **CONNECTION · SIGNAL → Record every**. Drop it to 0.5m for a quick check and put it
+adjustable: **CONNECTION → Stored → Record every**. Drop it to 0.5m for a quick check and put it
 back to 30m for realistic data. Flash holds 5,000 records — about 104 days at the real rate.
 
 ## Getting an Unassigned Driving Period

@@ -22,4 +22,4 @@ Test steps are the same as before:
 - **STORED: DUPLICATES, SAME CONNECTION** — each packet sent twice, second one should be dropped
 - **STORED: REPEAT AFTER RECONNECT** — dump, press DROP, wait for reconnect, then press this
 
-All three are in **BAD DATA** in the bottom bar, last section.
+All three are in **BAD DATA** in the bottom bar (CONNECTION → Bad data), last section.

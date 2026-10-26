@@ -7,7 +7,7 @@ Every requirement from the 2026-09 request, with the exact steps and what to exp
 2. Connect the phone (ELD app) and wait until telemetry is flowing — the log shows `→ LP,…`
    followed by `← $ACK`. If it has stopped, reconnect: an armed fault into a dead stream proves
    nothing.
-3. Open **BAD DATA** in the bottom bar.
+3. Open **BAD DATA** in the bottom bar (it opens the Bad data tab in the CONNECTION panel).
 4. Arm **one fault at a time**. Two at once makes the result impossible to attribute.
 5. **RESET TO CLEAN DATA** when finished.
 
@@ -130,7 +130,8 @@ stationary proves nothing.
 ## The Scenarios panel is gone
 
 All twelve scenarios were reachable from the dashboard. Engine on/off, idle, driving and stopping are
-buttons; duplicate and out-of-order packets are RAW EFFECTS sliders; stored backlogs are DUMP STORED
+buttons; duplicate and out-of-order packets are the PACKET EFFECTS sliders in CONNECTION → Setup;
+stored backlogs are DUMP STORED in CONNECTION → Stored,
 with the Count slider; a disconnect mid-drive is DROP, and the offline recorder captures the gap by
 itself. The malformed packet is now a control in BAD DATA.
 
