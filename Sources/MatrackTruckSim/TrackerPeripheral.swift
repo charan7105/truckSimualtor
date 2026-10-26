@@ -20,8 +20,23 @@ struct LogLine: Identifiable {
     let kind: Kind
 }
 
+/// The four jobs the right-hand inspector does, in the order a tester meets them.
+/// Lives here rather than in the view so the footer can jump straight to a tab.
+enum InspectorTab: String, CaseIterable, Identifiable {
+    case signal = "Signal"
+    case stored = "Stored"
+    case faults = "Bad data"
+    case setup  = "Setup"
+    var id: String { rawValue }
+}
+
 final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelegate {
     // Connection / status
+    /// Which inspector tab is showing. These used to be five sections stacked inside ONE scrolling
+    /// card, and the bottom two (stored dump, packet effects) sat below the fold where nobody found
+    /// them — the dump button a tester is told to press was invisible until they happened to scroll
+    /// inside a card that looked complete.
+    @Published var inspectorTab: InspectorTab = .signal
     @Published var status = "Starting…"
     @Published var statusColor = Theme.dim
     @Published var connected = false

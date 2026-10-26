@@ -10,7 +10,6 @@ struct ContentView: View {
     // screens (16:9 / ultrawide) get slim, balanced side margins rather than stretched panels.
     private let designSize = CGSize(width: 1800, height: 1120)
     @State private var showDTC = false
-    @State private var showFaults = false      // fault injection lives behind a footer button, like DTC
     @State private var linkCopied = false   // brief ✓ feedback after tapping the FUEL LINK pill to copy the address
     @ObservedObject private var bridge = SimBridge.shared   // LAN link the Fuel App follows
 
@@ -262,7 +261,10 @@ struct ContentView: View {
             .popover(isPresented: $showDTC, arrowEdge: .bottom) {
                 DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
             }
-            Button { showFaults.toggle() } label: {
+            // Jumps to the inspector's Bad data tab rather than opening a popover copy of it.
+            // Two live copies of the same panel meant a fault armed in one left the other showing
+            // "wire is clean", and the popover hid the link state you need while faults are running.
+            Button { sim.inspectorTab = .faults } label: {
                 // faultRevision is read so the badge repaints the moment a fault is armed, not on
                 // the next telemetry tick — see TrackerPeripheral.faultRevision.
                 let _ = sim.faultRevision
@@ -273,9 +275,7 @@ struct ContentView: View {
                 .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
             }
             .buttonStyle(.plain).hoverGlow()
-            .popover(isPresented: $showFaults, arrowEdge: .bottom) {
-                FaultPanel().frame(width: 400).padding(14).background(Theme.bg1)
-            }
+            .help("Opens the Bad data tab in the CONNECTION panel.")
             Button { sim.rearmStartup() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise"); Text("REPLAY IGNITION").font(.system(size: 11, weight: .bold, design: .rounded))

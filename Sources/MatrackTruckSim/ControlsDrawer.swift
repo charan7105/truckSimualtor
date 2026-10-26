@@ -75,7 +75,10 @@ struct DrivePanel: View {
                                   set: { sim.setSpeed(sim.drivingRoute ? max(8, $0) / 1.60934 : $0 / 1.60934) }),
                    in: 0...130).tint(Theme.ice)
 
-            Text("SIM SPEED · MAP PACE").sectionLabel()
+            // Was "SIM SPEED · MAP PACE", which reads as a third speed control sitting under two real
+            // ones. It is not a speed: it scales how far the truck travels per tick along the route
+            // (see driveDt in step()), while the speed on the wire stays whatever SPEED is set to.
+            Text("FAST-FORWARD").sectionLabel()
             HStack(spacing: 6) {
                 ForEach([1, 5, 10, 25, 30], id: \.self) { x in
                     NeonButton(title: "\(x)×", tint: Theme.amber, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
@@ -83,6 +86,9 @@ struct DrivePanel: View {
                     }
                 }
             }
+            Text("Covers the route quicker. The speed the app sees stays the same.")
+                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -178,115 +184,149 @@ struct DiagnosticsPanel: View {
     }
 }
 
+// The right-hand inspector. Four tabs, one per job a tester actually has: watch the link, replay
+// the offline backlog, send bad data, set the rig up once.
+//
+// This replaced a single card that stacked SIGNAL, ESP32, TEST SETUP, RAW EFFECTS and STORED DUMP
+// inside a nested ScrollView. Eighteen controls in a card about nine tall: the stored-dump button
+// and the packet-effect sliders were below the fold, inside a card that looked finished, so the
+// only way to find them was to scroll a view nobody could tell was scrollable.
 struct NetworkPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var showSignalInfo = false
+
     var body: some View {
-        Card(title: "CONNECTION · SIGNAL", icon: "antenna.radiowaves.left.and.right", tint: Theme.blue) {
-            // Indicators ON: this card stacks SIGNAL, ESP32, TEST SETUP, RAW EFFECTS and STORED
-            // DUMP, and with them hidden there was nothing to tell you the lower sections existed.
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 12) {
+        Card(title: "CONNECTION", icon: "antenna.radiowaves.left.and.right", tint: Theme.blue) {
+            VStack(alignment: .leading, spacing: 11) {
+                // Link state stays put across every tab — it is the one thing you must be able to
+                // see while you are doing something else (dumping, arming a fault, editing the odo).
+                liveStatusRow
 
-                    // F1 — signal / out-of-range: one clean row of presets
-                    HStack(spacing: 8) {
-                        Image(systemName: sim.linkDown ? "wifi.slash" : "wifi").font(.system(size: 12, weight: .bold)).foregroundStyle(signalTint)
-                        Text("SIGNAL").sectionLabel()
-                        Spacer()
-                        Text(signalState).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(signalTint)
-                        Button { showSignalInfo.toggle() } label: {
-                            Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.dim)
-                        }
-                        .buttonStyle(.plain).hoverGlow()
-                        .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
-                            Text("AUTO continuously sweeps the signal on its own (full ↔ weak ↔ poor) and every few minutes drops fully out of range to mimic a dead zone (tunnel / rural gap) — the app disconnects and auto-reconnects, just like a real drive. It's the default. FULL / POOR set link strength manually (lower = more latency, still connected — real BLE never drops packets on weak signal). DROP forces an immediate disconnect now, then re-advertises after the Auto-return timer, or press BACK, so the app reconnects.")
-                                .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
-                                .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
-                        }
-                    }
-                    HStack(spacing: 6) {
-                        signalPreset("FULL", 100)
-                        NeonButton(title: "AUTO", tint: Theme.ice, filled: sim.autoSignal) { sim.setAutoSignal(!sim.autoSignal) }
-                        signalPreset("POOR", 25)
-                        NeonButton(title: sim.linkDown ? "BACK" : "DROP", icon: sim.linkDown ? "wifi" : "wifi.slash",
-                                   tint: Theme.red, filled: sim.linkDown) {
-                            if sim.linkDown { sim.resumeLink() } else { sim.autoSignal = false; sim.forceDisconnect(seconds: sim.config.rangeOutageSec) }
-                        }
-                    }
-                    if sim.linkDown {
-                        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                            HStack(spacing: 6) {
-                                Image(systemName: "clock.arrow.circlepath").font(.system(size: 11)).foregroundStyle(Theme.amber)
-                                Text(outageCountdown).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
-                                Spacer()
-                            }
-                        }
-                    }
-                    cfgSlider("Auto-return", \.rangeOutageSec, 15...180, "s", 0)
-
-                    Divider().overlay(Theme.stroke)
-
-                    // ESP32 (USB-serial) transport: pick the port + toggle BLE ⇄ ESP32 (enables real RSSI).
-                    HStack(spacing: 6) {
-                        Text("ESP32").sectionLabel()
-                        Spacer()
-                        Text(sim.config.link == .esp32Serial ? "\(sim.config.txPowerDbm >= 0 ? "+" : "")\(sim.config.txPowerDbm) dBm" : "n/a (BLE)")
-                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice)
-                    }
-                    HStack(spacing: 6) {
-                        Picker("", selection: Binding(get: { sim.config.serialPortName }, set: { sim.config.serialPortName = $0 })) {
-                            Text("Select port…").tag("")
-                            ForEach(sim.availableSerialPorts, id: \.self) { p in
-                                Text(portShort(p)).tag(p)
-                            }
-                        }
-                        .labelsHidden().pickerStyle(.menu).tint(Theme.ice)
-                        NeonButton(title: "LINK", tint: Theme.ice, filled: sim.config.link == .esp32Serial) {
-                            sim.switchTransport(sim.config.link == .esp32Serial ? .ble : .esp32Serial)
-                        }
-                    }
-                    // RSSI = ESP32 real BLE TX power. 0% out of range (-12 dBm) … 100% full (+9 dBm).
-                    rssiSlider
-                    // FLICKER: edge-of-range wobble — signal flaps weak⇄almost-gone so the phone's link flickers.
-                    NeonButton(title: "〰 FLICKER", tint: Theme.amber, filled: sim.flickerOn) {
-                        sim.setFlicker(!sim.flickerOn)
-                    }
-
-                    Divider().overlay(Theme.stroke)
-
-                    // Raw transport effects (advanced). Weak signal adds latency (driven by SIGNAL / AUTO), not loss.
-                    setupFields
-
-                    Divider().overlay(Theme.stroke)
-
-                    Text("RAW EFFECTS").sectionLabel()
-                    cfgSlider("Dup", \.duplicatePct, 0...50, "%", 0)
-                    cfgSlider("Reorder", \.outOfOrderPct, 0...50, "%", 0)
-                    cfgSlider("Interval", \.packetIntervalSec, 0.25...3, "s", 2)
-
-                    Divider().overlay(Theme.stroke)
-
-                    // F2 — stored-packet dump (reproduce the fast-dump disconnect)
-                    HStack {
-                        Text("STORED DUMP").sectionLabel(); Spacer()
-                        Text("\(sim.config.storedDumpCount) pkts").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
-                    }
-                    countSlider
-                    cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
-                    // Offline recording rate. The real tracker writes one record every 30 minutes;
-                    // turn it down when you just want to watch the recorder work.
-                    cfgSlider("Record every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
-                    NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
-                               icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: isDumping) {
-                        sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
-                    }
-                    Text("≈500ms reproduces the disconnect · 1s is safe.")
-                        .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                Picker("", selection: $sim.inspectorTab) {
+                    ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) }
                 }
+                .labelsHidden().pickerStyle(.segmented)
+
+                switch sim.inspectorTab {
+                case .signal: signalTab
+                case .stored: storedTab
+                case .faults: FaultPanel(embedded: true)
+                case .setup:  setupTab
+                }
+                Spacer(minLength: 0)
             }
         }
     }
 
+    // MARK: - Always-visible link state
+
+    private var liveStatusRow: some View {
+        HStack(spacing: 8) {
+            // Shape as well as colour: red/amber/green alone fails for colour-blind testers.
+            Image(systemName: sim.linkDown ? "wifi.slash" : "wifi")
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(signalTint)
+            Text(signalState).font(.system(size: 11, weight: .heavy, design: .rounded))
+                .tracking(1).foregroundStyle(signalTint)
+            Spacer()
+            if sim.linkDown {
+                TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                    Text(outageCountdown).font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.amber)
+                }
+            }
+            Button { showSignalInfo.toggle() } label: {
+                Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(Theme.dim)
+            }
+            .buttonStyle(.plain).hoverGlow()
+            .padding(4).contentShape(Rectangle())      // desktop click targets want >= 24pt
+            .popover(isPresented: $showSignalInfo, arrowEdge: .bottom) {
+                Text("AUTO continuously sweeps the signal on its own (full ↔ weak ↔ poor) and every few minutes drops fully out of range to mimic a dead zone (tunnel / rural gap) — the app disconnects and auto-reconnects, just like a real drive. It's the default. FULL / POOR set link strength manually (lower = more latency, still connected — real BLE never drops packets on weak signal). DROP forces an immediate disconnect now, then re-advertises after the Back-in-range timer, or press BACK, so the app reconnects.")
+                    .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.text)
+                    .frame(width: 280).fixedSize(horizontal: false, vertical: true).padding(16).background(Theme.bg1)
+            }
+        }
+    }
+
+    // MARK: - Signal
+
+    private var signalTab: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 6) {
+                signalPreset("FULL", 100)
+                NeonButton(title: "AUTO", tint: Theme.ice, filled: sim.autoSignal) { sim.setAutoSignal(!sim.autoSignal) }
+                signalPreset("POOR", 25)
+                NeonButton(title: sim.linkDown ? "BACK" : "DROP", icon: sim.linkDown ? "wifi" : "wifi.slash",
+                           tint: Theme.red, filled: sim.linkDown) {
+                    if sim.linkDown { sim.resumeLink() } else { sim.autoSignal = false; sim.forceDisconnect(seconds: sim.config.rangeOutageSec) }
+                }
+            }
+            // RSSI only in ESP32 mode — see rssiSlider for why the label follows the transport.
+            rssiSlider
+            cfgSlider("Back in range after", \.rangeOutageSec, 15...180, "s", 0)
+            NeonButton(title: "〰 FLICKER", tint: Theme.amber, filled: sim.flickerOn) {
+                sim.setFlicker(!sim.flickerOn)
+            }
+            Text("FLICKER wobbles the link at the edge of range so the phone keeps dropping and re-finding it.")
+                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Stored
+
+    private var storedTab: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("While the phone is disconnected the tracker keeps writing to flash, then hands the whole backlog over on the app's next readstr.")
+                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            cfgSlider("Record every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
+
+            Divider().overlay(Theme.stroke)
+
+            Text("REPLAY A DUMP NOW").sectionLabel()
+            countSlider
+            cfgSlider("Send every", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
+            NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
+                       icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: isDumping) {
+                sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
+            }
+            Text("≈500ms reproduces the disconnect · 1s is safe.")
+                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+        }
+    }
+
+    // MARK: - Setup (set once, then left alone)
+
+    private var setupTab: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("ESP32 RADIO").sectionLabel()
+            HStack(spacing: 6) {
+                Picker("", selection: Binding(get: { sim.config.serialPortName }, set: { sim.config.serialPortName = $0 })) {
+                    Text("Select port…").tag("")
+                    ForEach(sim.availableSerialPorts, id: \.self) { p in
+                        Text(portShort(p)).tag(p)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu).tint(Theme.ice)
+                NeonButton(title: "LINK", tint: Theme.ice, filled: sim.config.link == .esp32Serial) {
+                    sim.switchTransport(sim.config.link == .esp32Serial ? .ble : .esp32Serial)
+                }
+                Text(sim.config.link == .esp32Serial ? "\(sim.config.txPowerDbm >= 0 ? "+" : "")\(sim.config.txPowerDbm) dBm" : "n/a (BLE)")
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.ice).fixedSize()
+            }
+
+            Divider().overlay(Theme.stroke)
+
+            setupFields
+
+            Divider().overlay(Theme.stroke)
+
+            Text("PACKET EFFECTS").sectionLabel()
+            cfgSlider("Duplicate", \.duplicatePct, 0...50, "%", 0)
+            cfgSlider("Out of order", \.outOfOrderPct, 0...50, "%", 0)
+            cfgSlider("Packet every", \.packetIntervalSec, 0.25...3, "s", 2)
+        }
+    }
     private var isDumping: Bool { sim.runningDump?.hasPrefix("Stored dump") == true }
 
     private var signalTint: Color {
@@ -505,6 +545,9 @@ struct PacketConsole: View {
 // a button and waiting for an alert that cannot come. So the sections are labelled by outcome and
 // the ignored ones are collapsed by default — present, but never mistaken for a warning.
 struct FaultPanel: View {
+    /// `true` when shown as a tab inside the inspector Card, which already draws the chrome and
+    /// constrains the height — so drop the standalone popover's own frame and let it fill the tab.
+    var embedded = false
     @EnvironmentObject var sim: SimController
     @State private var showIgnored = false
     @State private var customVin = "00000000000000000"
@@ -520,7 +563,8 @@ struct FaultPanel: View {
         let _ = sim.faultRevision
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                header
+                if !embedded { header }      // the tab shows the arm state in its own summary row
+                if embedded { embeddedHeader } else { EmptyView() }
                 legend
                 warns
                 Divider().overlay(Theme.stroke)
@@ -528,8 +572,23 @@ struct FaultPanel: View {
                 Divider().overlay(Theme.stroke)
                 ignoredSection
             }
+            .padding(.trailing, embedded ? 4 : 0)   // breathing room beside the scroll indicator
         }
-        .frame(maxHeight: 560)
+        .frame(maxHeight: embedded ? .infinity : 560)
+    }
+
+    /// Inside the inspector the Card title and the live link row are already overhead, so the tab
+    /// leads with the only thing that changes — whether the wire is clean — plus the way back to it.
+    private var embeddedHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(sim.faultsArmed ? "SENDING BAD DATA: \(armedSummary)" : "Wire is clean — the phone is getting good data.")
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            if sim.faultsArmed {
+                NeonButton(title: "RESET TO CLEAN DATA", tint: Theme.red, filled: true) { sim.clearAllFaults() }
+            }
+        }
     }
 
     private var header: some View {
