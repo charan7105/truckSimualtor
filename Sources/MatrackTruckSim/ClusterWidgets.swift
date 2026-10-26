@@ -135,7 +135,7 @@ struct NavStrip: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(active ? distanceString(sim.routeRemainingMeters) : "No active route")
                     .font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Theme.text).contentTransition(.numericText())
-                Text(active ? "Continue on route" : "Plan or randomize a route in the Flight Deck")
+                Text(active ? "Continue on route" : "Set From and To under ROUTE, or press RANDOM")
                     .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(Theme.dim).lineLimit(1)
             }
             Spacer()

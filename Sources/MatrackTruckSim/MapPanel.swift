@@ -5,7 +5,7 @@ import AppKit
 import QuartzCore
 
 /// The center navigation map: the route polyline + a smoothly-eased truck pin with a continuous
-/// pan, with a floating compass. Route controls live in the Flight Deck drawer.
+/// pan, with a floating compass. Route controls live in the ROUTE card, left column.
 struct ClusterMap: View {
     @ObservedObject var sim: SimController
     var body: some View {
