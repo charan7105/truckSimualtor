@@ -50,7 +50,7 @@ struct VINChip: View {
     @FocusState private var focused: Bool
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "number").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.dim)
+            Image(systemName: "number").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.dim)
             if editing {
                 TextField("VIN", text: $sim.vin)
                     .textFieldStyle(.plain)
@@ -65,7 +65,7 @@ struct VINChip: View {
                     .font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(1)
             }
             Text(sim.vin.count == 17 ? "VALID" : "TEST")
-                .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1)
+                .font(.system(size: 11, weight: .bold, design: .rounded)).tracking(1)
                 .foregroundStyle(sim.vin.count == 17 ? Theme.green : Theme.amber)
             Image(systemName: "pencil").font(.system(size: 10)).foregroundStyle(Theme.dim)
         }
@@ -109,7 +109,7 @@ struct NavStrip: View {
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(label).font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1.3).foregroundStyle(bannerTint)
+                Text(label).font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(1.3).foregroundStyle(bannerTint)
                 Text(status).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(Theme.text)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
@@ -207,13 +207,13 @@ struct CompassRose: View {
         ZStack {
             Circle().fill(Theme.bg0.opacity(0.7))
             Circle().stroke(Theme.stroke, lineWidth: 1)
-            Text("N").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(Theme.red)
+            Text("N").font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(Theme.red)
                 .offset(y: -32)
                 .rotationEffect(.degrees(-Double(sim.headingDeg)))
                 .animation(.easeOut(duration: 0.4), value: sim.headingDeg)
             VStack(spacing: 0) {
                 Text("\(sim.headingDeg)°").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Theme.text)
-                Text(sim.cardinal).font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+                Text(sim.cardinal).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
             }
         }
         .frame(width: 88, height: 88)
@@ -282,5 +282,80 @@ struct NumberEntry: View {
     private func apply() {
         if let v = Double(text.trimmingCharacters(in: .whitespaces)) { commit(v) }
         editing = false
+    }
+}
+
+// MARK: - Next step
+
+/// The one thing to do next, derived from live state.
+///
+/// Without this the face is forty controls and no sequence: a tester who has not been walked through
+/// it has no way to tell that the engine has to be on before anything else works, or that the phone
+/// has to connect before a stored dump means anything. The order below is the real dependency chain,
+/// so following it top to bottom is always a working run.
+struct NextStep: View {
+    @EnvironmentObject var sim: SimController
+
+    private struct Step {
+        var icon: String
+        var title: String
+        var detail: String
+        var button: String? = nil
+        var tint: Color = Theme.ice
+        var run: (() -> Void)? = nil
+    }
+
+    /// `true` once the truck is actually moving by ANY route — a planned route, auto-cruise, or a
+    /// hand-set speed. Most testers never touch the route controls, so "moving" cannot mean
+    /// "driving a route" or the guidance would nag people who are already doing it right.
+    private var moving: Bool { sim.drivingRoute || sim.autoDrive || sim.speedMph > 0.5 }
+
+    private var step: Step {
+        if !sim.ignitionOn {
+            return Step(icon: "power", title: "Turn the engine on",
+                        detail: "Nothing is sent to the phone while the key is off.",
+                        button: "ENGINE ON", tint: Theme.green) { sim.setEngine(true) }
+        }
+        if !moving {
+            return sim.hasRoute
+                ? Step(icon: "play.fill", title: "Start driving",
+                       detail: "The route is planned and ready.",
+                       button: "DRIVE", tint: Theme.green) { sim.startRouteDrive() }
+                : Step(icon: "steeringwheel", title: "Get the truck moving",
+                       detail: "Press a speed under DRIVE, or plan a route and press DRIVE.",
+                       button: "RANDOM ROUTE", tint: Theme.ice) { Task { await sim.loadRandomRoute() } }
+        }
+        if !sim.connected {
+            return Step(icon: "iphone.radiowaves.left.and.right", title: "Connect the phone",
+                        detail: "Open the Matrack ELD app and connect to ELD-MA.", tint: Theme.amber)
+        }
+        if !sim.streaming {
+            return Step(icon: "hourglass", title: "Waiting for the app to ask for data",
+                        detail: "The phone is connected. It sends readdata when it is ready.", tint: Theme.amber)
+        }
+        return Step(icon: "checkmark.circle.fill", title: "Running — the phone is getting live data",
+                    detail: "Pick a test from the CONNECTION panel on the right.", tint: Theme.green)
+    }
+
+    var body: some View {
+        let s = step
+        HStack(spacing: 10) {
+            Image(systemName: s.icon).font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(s.tint).frame(width: 16)
+            Text(s.title).font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.text)
+            Text(s.detail).font(.system(size: 12, design: .rounded))
+                .foregroundStyle(Theme.dim).lineLimit(1)
+            Spacer(minLength: 8)
+            if let run = s.run, let title = s.button {
+                NeonButton(title: title, tint: s.tint, prominent: true, action: run).frame(width: 150)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(s.tint.opacity(0.35), lineWidth: 1))
+        .animation(.easeOut(duration: 0.2), value: s.title)
     }
 }

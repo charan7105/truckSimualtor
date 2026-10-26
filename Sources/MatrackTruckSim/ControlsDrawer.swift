@@ -21,7 +21,7 @@ private struct Card<C: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 7) {
                 if !icon.isEmpty {
-                    Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+                    Image(systemName: icon).font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.dim)
                 }
                 Text(title).cardTitle()
@@ -57,7 +57,7 @@ struct DrivePanel: View {
             // SPEED label + live MODE badge + value all on one line (mode no longer needs its own row)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Speed").sectionLabel()
-                Text(modeText.capitalized).font(.system(size: 10, weight: .semibold, design: .rounded))
+                Text(modeText.capitalized).font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(modeTint)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(modeTint.opacity(0.14)))
@@ -82,7 +82,7 @@ struct DrivePanel: View {
                 }
             }
             Text("Covers the route quicker. The speed the app sees stays the same.")
-                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -165,7 +165,7 @@ struct DiagnosticsPanel: View {
             } else {
                 HStack(spacing: 6) {
                     ForEach(sim.faults, id: \.self) { f in
-                        Text(f).font(.system(size: 10, weight: .bold, design: .monospaced))
+                        Text(f).font(.system(size: 11, weight: .bold, design: .monospaced))
                             .padding(.horizontal, 7).padding(.vertical, 3)
                             .background(Capsule().fill(Theme.red.opacity(0.18)))
                             .overlay(Capsule().stroke(Theme.red.opacity(0.6), lineWidth: 1))
@@ -225,7 +225,7 @@ struct NetworkPanel: View {
             Spacer()
             if sim.linkDown {
                 TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                    Text(outageCountdown).font(.system(size: 10, weight: .semibold, design: .rounded))
+                    Text(outageCountdown).font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(Theme.amber)
                 }
             }
@@ -262,7 +262,7 @@ struct NetworkPanel: View {
                 sim.setFlicker(!sim.flickerOn)
             }
             Text("FLICKER wobbles the link at the edge of range so the phone keeps dropping and re-finding it.")
-                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -272,7 +272,7 @@ struct NetworkPanel: View {
     private var storedTab: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("While the phone is disconnected the tracker keeps writing to flash, then hands the whole backlog over on the app's next readstr.")
-                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
             cfgSlider("Record every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
 
@@ -287,7 +287,7 @@ struct NetworkPanel: View {
                 sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
             }
             Text("≈500ms reproduces the disconnect · 1s is safe.")
-                .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
         }
     }
 
@@ -308,7 +308,7 @@ struct NetworkPanel: View {
                     sim.switchTransport(sim.config.link == .esp32Serial ? .ble : .esp32Serial)
                 }
                 Text(sim.config.link == .esp32Serial ? "\(sim.config.txPowerDbm >= 0 ? "+" : "")\(sim.config.txPowerDbm) dBm" : "n/a (BLE)")
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.ice).fixedSize()
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).fixedSize()
             }
 
             Divider().overlay(Theme.stroke)
@@ -381,7 +381,7 @@ struct NetworkPanel: View {
             // Must track the same flag the setter gates on (`connected`), or the caption promises
             // "any value" during a watchdog lapse while the app is still attached.
             Text(sim.connected ? "forward only while the app is connected" : "any value — no app connected")
-                .font(.system(size: 10, design: .rounded))
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(sim.connected ? Theme.amber : Theme.dim)
         }
     }
@@ -407,7 +407,7 @@ struct NetworkPanel: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("\(value)").font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(changed ? Theme.amber : Theme.ice)
-                    Text("def \(fallback)").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                    Text("def \(fallback)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim)
                 }.fixedSize()
             }
             if changed {
@@ -416,7 +416,7 @@ struct NetworkPanel: View {
                     sim.info("Count back to the default \(fallback)")
                 } label: {
                     Text("↺ back to default \(fallback)")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
                 // Desktop click targets want >= 24pt; the bare label was about 12pt tall.
                 .buttonStyle(.plain)
@@ -456,7 +456,7 @@ struct NetworkPanel: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(changed ? Theme.amber : Theme.ice)
                     Text("def \(String(format: "%.\(dec)f", fallback))")
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim)
                 }.fixedSize()
             }
             // ALWAYS visible, not just once it differs: you need to know what normal looks like
@@ -467,7 +467,7 @@ struct NetworkPanel: View {
                     sim.info("\(label) back to the default \(String(format: "%.\(dec)f", fallback))\(unit)")
                 } label: {
                     Text("↺ back to default \(String(format: "%.\(dec)f", fallback))\(unit)")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
                 }
                 // Desktop click targets want >= 24pt; the bare label was about 12pt tall.
                 .buttonStyle(.plain)
@@ -485,7 +485,7 @@ struct PacketConsole: View {
             HStack(spacing: 10) {
                 Text("Live packet stream").sectionLabel()
                 Spacer()
-                Text("\(sim.log.count) lines").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                Text("\(sim.log.count) lines").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim)
                 Button { exportLog() } label: {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.ice)
                 }.buttonStyle(.plain).hoverGlow().help("Export packet log to a file")
@@ -578,7 +578,7 @@ struct FaultPanel: View {
     private var embeddedHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(sim.faultsArmed ? "SENDING BAD DATA: \(armedSummary)" : "Wire is clean — the phone is getting good data.")
-                .font(.system(size: 10, design: .rounded))
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
             if sim.faultsArmed {
@@ -595,7 +595,7 @@ struct FaultPanel: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(Theme.text)
             }
             Text(sim.faultsArmed ? "SENDING BAD DATA: \(armedSummary)" : "Wire is clean — the phone is getting good data.")
-                .font(.system(size: 10, design: .rounded))
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
             NeonButton(title: "RESET TO CLEAN DATA", tint: Theme.red, filled: sim.faultsArmed) {
                 sim.clearAllFaults()
@@ -605,7 +605,7 @@ struct FaultPanel: View {
 
     private var legend: some View {
         Text("⚠ phone warns     ◐ bad data, no warning     ∅ phone ignores it")
-            .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+            .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
     }
 
     // Ordered fastest-to-fire first, so a demo runs straight down the list.
@@ -696,25 +696,25 @@ struct FaultPanel: View {
             Button { withAnimation { showIgnored.toggle() } } label: {
                 HStack(spacing: 6) {
                     Image(systemName: showIgnored ? "chevron.down" : "chevron.right").font(.system(size: 10))
-                    Text("∅ SHOW THE FAULTS THE APP IGNORES").font(.system(size: 10, weight: .bold, design: .rounded))
+                    Text("∅ SHOW THE FAULTS THE APP IGNORES").font(.system(size: 11, weight: .bold, design: .rounded))
                 }.foregroundStyle(Theme.dim)
             }.buttonStyle(.plain)
 
             if showIgnored {
                 Text("Verified against the app source. These are worth sending to PROVE the app ignores them — not to wait for an alert.")
-                    .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                    .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
 
                 HStack(spacing: 6) {
                     TextField("VIN", text: $customVin)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.text)
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.text)
                     NeonButton(title: "SEND BAD VIN", tint: Theme.dim, filled: false) {
                         sim.vin = customVin
                         sim.sendVINNow()
                     }
                 }
                 Text("All zeros and a 6-character VIN behave identically. Only visible in Troubleshoot → Run Diagnostic Check.")
-                    .font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                    .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
 
                 HStack(spacing: 6) {
                     NeonButton(title: "ALL ZEROS", tint: Theme.dim, filled: false) { customVin = "00000000000000000" }
@@ -772,8 +772,8 @@ struct FaultPanel: View {
                              action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             NeonButton(title: on ? "\(title)  ● ON" : title, tint: on ? Theme.red : Theme.ice, filled: on, action: action)
-            Text(subtitle).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
-            Text(look).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+            Text(subtitle).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
         }
     }
 
@@ -781,8 +781,8 @@ struct FaultPanel: View {
                              action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             NeonButton(title: title, tint: Theme.amber, filled: false, action: action)
-            Text(subtitle).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
-            Text(look).font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+            Text(subtitle).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.text.opacity(0.75))
+            Text(look).font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
         }
     }
 }

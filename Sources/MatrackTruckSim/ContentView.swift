@@ -9,27 +9,49 @@ struct ContentView: View {
     // clips. The content is compacted to fit this height at ~full size (no heavy shrink). Wider-than-16:10
     // screens (16:9 / ultrawide) get slim, balanced side margins rather than stretched panels.
     private let designSize = CGSize(width: 1800, height: 1120)
+    /// User zoom on top of the fit-to-window scale. macOS has no Dynamic Type, so scaling the whole
+    /// face under the operator's control is the only honest answer to "the text is too small" — at
+    /// the old 1000pt minimum width the 10pt labels were rendering at 5.6pt. View ▸ Zoom In (⌘+).
+    @AppStorage("uiZoom") private var uiZoom: Double = 1.0
     @State private var showDTC = false
     @State private var linkCopied = false   // brief ✓ feedback after tapping the FUEL LINK pill to copy the address
     @ObservedObject private var bridge = SimBridge.shared   // LAN link the Fuel App follows
 
     var body: some View {
         GeometryReader { geo in
-            let scale = min(geo.size.width / designSize.width, geo.size.height / designSize.height)
+            let fit = min(geo.size.width / designSize.width, geo.size.height / designSize.height)
+            let scale = fit * uiZoom
+            let w = designSize.width * scale, h = designSize.height * scale
             ZStack {
                 DashboardBackground()            // fills the actual window (unscaled)
-                face
-                    .frame(width: designSize.width, height: designSize.height)   // lay out at design size
-                    .scaleEffect(scale, anchor: .center)                         // fit to the window (grows or shrinks), never clips
-                    .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint to the window → centers
+                if uiZoom <= 1 {
+                    // Unzoomed: fit and centre, exactly as before. No ScrollView in this path —
+                    // inside one the face is measured at its pre-scale 1800x1120, so the window
+                    // shows a crop of an oversized canvas instead of the whole fitted cockpit.
+                    face
+                        .frame(width: designSize.width, height: designSize.height)   // lay out at design size
+                        .scaleEffect(scale, anchor: .center)                         // fit to the window, never clips
+                        .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint → centers
+                } else {
+                    // Zoomed past fit the face is bigger than the window, so it has to scroll —
+                    // clipping it would silently cut off controls.
+                    ScrollView([.horizontal, .vertical]) {
+                        face
+                            .frame(width: designSize.width, height: designSize.height)
+                            .scaleEffect(scale, anchor: .topLeading)
+                            .frame(width: w, height: h)
+                    }
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
         // maxWidth/Height .infinity makes the GeometryReader report the ACTUAL window size (not the ideal),
         // so the fit math uses real dimensions; idealWidth/Height just sets the default open size.
-        .frame(minWidth: 1000, idealWidth: 1560, maxWidth: .infinity,
-               minHeight: 660, idealHeight: 980, maxHeight: .infinity)
+        // The minimum was 1000x660, which forced a 0.56 fit scale and rendered the smallest labels at
+        // 5.6pt. 1280x820 holds the scale at 0.71 or better, so nothing drops under ~8pt unzoomed.
+        .frame(minWidth: 1280, idealWidth: 1560, maxWidth: .infinity,
+               minHeight: 820, idealHeight: 980, maxHeight: .infinity)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -137,6 +159,7 @@ struct ContentView: View {
         let live = sim.phase == .live
         return VStack(spacing: 16) {
             TopRail().panelReveal(live, delay: 0.0)
+            NextStep().panelReveal(live, delay: 0.04)
 
             HStack(alignment: .top, spacing: 20) {
                 // LEFT (controls lane): big speed dial → route → drive.
@@ -183,7 +206,7 @@ struct ContentView: View {
         let t2 = sim.fuel2Pct < 20 ? Theme.red : Theme.blue
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 7) {
-                Image(systemName: "fuelpump.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.dim)
+                Image(systemName: "fuelpump.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.dim)
                 Text("FUEL").cardTitle()
                 Spacer()
                 Text("Dual tank").sectionLabel()
@@ -232,7 +255,7 @@ struct ContentView: View {
                         Text("FUEL LINK \(bridge.linkIP)")
                             .font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.green)
                         Image(systemName: linkCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.green.opacity(0.8))
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.green.opacity(0.8))
                     }
                     .padding(.horizontal, 9).padding(.vertical, 3)
                     .background(Capsule().fill(Theme.green.opacity(0.12)))
@@ -242,39 +265,46 @@ struct ContentView: View {
                 .help("Tap to copy the address, then paste it into the phone's Fuel App → Link to sim. Phone + this computer must share WiFi (or the phone's hotspot).")
             }
             Spacer()
-            Button { showDTC.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "wrench.and.screwdriver.fill")
-                    Text(sim.faults.isEmpty ? "DTC" : "DTC (\(sim.faults.count))").font(.system(size: 11, weight: .bold, design: .rounded))
+            footerButton("DTC", sim.faults.isEmpty ? "DTC" : "DTC (\(sim.faults.count))",
+                         icon: "wrench.and.screwdriver.fill",
+                         tint: sim.faults.isEmpty ? Theme.dim : Theme.amber) { showDTC.toggle() }
+                .popover(isPresented: $showDTC, arrowEdge: .bottom) {
+                    DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
                 }
-                .foregroundStyle(sim.faults.isEmpty ? Theme.dim : Theme.amber)
-            }
-            .buttonStyle(.plain).hoverGlow()
-            .popover(isPresented: $showDTC, arrowEdge: .bottom) {
-                DiagnosticsPanel().frame(width: 360).padding(14).background(Theme.bg1)
-            }
             // Jumps to the inspector's Bad data tab rather than opening a popover copy of it.
             // Two live copies of the same panel meant a fault armed in one left the other showing
             // "wire is clean", and the popover hid the link state you need while faults are running.
-            Button { sim.inspectorTab = .faults } label: {
-                // faultRevision is read so the badge repaints the moment a fault is armed, not on
-                // the next telemetry tick — see TrackerPeripheral.faultRevision.
-                let _ = sim.faultRevision
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text(sim.faultsArmed ? "BAD DATA ▸ SENDING" : "BAD DATA").font(.system(size: 11, weight: .bold, design: .rounded))
-                }
-                .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
+            // faultRevision is read so the badge repaints the moment a fault is armed, not on the
+            // next telemetry tick — see TrackerPeripheral.faultRevision.
+            footerButton("BADDATA\(sim.faultRevision)",
+                         sim.faultsArmed ? "BAD DATA ▸ SENDING" : "BAD DATA",
+                         icon: "exclamationmark.triangle.fill",
+                         tint: sim.faultsArmed ? Theme.red : Theme.dim) { sim.inspectorTab = .faults }
+                .help("Opens the Bad data tab in the CONNECTION panel.")
+            footerButton("REPLAY", "REPLAY IGNITION", icon: "arrow.clockwise", tint: Theme.dim) {
+                sim.rearmStartup()
             }
-            .buttonStyle(.plain).hoverGlow()
-            .help("Opens the Bad data tab in the CONNECTION panel.")
-            Button { sim.rearmStartup() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise"); Text("REPLAY IGNITION").font(.system(size: 11, weight: .bold, design: .rounded))
-                }
-                .foregroundStyle(Theme.dim)
-            }.buttonStyle(.plain).hoverGlow()
         }
-        .frame(height: 24)
+        .frame(height: 30)
+    }
+
+    /// Footer controls used to be bare 11pt text with no border and a ~14pt hit area — they did not
+    /// read as buttons at all, and the desktop guidance is a >= 24pt target. Same chrome as every
+    /// other control on the face, so they look clickable because they are.
+    private func footerButton(_ id: String, _ title: String, icon: String, tint: Color,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                Text(title).font(.system(size: 11, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 11).padding(.vertical, 6)
+            .frame(minHeight: 26)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.control))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).hoverGlow().id(id)
     }
 }

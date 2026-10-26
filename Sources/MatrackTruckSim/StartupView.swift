@@ -53,7 +53,7 @@ struct IgnitionView: View {
             }
             .buttonStyle(.plain)
             Text("PRESS TO INITIALIZE")
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded)).tracking(2.5).foregroundStyle(Theme.dim)
+                .font(.system(size: 11, weight: .semibold, design: .rounded)).tracking(2.5).foregroundStyle(Theme.dim)
         }
         .onAppear { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true } }
     }
