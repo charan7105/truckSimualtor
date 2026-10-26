@@ -1,0 +1,1926 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Devices.Bluetooth;
+using Windows.Devices.Bluetooth.GenericAttributeProfile;
+using Windows.Devices.Radios;
+using Windows.Storage.Streams;
+using MatrackSim.Core;
+
+namespace MatrackSim.App
+{
+    // The simulator core: a BLE peripheral that impersonates a legacy Matrack "MT" tracker,
+    // exposed as an INotifyPropertyChanged object so the WPF control panel can drive + observe it.
+    //
+    // PLATFORM NOTE (read me): Windows BLE advertising broadcasts the *machine name* — there is no
+    // per-app local-name API like CoreBluetooth's CBAdvertisementDataLocalNameKey. The ELD app
+    // filters peripherals by a name that starts with "ELD-MA", so on Windows the PC MUST be renamed
+    // to begin with "ELD-MA" (Settings ▸ System ▸ About ▸ Rename this PC), exactly the same workaround
+    // as the macOS name fix. advertisedName below is kept only for the UI/status text.
+
+    /// <summary>Power-on state machine for the cinematic ignition sequence.</summary>
+    public enum ClusterPhase { Cold, Igniting, Sweep, Settle, Live }
+
+    /// <summary>
+    /// Semantic status color. Swift used SwiftUI's Theme.Color (a UI type); on Windows the color is a
+    /// view concern, so the controller exposes the *meaning* and the WPF layer maps it to a brush.
+    /// </summary>
+    public enum StatusColor { Dim, Red, Green, Amber }
+
+    public sealed class LogLine
+    {
+        public enum Kind { Out, Inbound, Info, Drop }
+        public Guid Id { get; } = Guid.NewGuid();
+        public string Time { get; }
+        public string Text { get; }
+        public Kind LineKind { get; }
+
+        public LogLine(string time, string text, Kind kind)
+        {
+            Time = time;
+            Text = text;
+            LineKind = kind;
+        }
+
+        // Presentation helpers for the packet-stream DataTemplate (mirrors the symbol/colour the
+        // Swift console drew per line). Brushes are frozen so they're safe to read from any thread.
+        public string Symbol
+        {
+            get
+            {
+                switch (LineKind)
+                {
+                    case Kind.Out: return "→";
+                    case Kind.Inbound: return "←";
+                    case Kind.Drop: return "⨯";
+                    default: return "•";
+                }
+            }
+        }
+
+        /// <summary>Row text colour — info lines are dimmed like the Mac (kind==.info ? dim : text).</summary>
+        public System.Windows.Media.Brush TextBrush =>
+            LineKind == Kind.Info ? ThemeBrushes.Dim : ThemeBrushes.Text;
+
+        public System.Windows.Media.Brush Color
+        {
+            get
+            {
+                switch (LineKind)
+                {
+                    case Kind.Out: return ThemeBrushes.Green;
+                    case Kind.Inbound: return ThemeBrushes.Ice;
+                    case Kind.Drop: return ThemeBrushes.Red;
+                    default: return ThemeBrushes.Dim;
+                }
+            }
+        }
+    }
+
+    /// <summary>Frozen theme brushes (hex mirrors App.xaml) — safe to share across threads.</summary>
+    internal static class ThemeBrushes
+    {
+        private static System.Windows.Media.SolidColorBrush Make(string hex)
+        {
+            var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
+            var b = new System.Windows.Media.SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+        // Exact mirror of App.xaml / Theme.swift (these previously drifted to iOS system colours,
+        // making the packet log + status read a different palette than the rest of the UI).
+        public static readonly System.Windows.Media.Brush Text  = Make("#FFF4F6FA");
+        public static readonly System.Windows.Media.Brush Dim   = Make("#FF868E9C");
+        public static readonly System.Windows.Media.Brush Ice   = Make("#FF6FD3FF");
+        public static readonly System.Windows.Media.Brush Blue  = Make("#FF3E7BFA");
+        public static readonly System.Windows.Media.Brush Green = Make("#FF32D74B");
+        public static readonly System.Windows.Media.Brush Amber = Make("#FFF5A623");
+        public static readonly System.Windows.Media.Brush Red   = Make("#FFE2122B");
+    }
+
+    public sealed partial class TrackerPeripheral : INotifyPropertyChanged
+    {
+        // Swift used a shared static RNG via Double.random/Int.random; mirror with one shared Random.
+        private static readonly Random Rng = new Random();
+        private static double RandRange(double a, double b) => Rng.NextDouble() * (b - a) + a;
+        private static int RandInt(int a, int b) => Rng.Next(a, b + 1);   // inclusive, like Swift Int.random(in: a...b)
+
+        // ---- INotifyPropertyChanged plumbing -------------------------------------------------
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void Raise([CallerMemberName] string name = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        private bool Set<T>(ref T field, T value, [CallerMemberName] string name = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+            field = value;
+            Raise(name);
+            return true;
+        }
+
+        // MARK: - Connection / status
+        private string _status = "Starting…";
+        public string Status { get => _status; set => Set(ref _status, value); }
+
+        private StatusColor _statusColor = StatusColor.Dim;
+        public StatusColor StatusColorValue { get => _statusColor; set => Set(ref _statusColor, value); }
+
+        private bool _connected;
+        public bool Connected { get => _connected; set => Set(ref _connected, value); }
+
+        private bool _streaming;
+        public bool Streaming { get => _streaming; set => Set(ref _streaming, value); }
+
+        private bool _linkDown;   // F1: emulated out-of-range (we go silent; the app times out)
+        public bool LinkDown { get => _linkDown; set => Set(ref _linkDown, value); }
+
+        private DateTime? _dropEndsAt;   // F1: when the outage auto-recovers (for the UI countdown)
+        public DateTime? DropEndsAt { get => _dropEndsAt; set => Set(ref _dropEndsAt, value); }
+
+        private ClusterPhase _phase = ClusterPhase.Cold;   // ignition power-on state
+        public ClusterPhase Phase { get => _phase; set => Set(ref _phase, value); }
+
+        // MARK: - Live telemetry (mirrored from EngineState each tick)
+        private bool _ignitionOn;
+        public bool IgnitionOn { get => _ignitionOn; set => Set(ref _ignitionOn, value); }
+
+        private bool _autoDrive;
+        public bool AutoDrive { get => _autoDrive; set => Set(ref _autoDrive, value); }
+
+        private bool _autoSignal = true;
+        public bool AutoSignal { get => _autoSignal; set => Set(ref _autoSignal, value); }
+
+        private double _speedMph;
+        public double SpeedMph { get => _speedMph; set => Set(ref _speedMph, value); }
+
+        private int _rpm;
+        public int Rpm { get => _rpm; set => Set(ref _rpm, value); }
+
+        private double _odometerMiles = 25_000.0;
+        public double OdometerMiles { get => _odometerMiles; set => Set(ref _odometerMiles, value); }
+
+        private double _engineHours = 4_352.5;
+        public double EngineHours { get => _engineHours; set => Set(ref _engineHours, value); }
+
+        private double _fuelPct = 78.0;
+        public double FuelPct { get => _fuelPct; set => Set(ref _fuelPct, value); }
+
+        private double _fuel2Pct = 60.0;
+        public double Fuel2Pct { get => _fuel2Pct; set => Set(ref _fuel2Pct, value); }
+
+        // Low-fuel → "open the Fuel App / refuel" prompt (centered overlay). Edge-triggered so it fires once
+        // when tank 1 crosses the warning level, and once more when both tanks run dry.
+        private bool _showLowFuel;
+        public bool ShowLowFuel { get => _showLowFuel; set => Set(ref _showLowFuel, value); }
+        private bool lowFuelNotified;
+        private bool outOfFuelNotified;
+
+        private int _satellites = 11;
+        public int Satellites { get => _satellites; set => Set(ref _satellites, value); }
+
+        private int _headingDeg = 103;
+        public int HeadingDeg { get => _headingDeg; set => Set(ref _headingDeg, value); }
+
+        private bool _ecmActive = true;
+        public bool EcmActive { get => _ecmActive; set => Set(ref _ecmActive, value); }
+
+        // Read directly by the map's render loop — deliberately NOT observable so position updates
+        // don't re-render the whole dashboard every tick (which starved the map and caused stutter).
+        public double CurrentLat = 37.78687;
+        public double CurrentLon = -121.977687;
+
+        // MARK: - Identity / diagnostics
+        private string _vin = "";
+        public string Vin   // editable; flows into the LV/VIN packet
+        {
+            get => _vin;
+            set { if (Set(ref _vin, value)) device.Vin = value; }
+        }
+
+        private string _firmware = "";
+        public string Firmware { get => _firmware; set => Set(ref _firmware, value); }
+
+        private List<string> _faults = new List<string>();
+        public List<string> Faults { get => _faults; set => Set(ref _faults, value); }
+
+        // Observable log so the WPF list can bind directly. push() mutates this on the sim thread;
+        // the UI is expected to marshal collection changes onto its dispatcher.
+        public ObservableCollection<LogLine> Log { get; } = new ObservableCollection<LogLine>();
+
+        // MARK: - Config (everything tunable)
+        private SimConfig _config = SimConfig.Default;
+        public SimConfig Config { get => _config; set => Set(ref _config, value); }
+
+        // MARK: - Route driving
+        private bool _drivingRoute;
+        public bool DrivingRoute { get => _drivingRoute; set => Set(ref _drivingRoute, value); }
+
+        private bool _dayDriving;   // F3: DRIVE MY DAY (distinct from a plain ROUTE drive)
+        public bool DayDriving { get => _dayDriving; set => Set(ref _dayDriving, value); }
+
+        private string _routeInfo = "";
+        public string RouteInfo { get => _routeInfo; set => Set(ref _routeInfo, value); }
+
+        private double _routeProgress;
+        public double RouteProgress { get => _routeProgress; set => Set(ref _routeProgress, value); }
+
+        private List<Coordinate> _routeCoords = new List<Coordinate>();
+        public List<Coordinate> RouteCoords { get => _routeCoords; set => Set(ref _routeCoords, value); }
+
+        private bool _routeBusy;
+        public bool RouteBusy { get => _routeBusy; set => Set(ref _routeBusy, value); }
+
+        private string _routeFrom = "";
+        public string RouteFrom { get => _routeFrom; set => Set(ref _routeFrom, value); }
+
+        private string _routeTo = "";
+        public string RouteTo { get => _routeTo; set => Set(ref _routeTo, value); }
+
+        private int _routeVersion;   // bumps only when a new route is loaded (drives map redraw)
+        public int RouteVersion { get => _routeVersion; set => Set(ref _routeVersion, value); }
+
+        public RouteEngine Route { get; } = new RouteEngine();
+
+        public string AdvertisedName => Config.AdvertisedName;
+
+        // MARK: - BLE peripheral (WinRT GATT) + private sim state
+        private GattServiceProvider serviceProvider;          // CBPeripheralManager → GattServiceProvider
+        private GattLocalCharacteristic dataChar;             // notify (7add0003)
+        private GattLocalCharacteristic commandChar;          // write  (7add0002)
+        private int advertiseRetries;                         // F1: how many times we've retried after an Aborted advertisement
+        private const int MaxAdvertiseRetries = 5;
+        private readonly EngineState engine = new EngineState();
+        private DeviceInfo device = new DeviceInfo();
+        private Timer tick;
+        private readonly object tickGate = new object();
+        private readonly List<byte[]> pending = new List<byte[]>();
+        private bool? lastIgnitionSent;
+        private string heldPacket;                 // for out-of-order injection
+        private string lastDataPayload;            // F1: last live packet — re-emitted if the app NAKs ($ERR)
+        private bool awaitingAck;                  // F1: between a live packet and its $ACK (only when AckGatedCadence)
+        private DateTime? awaitingAckSince;
+        private DateTime lastWatchdog = DateTime.UtcNow;   // app sends $wdg every ~20s; a real tracker stops streaming if it stops
+        private readonly double bootOdometerMiles = SimConfig.Default.StartOdometerMiles;   // for trip distance
+        private const double uiTickSec = 0.2;                // smooth sim/UI clock (decoupled from packet cadence)
+        private double sinceLastPacket;
+        private double autoSpeedCountdown;          // AUTO: seconds until the next random target-speed change
+        private double autoSignalCountdown;         // AUTO SIGNAL: seconds until the next random signal-strength change
+        private double autoSignalDipCountdown = RandRange(300, 600);   // AUTO SIGNAL: seconds until the next out-of-range dip (dead zone)
+        private Timer dropTimer;                    // F1: out-of-range outage timer
+        private double nextViolationAtMeters;       // F3: distance-triggered violation scheduler
+        private double violationHoldSec;            // F3: remaining seconds of the active violation
+        private bool violationIsIdle;               // F3: alternate speeding ↔ idle
+
+        // BLE bookkeeping: WinRT reports connected centrals via SubscribedClients, not a single bool.
+        private int subscriberCount;
+
+        // ESP32 serial transport (alternative to WinRT BLE — see StartSerial)
+        private System.IO.Ports.SerialPort serialPort;
+        private System.Threading.Thread serialReader;
+        private volatile bool serialRunning;
+
+        public TrackerPeripheral()
+        {
+            ApplyConfigToEngine();
+            Vin = device.Vin;
+            Firmware = $"{device.McuFW} · BLE {device.BleFW}";
+            InitPresentation();      // wire derived UI bindings + start the refresh timer (see partial)
+            StartBLE();              // begin advertising the tracker service on launch (like the macOS app)
+        }
+
+        public void StartBLE()
+        {
+            if (Config.Link == SimConfig.Transport.Esp32Serial) { StartSerial(); return; }
+            if (serviceProvider != null) return;
+            // WinRT GATT setup is async; fire-and-forget like Swift's CBPeripheralManager init (which
+            // also completes asynchronously via peripheralManagerDidUpdateState).
+            _ = SetupBLEAsync();
+        }
+
+        // MARK: - ESP32 serial transport (alternative to WinRT BLE)
+        // The desktop sim still generates every byte; the ESP32 is just the radio, fed over USB serial.
+        // 1 framed line == 1 BLE notification (frames are ASCII with no newline — see MTPacket.Frame).
+        public void StartSerial()
+        {
+            StopSerial();
+            if (string.IsNullOrWhiteSpace(Config.SerialPortName))
+            { Status = "No serial port selected"; StatusColorValue = StatusColor.Red; return; }
+            try
+            {
+                serialPort = new System.IO.Ports.SerialPort(Config.SerialPortName, 115200)
+                { NewLine = "\n", Encoding = Encoding.UTF8, DtrEnable = false, RtsEnable = false, WriteTimeout = 500 };
+                serialPort.Open();
+                serialRunning = true;
+                serialReader = new System.Threading.Thread(SerialReadLoop) { IsBackground = true };
+                serialReader.Start();
+                Status = $"ESP32 on {Config.SerialPortName}"; StatusColorValue = StatusColor.Amber;
+                Info($"serial transport open on {Config.SerialPortName} @115200");
+                SetTxPower(Config.TxPowerDbm);                 // push the current signal level to the board
+            }
+            catch (Exception ex)
+            { Status = "Serial open failed"; StatusColorValue = StatusColor.Red; Info($"✗ {Config.SerialPortName}: {ex.Message}"); }
+        }
+
+        public void StopSerial()
+        {
+            serialRunning = false;
+            try { serialPort?.Close(); } catch { }
+            serialPort = null;
+        }
+
+        private void SerialReadLoop()
+        {
+            while (serialRunning && serialPort != null)
+            {
+                string line;
+                try { line = serialPort.ReadLine(); } catch { break; }        // closed / unplugged
+                if (string.IsNullOrEmpty(line)) continue;
+                line = line.TrimEnd('\r');
+                PostToUi(() => OnSerialLine(line));                            // marshal to the sim/UI thread
+            }
+        }
+
+        // Map ESP32 events onto the SAME state the BLE path drives (Connected/Streaming, command responder).
+        private void OnSerialLine(string line)
+        {
+            if (line.StartsWith("<"))                                          // a command the ELD app wrote
+            { string c = line.Substring(1); Push(new LogLine(Stamp(), c, LogLine.Kind.Inbound)); HandleTrackerCommand(c); }
+            else if (line.StartsWith("#connected") || line.StartsWith("#subscribed"))
+            { Connected = true; Status = "Device connected (ESP32)"; StatusColorValue = StatusColor.Green; Info("✓ ELD app connected via ESP32"); }
+            else if (line.StartsWith("#disconnected"))
+            { Connected = false; Streaming = false; heldPacket = null; lock (pending) pending.Clear(); Status = $"Advertising as {AdvertisedName} (ESP32)"; StatusColorValue = StatusColor.Amber; Info("ELD app disconnected"); }
+            else { Info(line); }                                              // #txpower ok / #status / banner
+        }
+
+        /// <summary>Send a local control command to the ESP32 (no-op unless the serial port is open).</summary>
+        private void SerialControl(string cmd)
+        {
+            var sp = serialPort;
+            if (Config.Link == SimConfig.Transport.Esp32Serial && sp != null && sp.IsOpen)
+            { try { sp.Write(cmd + "\n"); } catch { /* port may have vanished */ } }
+        }
+
+        /// <summary>Command the ESP32's real BLE TX power (no-op in BLE mode — Windows has no TX-power API).</summary>
+        public void SetTxPower(int dbm)
+        {
+            Config.TxPowerDbm = dbm;
+            SerialControl($"#txpower {dbm}");
+        }
+
+        // FLICKER: emulate sitting at the very edge of range — the signal rapidly wobbles between
+        // "barely there" and "almost gone", so the phone sees a flapping connection (the classic
+        // weak-spot / doorway-of-the-truck behavior). ESP32 mode wobbles the REAL TX power
+        // (-12 ⇄ -3 dBm every 1.5s); BLE mode wobbles the emulated latency instead.
+        private Timer flickerTimer;
+        private bool flickerLow;
+        private bool _flickerOn;
+        public bool FlickerOn { get => _flickerOn; set => Set(ref _flickerOn, value); }
+
+        public void SetFlicker(bool on)
+        {
+            FlickerOn = on;
+            flickerTimer?.Dispose(); flickerTimer = null;
+            if (on)
+            {
+                AutoSignal = false;                       // manual effect takes over from AUTO (same rule as presets)
+                Info("〰 flicker on — signal wobbling at the edge of range");
+                flickerTimer = new Timer(_ =>
+                {
+                    flickerLow = !flickerLow;
+                    if (Config.Link == SimConfig.Transport.Esp32Serial)
+                        SetTxPower(flickerLow ? -12 : -3);            // real RSSI flaps at the edge
+                    else
+                    {
+                        Config.SignalPct = flickerLow ? 5 : 25;       // BLE mode: latency flaps (no real RSSI)
+                        Config.ExtraDelayMs = LatencyMsFor(Config.SignalPct);
+                    }
+                }, null, 0, 1500);
+            }
+            else
+            {
+                Info("〰 flicker off — signal restored");
+                SetSignal(100);                            // settle back to full, like AUTO-off does
+            }
+        }
+
+        /// <summary>Tear down the current transport and start the other (UI toggle: BLE ⇄ ESP32).</summary>
+        public void SwitchTransport(SimConfig.Transport t)
+        {
+            if (Config.Link == t) return;
+            if (Config.Link == SimConfig.Transport.Ble) TeardownBLE(); else StopSerial();
+            Config.Link = t;
+            StartBLE();   // routes to StartSerial() when t == Esp32Serial (see the guard above)
+            Raise(nameof(SignalDbmLabel));
+        }
+
+        // MARK: - Cluster-derived display helpers (computed from existing state)
+        public int AmbientTempC => 22;
+        public double TripMiles => Math.Max(0, OdometerMiles - bootOdometerMiles);
+        public double RouteRemainingMeters => Math.Max(0, Route.TotalMeters * (1 - RouteProgress));
+        public int RouteMilesLeft => (int)Math.Round(Route.TotalMiles * (1 - RouteProgress), MidpointRounding.AwayFromZero);
+        public bool HasRoute => RouteCoords.Count >= 2;
+        public string Gear => !IgnitionOn ? "P" : (SpeedMph > 0.5 ? "D" : "N");
+        public string Cardinal
+        {
+            get
+            {
+                var dirs = new[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+                int i = (int)Math.Floor((HeadingDeg + 22.5) / 45);
+                return dirs[((i % 8) + 8) % 8];
+            }
+        }
+
+        /// <summary>Next-turn icon + signed bearing delta, from a look-ahead along the route.</summary>
+        public (string Icon, int DeltaDeg) NextTurn
+        {
+            get
+            {
+                if (!Route.HasRoute) return ("location.slash", 0);
+                double t = Route.TraveledMeters;
+                int h1 = Route.PositionAt(t).HeadingDeg;
+                int h2 = Route.PositionAt(Math.Min(Route.TotalMeters, t + 400)).HeadingDeg;
+                int d = h2 - h1;
+                while (d > 180) d -= 360;
+                while (d < -180) d += 360;
+                string icon;
+                if (Math.Abs(d) > 150) icon = "arrow.uturn.up";
+                else if (d > 25) icon = "arrow.turn.up.right";
+                else if (d < -25) icon = "arrow.turn.up.left";
+                else icon = "arrow.up";
+                return (icon, d);
+            }
+        }
+
+        // MARK: - Ignition power-on sequence (visual only; BLE keeps running)
+        // Swift used SwiftUI withAnimation + Task.sleep for the cinematic timing. On WPF the animation
+        // is a view concern; we keep the same phase progression + timings via async delays.
+        public void BeginStartup()
+        {
+            if (Phase != ClusterPhase.Cold) return;
+            SetEngine(true);                                  // real telemetry spins up "under the curtain"
+            Phase = ClusterPhase.Igniting;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(350);
+                Phase = ClusterPhase.Sweep;
+                await Task.Delay(1500);
+                Phase = ClusterPhase.Settle;
+                await Task.Delay(900);
+                Phase = ClusterPhase.Live;
+            });
+        }
+        public void SkipStartup() { Phase = ClusterPhase.Live; }
+        public void RearmStartup() { Phase = ClusterPhase.Cold; }
+
+        private void ApplyConfigToEngine()
+        {
+            engine.OdometerMiles = Config.StartOdometerMiles;
+            engine.EngineHours = Config.StartEngineHours;
+            engine.FuelLevelPct = Config.StartFuelPct;
+            engine.IdleRpmConfig = Config.IdleRpm;
+            engine.RpmPerMphConfig = Config.RpmPerMph;
+            engine.FuelBurnPctPerMile = Config.FuelBurnPctPerMile;
+            // A restart must look like a power cycle, not a factory reset. Carry the odometer, engine
+            // hours, position and fuel across launches — see SimPersistedState for why the app cares.
+            var saved = SimPersistedState.Load();
+            if (saved != null) engine.Restore(saved);
+            Mirror();
+        }
+
+        // MARK: - Fault injection
+
+        /// <summary>
+        /// Names for the wire fields, so the UI and the log can say what is being faked rather than
+        /// printing a bare index. Index matches the 17-field telemetry layout.
+        /// </summary>
+        public static readonly string[] WireFieldNames = {
+            "type", "ignition", "rpm", "speed", "odometer", "engine hours", "latitude", "longitude",
+            "GPS lock", "heading", "time", "date", "ECM", "fuel 1", "fuel 2", "satellites", "GPS speed"
+        };
+
+        /// <summary>Override one telemetry field on the wire, or pass null/empty to clear it.</summary>
+        public void SetWireOverride(int field, string value, double probability = 1, bool requiresMotion = false)
+        {
+            if (field < 0 || field >= WireFieldNames.Length) return;
+            string name = WireFieldNames[field];
+            if (!string.IsNullOrEmpty(value))
+            {
+                // TWO ECU ODOMETERS rewrites field 4 every tick, so it would silently overwrite any
+                // other odometer fault. Turn it off rather than let them fight — a control that
+                // appears armed while something else wins is the confusion this panel exists to avoid.
+                if (field == 4 && OdoAlternating)
+                {
+                    OdoAlternating = false;
+                    Info("  (two ECU odometers turned off — it would overwrite this)");
+                }
+                engine.WireFaults[field] = new WireFault(value, probability, requiresMotion);
+                string how = probability >= 1 ? "every packet" : $"~{(int)(probability * 100)}% of packets";
+                string gate = requiresMotion ? $" (only above {(int)SimConfig.MovingThresholdMph} mph)" : "";
+                Info($"⚠ faking {name} = {value} on {how}{gate}");
+            }
+            else if (engine.WireFaults.Remove(field))
+            {
+                Info($"✓ {name} back to the real value");
+            }
+            Mirror();
+            RefreshFaultBindings();
+        }
+
+        /// <summary>
+        /// Two ECU odometer series, flipping every packet — the shape Praboo described. The app never
+        /// alerts: it books the jump as driven miles, or freezes the event's mileage at 0 if the low
+        /// series sits below where the duty event began.
+        /// </summary>
+        public void SetOdoAlternating(bool on)
+        {
+            OdoAlternating = on;
+            if (on)
+            {
+                // Same reason in reverse: only one thing may own field 4.
+                if (engine.WireFaults.Remove(4)) Info("  (cleared the other odometer fault — only one can own that field)");
+                Info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)");
+            }
+            else { engine.WireFaults.Remove(4); Info("✓ odometer back to one series"); }
+            Mirror(); RefreshFaultBindings();
+        }
+
+        /// <summary>
+        /// Re-send the previous dump byte for byte — the cross-connection duplicate case. The app's
+        /// packet-level de-dup only compares against the immediately previous stored packet and is
+        /// never reset on connect, so whether the repeat is caught depends on what it saw last.
+        /// </summary>
+        public void RepeatLastStoredDump(double cadenceSec)
+        {
+            if (lastStoredBatch.Count == 0) { Info("no previous stored dump to repeat"); return; }
+            int n = lastStoredBatch.FindAll(x => x.ItemKind == Emitted.Kind.Stored).Count;
+            lock (scenarioGate) { scenarioQueue = new List<Emitted>(lastStoredBatch); }
+            runningDump = $"Repeat stored dump ({n})";
+            Info($"▶ repeating the previous dump — {n} identical stored packets");
+            scenarioTimer?.Dispose();
+            long period = (long)(Math.Max(0.05, cadenceSec) * 1000);
+            scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+        }
+
+        /// <summary>
+        /// A single deliberately broken packet. The one thing the live path genuinely cannot produce
+        /// on its own — every packet the engine builds is well formed by construction.
+        /// </summary>
+        public void SendMalformedPacket()
+        {
+            SendRaw("ZZ,not,a,valid,packet");
+            Info("☠︎ malformed packet sent — the app should reject it and keep running");
+        }
+
+        /// <summary>Send the odometer-source packet — sending it PROVES the app does nothing with it.</summary>
+        public void SendOdoSourcePacket(bool virtualSource)
+        {
+            SendRaw(MTPacket.OdoSource(virtualSource, virtualSource ? 1 : 0));
+            Info($"↻ odometer-source packet sent ({(virtualSource ? "virtual" : "ECU")}) — the app parses it into a variable nothing reads");
+        }
+
+        /// <summary>Re-publish the armed-fault bindings after a change that is not a wire override
+        /// (the clock skew lives in SimConfig, not in the override table).</summary>
+        public void RefreshFaultBindings()
+        {
+            Raise(nameof(FaultsArmed)); Raise(nameof(ArmedFaultsSummary));
+        }
+
+        public bool IsFaked(int field, string value = null) =>
+            engine.WireFaults.TryGetValue(field, out WireFault f) && (value == null || f.Value == value);
+
+        private bool _odoAlternating;
+        public bool OdoAlternating { get => _odoAlternating; set => Set(ref _odoAlternating, value); }
+        private bool odoSeriesHigh;
+
+        public bool FaultsArmed => engine.WireFaults.Count > 0 || Config.TimeSkewSec != 0 || OdoAlternating;
+
+        /// <summary>Everything currently being faked, in field order — drives the UI's status line.</summary>
+        public string ArmedFaultsSummary
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (Config.TimeSkewSec != 0)
+                    parts.Add($"clock {(Config.TimeSkewSec > 0 ? "+" : "")}{(int)(Config.TimeSkewSec / 60)} min");
+                if (OdoAlternating) parts.Add("two ECU odometers");
+                foreach (var k in new List<int>(engine.WireFaults.Keys))
+                {
+                    var f = engine.WireFaults[k];
+                    string pct = f.Probability >= 1 ? "" : $" ({(int)(f.Probability * 100)}%)";
+                    parts.Add($"{WireFieldNames[k]} = {f.Value}{pct}");
+                }
+                parts.Sort(StringComparer.Ordinal);
+                return parts.Count == 0 ? "" : string.Join(", ", parts);
+            }
+        }
+
+        /// <summary>One button back to a clean wire — the tester must never have to remember what they armed.</summary>
+        public void ClearAllFaults()
+        {
+            int n = engine.WireFaults.Count + (Config.TimeSkewSec != 0 ? 1 : 0) + (OdoAlternating ? 1 : 0);
+            engine.WireFaults.Clear();
+            Config.TimeSkewSec = 0;
+            OdoAlternating = false;
+            Mirror();
+            RefreshFaultBindings();
+            Info(n > 0 ? $"✓ wire is clean again — {n} fault{(n == 1 ? "" : "s")} cleared" : "wire was already clean");
+        }
+
+        public void SendVinNow()
+        {
+            SendReliable(MTPacket.Version(device));
+            Info($"↻ VIN packet sent ({(string.IsNullOrEmpty(device.Vin) ? "empty" : device.Vin)})");
+        }
+
+        /// <summary>
+        /// A burst of alternating ignition packets. Cannot go through Step(): that path is
+        /// edge-triggered on lastIgnitionSent, so it emits at most one LI per real ignition change.
+        /// 500ms spacing is deliberate — whole-second spacing between same-direction packets hits
+        /// the app's own de-dup.
+        /// </summary>
+        public void PowerCycleBurst(int cycles = 10, double intervalSec = 0.5)
+        {
+            if (cycles <= 0) return;
+            powerBurstTimer?.Dispose();
+            int remaining = cycles * 2;
+            bool on = !engine.IgnitionOn;
+            Info($"⚡️ power-cycle burst — {cycles} power-up/shutdown pairs at {(int)(1 / Math.Max(0.05, intervalSec))}/s");
+            long period = (long)(Math.Max(0.05, intervalSec) * 1000);
+            powerBurstTimer = new Timer(_ =>
+            {
+                if (remaining <= 0)
+                {
+                    powerBurstTimer?.Dispose(); powerBurstTimer = null;
+                    lastIgnitionSent = engine.IgnitionOn;     // resync so Step() doesn't re-announce
+                    Info("⚡️ power-cycle burst finished");
+                    return;
+                }
+                SendReliable(MTPacket.Ignition(engine, on));
+                on = !on;
+                remaining--;
+            }, null, period, period);
+        }
+
+        // MARK: - Test setup: dial the truck to a starting state
+
+        /// <summary>
+        /// Set the odometer directly — park the truck just short of a threshold instead of driving to it.
+        ///
+        /// FORWARD ONLY while the app is streaming. A live rewind is the exact transition that freezes
+        /// mileage accrual in the ELD app: it only accrues while the live odometer exceeds the current
+        /// event's start odometer, so a lower reading silently stops the active event from gaining miles
+        /// until the truck re-covers the lost distance. With no app subscribed, any value is allowed.
+        /// </summary>
+        public bool SetOdometer(double miles)
+        {
+            // A non-finite or absurd value is fatal, not cosmetic: MTPacket converts miles to the raw
+            // x10-km int, and because the value is persisted on the same call it would come back on
+            // every launch. Reject before it can be stored.
+            if (!SimConfig.IsValidOdometer(miles))
+            {
+                Info($"⚠ odometer must be 0…{(int)SimConfig.MaxOdometerMiles} mi — \"{miles}\" rejected");
+                return false;
+            }
+            // Forward-only while the app is ATTACHED. Gate on Connected, not Streaming: streaming also
+            // goes false on a watchdog lapse and between stopdata/readdata while the GATT link is alive
+            // and the app still holds an open duty event whose eventStartOdo it restores from its DB.
+            if (Connected && miles < engine.OdometerMiles)
+            {
+                Info($"⚠ odometer can't go backwards while the app is connected — {(int)engine.OdometerMiles} → {(int)miles} rejected (disconnect first)");
+                return false;
+            }
+            engine.OdometerMiles = miles;
+            engine.Persisted.Save(); Mirror(); Info($"odometer set to {miles:F1} mi");
+            return true;
+        }
+
+        /// <summary>Engine hours, same forward-only rule and for the same reason.</summary>
+        public bool SetEngineHours(double hours)
+        {
+            if (!SimConfig.IsValidEngineHours(hours))
+            {
+                Info($"⚠ engine hours must be 0…{(int)SimConfig.MaxEngineHours} h — \"{hours}\" rejected");
+                return false;
+            }
+            if (Connected && hours < engine.EngineHours)
+            {
+                Info($"⚠ engine hours can't go backwards while the app is connected — {engine.EngineHours:F2} → {hours:F2} rejected (disconnect first)");
+                return false;
+            }
+            engine.EngineHours = hours;
+            engine.Persisted.Save(); Mirror(); Info($"engine hours set to {hours:F2} h");
+            return true;
+        }
+
+        /// <summary>Fuel levels. Unlike odometer/hours these legitimately move both ways — refuelling is normal.</summary>
+        public void SetFuel(double? tank1 = null, double? tank2 = null)
+        {
+            if (tank1.HasValue) engine.FuelLevelPct = Math.Min(100, Math.Max(0, tank1.Value));
+            if (tank2.HasValue) engine.FuelLevel2Pct = Math.Min(100, Math.Max(0, tank2.Value));
+            engine.Persisted.Save(); Mirror();
+        }
+
+        // MARK: - Manual controls
+        public void SetEngine(bool on)
+        {
+            if (runningDump != null) StopDump();
+            AutoDrive = false; DrivingRoute = false; DayDriving = false;
+            engine.IgnitionOn = on;
+            if (!on) engine.SpeedMph = 0;
+            EnsureClock(); Mirror(); Info("engine " + (on ? "ON" : "OFF"));
+        }
+
+        public void SetSpeed(double mph)
+        {
+            if (runningDump != null) StopDump();
+            DayDriving = false;                          // a manual speed set ends DRIVE MY DAY automation
+            if (DrivingRoute)
+            {
+                if (mph <= 0) { StopRouteDrive(); return; }   // STOP pauses (keeps position)
+                AutoDrive = false;                            // manual speed override; keep driving
+                Config.TargetSpeedMph = mph; EnsureClock(); return;
+            }
+            AutoDrive = false;
+            if (mph > 0) engine.IgnitionOn = true;
+            engine.SpeedMph = mph;
+            EnsureClock(); Mirror();
+        }
+
+        /// <summary>
+        /// AUTO = automatic (cruise) speed control. It does NOT reset position or load a new route —
+        /// it takes over speed on the *current* drive and gradually settles to a cruising speed.
+        /// </summary>
+        public void SetAutoDrive(bool on)
+        {
+            if (runningDump != null) StopDump();
+            DayDriving = false;                          // AUTO cruise takes over from DRIVE MY DAY automation
+            AutoDrive = on;
+            if (on)
+            {
+                engine.IgnitionOn = true;
+                autoSpeedCountdown = 0;                                  // pick a fresh auto speed immediately
+                if (Route.HasRoute)
+                {
+                    if (!DrivingRoute) BeginDrive();                    // continue the current route, no reset
+                }
+                else if (!RouteBusy)                                    // no route yet → grab one (skip if a load is already in flight)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await LoadRandomRoute();
+                        if (!AutoDrive || !Route.HasRoute) return;
+                        BeginDrive();
+                    });
+                }
+                EnsureClock();
+            }
+            else
+            {
+                Config.TargetSpeedMph = 65;                              // restore a sane manual default after auto
+            }
+            Mirror();
+            Info("auto speed " + (on ? "on" : "off"));
+        }
+
+        public void InjectFault(string code)
+        {
+            if (!device.DtcCodes.Contains(code)) device.DtcCodes.Add(code);
+            Faults = new List<string>(device.DtcCodes);
+            Info($"fault {code} armed (app sees it on next readdtc)");
+        }
+        public void ClearFaults() { device.DtcCodes = new List<string>(); Faults = new List<string>(); Info("faults cleared"); }
+        public void SetFuel(double pct) { engine.FuelLevelPct = Math.Max(0, Math.Min(100, pct)); Mirror(); }
+        public void SetFuel2(double pct) { engine.FuelLevel2Pct = Math.Max(0, Math.Min(100, pct)); Mirror(); }
+
+        /// <summary>Refuel BOTH tanks to `pct` — the "arrived at a station, fill up" action from the low-fuel prompt.</summary>
+        public void Refuel(double pct)
+        {
+            double p = Math.Max(0, Math.Min(100, pct));
+            engine.FuelLevelPct = p; engine.FuelLevel2Pct = p;
+            lowFuelNotified = false; outOfFuelNotified = false; ShowLowFuel = false;
+            Mirror(); Info("refueled to " + (int)p + "%");
+        }
+        public void DismissLowFuel() { ShowLowFuel = false; }
+
+        /// <summary>Edge-triggered low-fuel prompting: fire once when tank 1 hits the warning level, and once
+        /// more when both tanks run dry (truck stalls). Each arm resets after a refuel so it can fire again.</summary>
+        private void DetectLowFuel()
+        {
+            if (engine.FuelLevelPct <= Config.LowFuelWarnPct)
+            {
+                if (!lowFuelNotified) { lowFuelNotified = true; ShowLowFuel = true;
+                    Info("low fuel " + (int)engine.FuelLevelPct + "% — open the Fuel App, find a station, refuel"); }
+            }
+            else if (engine.FuelLevelPct > Config.LowFuelWarnPct + 3)
+            {
+                lowFuelNotified = false;
+            }
+            if (engine.OutOfFuel)
+            {
+                if (!outOfFuelNotified) { outOfFuelNotified = true; ShowLowFuel = true;
+                    Status = "Out of fuel — refuel to continue"; StatusColorValue = StatusColor.Red;
+                    Info("OUT OF FUEL — truck stopped; refuel to continue"); }
+            }
+            else
+            {
+                outOfFuelNotified = false;
+            }
+        }
+        public void SendVINNow() { SendReliable(MTPacket.Version(device)); }
+
+        // MARK: - F1: signal strength + out-of-range emulation
+        /// <summary>
+        /// Signal 100→0. Above 0 it ramps packet loss (weak signal); at 0 it goes out of range (drops the link).
+        /// Windows has no TX-power API either, so this is emulated: loss reuses the existing EmitNow() gate, and
+        /// "out of range" = going silent so the *app* times out (~75s) → disconnects → auto-reconnects.
+        /// </summary>
+        private double preDropSignalPct = 100;          // signal level to restore after a transient outage
+
+        /// <summary>
+        /// AUTO SIGNAL: self-driving link quality. When on, Step() periodically reassigns a random signal
+        /// strength so the link sweeps full↔weak↔poor on its own. A manual preset or DROP turns it off.
+        /// </summary>
+        public void SetAutoSignal(bool on)
+        {
+            AutoSignal = on;
+            if (on)
+            {
+                autoSignalCountdown = 0;                                 // pick a fresh auto signal immediately
+                autoSignalDipCountdown = RandRange(300, 600);            // schedule the first dead-zone dip
+                EnsureClock();
+            }
+            else
+            {
+                SetSignal(100);                                         // settle back to full when auto is turned off
+            }
+            Info(on ? "auto signal on" : "auto signal off");
+        }
+
+        // Weak signal = added LATENCY, not packet loss: real BLE retransmits at the link layer, so the app
+        // gets every packet just slower, then cleanly disconnects at the edge. (RSSI itself can't be faked —
+        // a Windows peripheral has no TX-power API, so the phone's signal bar reflects real distance.)
+        private static double LatencyMsFor(double pct) => Math.Max(0, (100 - pct) * 9);   // FULL 0ms · WEAK(70) ~270ms · POOR(40) ~540ms
+        public void SetSignal(double pct)
+        {
+            Config.SignalPct = pct;
+            SetTxPower(SimConfig.SignalPctToDbm(pct));            // ESP32 mode → real RSSI on the phone; BLE mode → no-op
+            Config.ExtraDelayMs = LatencyMsFor(pct);              // weak signal → jittery latency via the EmitNow() delay
+            Config.PacketLossPct = 0;                             // BLE does NOT drop app packets on weak signal — it retransmits
+            if (pct <= 0) { if (!LinkDown) DropLink(Config.RangeOutageSec); }   // idempotent: a slider drag to 0 arms once
+            else if (LinkDown) ResumeLink();
+        }
+
+        /// <summary>
+        /// EMULATED out-of-range: suppress telemetry for `seconds`. We never stop advertising (the app
+        /// reconnects by scanning, so it must stay discoverable). After ~75s of silence the app disconnects
+        /// and auto-reconnects on its own — exactly the real out-of-range round-trip.
+        /// </summary>
+        public void DropLink(double seconds)
+        {
+            preDropSignalPct = Config.SignalPct >= 1 ? Config.SignalPct : 100;   // remember weak level to restore on return
+            LinkDown = true;
+            Config.SignalPct = 0;
+            // ESP32 mode: real out-of-range = not discoverable at all, so stop the board advertising too
+            // (the board keeps its BLE identity, so the phone reconnects fine on #adv on — the Windows
+            // identity concern below only applies to the built-in WinRT provider).
+            SerialControl("#adv off");
+            Status = $"OUT OF RANGE — silent {(int)seconds}s"; StatusColorValue = StatusColor.Red;
+            bool disconnects = seconds >= Config.AppDisconnectsAfterSec;
+            Info($"📵 out of range: telemetry suppressed for {(int)seconds}s — " + (disconnects
+                ? "long enough for the app to drop and reconnect"
+                : $"a stall demo; the app will NOT disconnect under {(int)Config.AppDisconnectsAfterSec}s"));
+            DropEndsAt = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));
+            dropTimer?.Dispose();
+            dropTimer = new Timer(_ => ResumeLink(), null, (long)(Math.Max(1, seconds) * 1000), Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Immediate FORCED disconnect — exactly what the app sees in the field. We tear down the whole
+        /// peripheral session (stop advertising + drop the GattServiceProvider); the connected central drops
+        /// within ~1–2s. On return (timer or BACK) we re-advertise and the app auto-reconnects via its scan —
+        /// the real out-of-range → back-in-range cycle.
+        /// </summary>
+        public void ForceDisconnect(double seconds)
+        {
+            preDropSignalPct = Config.SignalPct >= 1 ? Config.SignalPct : 100;
+            LinkDown = true;
+            Config.SignalPct = 0;
+            Status = "OUT OF RANGE — link dropped"; StatusColorValue = StatusColor.Red;
+            Info("⛔️ forced disconnect — link torn down (app sees a real disconnect)");
+            DropEndsAt = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));
+            SerialControl("#adv off");   // ESP32 mode: stop advertising so the phone truly loses the device
+            TeardownBLE();               // BLE mode: drop the GATT provider (no-op in ESP32 mode)
+            dropTimer?.Dispose();
+            dropTimer = new Timer(_ => ResumeLink(), null, (long)(Math.Max(1, seconds) * 1000), Timeout.Infinite);
+        }
+
+        /// <summary>Drop the peripheral session so the central is forced to disconnect immediately.</summary>
+        private void TeardownBLE()
+        {
+            try
+            {
+                serviceProvider?.StopAdvertising();
+            }
+            catch { /* provider may already be torn down */ }
+            // Detach handlers BEFORE releasing. The central doesn't disconnect instantly (it waits out its BLE
+            // supervision timeout), so the about-to-die dataChar would otherwise fire a stale
+            // SubscribedClientsChanged(count==0) a few seconds later — which resets LinkDown=false and strands us
+            // un-advertised, so a later FULL/BACK never calls ResumeLink(). (macOS nils its manager, so it can't
+            // fire stale callbacks — this keeps Windows parity.)
+            if (dataChar != null) dataChar.SubscribedClientsChanged -= OnSubscribedClientsChanged;
+            if (commandChar != null) commandChar.WriteRequested -= OnWriteRequested;
+            // Releasing the GattServiceProvider severs the active connection (CB removeAllServices + nil manager).
+            serviceProvider = null;
+            dataChar = null; commandChar = null;
+            subscriberCount = 0;
+            Connected = false; Streaming = false; heldPacket = null; pending.Clear();
+        }
+
+        /// <summary>
+        /// Back in range: resume. If we forced a disconnect (provider torn down) we re-advertise so the app
+        /// reconnects; otherwise just restore the stream/status.
+        /// </summary>
+        public void ResumeLink()
+        {
+            dropTimer?.Dispose(); dropTimer = null; DropEndsAt = null;
+            LinkDown = false;
+            if (Config.SignalPct < 1) Config.SignalPct = preDropSignalPct;    // restore the pre-drop weak level (or 100)
+            Config.ExtraDelayMs = LatencyMsFor(Config.SignalPct); Config.PacketLossPct = 0;
+            if (Config.Link == SimConfig.Transport.Esp32Serial)               // ESP32: just re-advertise on the board, don't reopen the port
+            {
+                SerialControl("#adv on");                                      // recover if a forced disconnect stopped advertising
+                Info("📶 back in range — telemetry resumes");
+                if (Connected && Streaming) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }
+                else if (Connected) { Status = "Device connected"; StatusColorValue = StatusColor.Green; }
+                else { Status = $"Advertising as {AdvertisedName} (ESP32)"; StatusColorValue = StatusColor.Amber; }
+            }
+            else if (serviceProvider == null)                                  // forced-disconnect teardown → bring the radio back
+            {
+                Info("📶 back in range — re-advertising for reconnect");
+                StartBLE();                                                    // recreates the peripheral → re-advertises → app rescans & reconnects
+            }
+            else
+            {
+                Info("📶 back in range — telemetry resumes");
+                if (Connected && Streaming) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }
+                else if (Connected) { Status = "Device connected"; StatusColorValue = StatusColor.Green; }
+            }
+        }
+
+        // MARK: - Route driving (from → to)
+        public async Task LoadRoute(string from, string to)
+        {
+            RouteBusy = true;
+            try
+            {
+                // Windows routing: OpenStreetMap (Nominatim geocode + OSRM road route, no API key), with a
+                // built-in city table + synthetic-line fallback when offline. Replaces the Mac's MapKit
+                // Directions (Core's stub throws NotImplementedOnThisPlatform). See WindowsRouting.
+                var pts = await WindowsRouting.RouteAsync(from, to, Info);   // Info logs which server served it / any fallback
+                Route.SetRoute(pts);
+                RouteCoords = pts;
+                DrivingRoute = false;            // freshly planned route returns to overview; press DRIVE to go
+                RouteVersion += 1;
+                RouteInfo = $"{from} → {to} · {Route.TotalMiles.ToString("F0", CultureInfo.InvariantCulture)} mi";
+                RouteProgress = 0;
+                Info($"route loaded: {RouteInfo}");
+            }
+            catch (Exception error)
+            {
+                Info($"route error: {error.Message}");    // keep prior route shown; surface error in log only
+            }
+            finally
+            {
+                RouteBusy = false;
+            }
+        }
+
+        /// <summary>Pick a random real city pair and load a drivable route between them.</summary>
+        public async Task LoadRandomRoute()
+        {
+            var pairs = new (string, string)[]
+            {
+                ("Dallas, TX", "Houston, TX"),
+                ("Los Angeles, CA", "San Diego, CA"),
+                ("Chicago, IL", "Milwaukee, WI"),
+                ("Phoenix, AZ", "Tucson, AZ"),
+                ("Atlanta, GA", "Macon, GA"),
+                ("Denver, CO", "Colorado Springs, CO"),
+                ("Seattle, WA", "Portland, OR"),
+                ("Miami, FL", "Orlando, FL"),
+                ("New York, NY", "Philadelphia, PA"),
+                ("San Francisco, CA", "Sacramento, CA"),
+            };
+            var pick = pairs[Rng.Next(pairs.Length)];
+            RouteFrom = pick.Item1; RouteTo = pick.Item2;
+            await LoadRoute(pick.Item1, pick.Item2);
+        }
+
+        public void StartRouteDrive() { BeginDrive(); }     // DRIVE ROUTE button
+
+        /// <summary>
+        /// Start/continue driving the loaded route from the current position (no reset), so toggling
+        /// speed/auto/stop never teleports back to the start. Only a finished route restarts.
+        /// </summary>
+        private void BeginDrive()
+        {
+            if (!Route.HasRoute) { Info("load a route first"); return; }
+            if (runningDump != null) StopDump();
+            if (Route.ProgressFraction >= 0.999) Route.Reset();   // re-drive a finished route from the start
+            DrivingRoute = true;
+            engine.IgnitionOn = true;
+            RouteProgress = Route.ProgressFraction;
+            var p = Route.PositionAt(Route.TraveledMeters);
+            engine.Latitude = p.Coord.Latitude; engine.Longitude = p.Coord.Longitude; engine.HeadingDeg = p.HeadingDeg;
+            EnsureClock();
+            Mirror();
+            Info("driving route…");
+        }
+
+        public void StopRouteDrive() { DrivingRoute = false; DayDriving = false; engine.SpeedMph = 0; Mirror(); Info("route drive stopped"); }
+
+        /// <summary>
+        /// No route loaded but the truck is moving (manual speed / quick-set): advance the GPS along the
+        /// current heading. Without this the sim reports speed > 0 with a frozen lat/lon forever — a
+        /// combination no real tracker can produce, and the reason the truck never moved on the app's map.
+        /// </summary>
+        private void DeadReckon(double dt)
+        {
+            if (engine.SpeedMph <= 0 || dt <= 0) return;
+            double meters = engine.SpeedMph * 0.44704 * dt;
+            double rad = engine.HeadingDeg * Math.PI / 180.0;
+            engine.Latitude += meters * Math.Cos(rad) / 111_320.0;
+            // Guard the cos(lat) term so a near-polar latitude can't divide by ~0.
+            double scale = Math.Max(0.05, Math.Cos(engine.Latitude * Math.PI / 180.0));
+            engine.Longitude += meters * Math.Sin(rad) / (111_320.0 * scale);
+        }
+
+        // MARK: - F3: DRIVE MY DAY (one-click full-day, state-crossing, with event violations)
+        /// <summary>Curated long interstate pairs so the day crosses a state line (IFTA is per-jurisdiction mileage).</summary>
+        private readonly (string, string)[] dayRoutes = new (string, string)[]
+        {
+            ("Dallas, TX", "Oklahoma City, OK"),
+            ("Atlanta, GA", "Nashville, TN"),
+            ("Phoenix, AZ", "Las Vegas, NV"),
+            ("Chicago, IL", "Indianapolis, IN"),
+            ("Portland, OR", "Seattle, WA"),
+            ("Kansas City, MO", "Omaha, NE"),
+        };
+
+        /// <summary>
+        /// One click: load a long state-crossing route and drive it end-to-end at 30×, with baked-in
+        /// speeding + idle EVENT violations — a full day of IFTA per-jurisdiction mileage in ~10 min.
+        /// HONEST LIMIT: the app's 11/14/70h HOS *hour* clocks run on real wall-clock and CANNOT be
+        /// compressed — use 1× + a long route for genuine HOS exhaustion. This produces mileage + events.
+        /// </summary>
+        public async Task DriveMyDay()
+        {
+            var pick = dayRoutes[Rng.Next(dayRoutes.Length)];
+            RouteFrom = pick.Item1; RouteTo = pick.Item2;
+            await LoadRoute(pick.Item1, pick.Item2);
+            if (!Route.HasRoute) { Info("DRIVE MY DAY: route load failed (check network)"); return; }
+            Config.RouteTimeScale = 30;
+            AutoDrive = false;                                   // steady cruise → deterministic IFTA mileage
+            Config.TargetSpeedMph = Config.DayCruiseMph;
+            nextViolationAtMeters = Config.ViolationEveryMiles / 0.000621371;
+            violationHoldSec = 0; violationIsIdle = false;
+            DayDriving = true;
+            BeginDrive();
+            Info($"▶ DRIVE MY DAY — {pick.Item1} → {pick.Item2} at 30× with auto speeding/idle events");
+        }
+
+        public void StopDay() { DayDriving = false; StopRouteDrive(); }
+
+        /// <summary>
+        /// F3 event scheduler — alternates a speeding spike and an idle stop every `violationEveryMiles`,
+        /// distance-triggered so it fires identically at any timescale. Holds are real-time so the LP
+        /// stream (sampled ~1/s) actually records each event.
+        /// </summary>
+        private void RunDayViolations(double dt)
+        {
+            if (violationHoldSec > 0)
+            {
+                violationHoldSec -= dt;
+                if (violationHoldSec <= 0) Config.TargetSpeedMph = Config.DayCruiseMph;   // resume cruise
+                return;
+            }
+            if (!(Route.TraveledMeters >= nextViolationAtMeters)) return;
+            int atMi = (int)(Route.TotalMiles * Route.ProgressFraction);
+            if (violationIsIdle)
+            {
+                Config.TargetSpeedMph = 0; violationHoldSec = Config.IdleStopSec;            // idle stop, ignition stays on
+                Info($"⚠︎ DRIVE MY DAY: idle stop ~{(int)Config.IdleStopSec}s at {atMi} mi");
+            }
+            else
+            {
+                Config.TargetSpeedMph = Config.SpeedingViolationMph; violationHoldSec = 6;   // speeding spike
+                Info($"⚠︎ DRIVE MY DAY: speeding {(int)Config.SpeedingViolationMph} mph at {atMi} mi");
+            }
+            violationIsIdle = !violationIsIdle;
+            nextViolationAtMeters += Config.ViolationEveryMiles / 0.000621371;
+        }
+
+        // MARK: - Live scenario playback (plays a scenario's exact packet sequence over BLE)
+        private Timer scenarioTimer;
+        private List<Emitted> scenarioQueue = new List<Emitted>();
+        private readonly object scenarioGate = new object();
+        private List<Emitted> pendingStored = new List<Emitted>();   // backdated stored packets, dumped on the app's next readstr (post-reconnect)
+        private double pendingStoredCadence = 1.0;
+        private double stateSaveCountdown = 0;                       // periodic persist (SimPersistedState)
+        private double sinceLastStored = 0;                          // offline flash recorder cadence
+        private Timer powerBurstTimer;                               // fault injection: rapid ignition storm
+        private DateTime? outageStartedAt = null;                    // when the current offline window began
+        private List<Emitted> undeliveredStored = new List<Emitted>(); // handed to the dump, not yet fully sent
+        private List<Emitted> lastStoredBatch = new List<Emitted>();   // so a dump can be repeated byte-for-byte
+        private bool flashFullWarned = false;
+
+        private string _runningDump;
+        public string RunningDump { get => _runningDump; set => Set(ref _runningDump, value); }
+        private string runningDump { get => _runningDump; set => RunningDump = value; }
+
+        
+
+        // Scenarios whose expect depends on the app processing STORED packets (replay or Unassigned Driving):
+        // they only fire after a genuine disconnect→reconnect→readstr, never from an inline live stream.
+        
+
+        // Stash backdated stored packets and force a REAL BLE disconnect. When the app reconnects and sends
+        // readstr, the handler dumps them + LAST_STORED_PACKET + the true count — the only sequence that makes
+        // both apps run stored replay / UDP classification.
+        
+
+        /// <summary>
+        /// Split the flash backlog into what is worth sending and what the app would silently discard.
+        /// The app keeps the driver's Driving event open for AppDrivingCloseSec after the link drops and
+        /// reports the window as ending there, so anything stamped earlier is filed as already assigned
+        /// and produces nothing at all. Sending it anyway is what made the old build look like it worked.
+        /// </summary>
+        private (List<Emitted> Keep, int Dropped) StoredRecordsWorthSending()
+        {
+            if (pendingStored.Count == 0) return (new List<Emitted>(), 0);
+            if (!outageStartedAt.HasValue) return (pendingStored, 0);   // scenario-armed batch: already anchored
+            var split = WireBuilder.DeliverableStored(pendingStored, outageStartedAt.Value, Config.AppDrivingCloseSec);
+            if (split.Keep.Count == 0)
+            {
+                int gap = (int)(DateTime.UtcNow - outageStartedAt.Value).TotalSeconds;
+                Info($"⚠ offline gap {gap}s is under {(int)Config.AppDrivingCloseSec}s — the app still has the driver's Driving event open and would file every one of these against it. Nothing to send; drive offline longer for an Unassigned Driving Period.");
+            }
+            else if (split.Dropped > 0)
+            {
+                Info($"⚠ withholding {split.Dropped} packets from the first {(int)Config.AppDrivingCloseSec}s of the outage — the app's Driving event was still open then, so it would classify them as already assigned");
+            }
+            return split;
+        }
+
+        public void StopDump()
+        {
+            scenarioTimer?.Dispose(); scenarioTimer = null;
+            scenarioQueue.Clear(); runningDump = null; Info("scenario stopped");
+        }
+
+        /// <summary>
+        /// F2: replay N stored 'S' packets at a configurable cadence to reproduce Harshith's fast-dump
+        /// disconnect (≈0.5s breaks the app; 1.0s completes cleanly). The SIM never fails — it reproduces
+        /// the STIMULUS for the app to react to. Reuses the scenario playback path with its own cadence timer.
+        /// </summary>
+        public void DumpStoredPackets(int count, double cadenceSec, bool stopDrive = true,
+                                      WireBuilder.StoredDumpOptions options = null, string label = null)
+        {
+            if (stopDrive) { AutoDrive = false; DrivingRoute = false; DayDriving = false; }   // app-issued readstr keeps the drive (resumes when queue drains)
+            var batch = WireBuilder.StoredDump(count, Config, options);
+            // Kept so the same bytes can be sent again after a reconnect — the cross-connection
+            // duplicate test needs the SECOND dump to be identical, not merely similar.
+            lastStoredBatch = batch;
+            scenarioQueue = batch;
+            runningDump = $"Stored dump ({count} @ {(int)(cadenceSec * 1000)}ms)";
+            Info($"▶ stored dump — {count} packets @ {(int)(cadenceSec * 1000)}ms cadence (≈500ms repros the disconnect)");
+            scenarioTimer?.Dispose();
+            long period = (long)(Math.Max(0.05, cadenceSec) * 1000);
+            scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+        }
+
+        private void PopScenario()
+        {
+            lock (scenarioGate)
+            {
+                if (scenarioQueue.Count == 0)
+                {
+                    scenarioTimer?.Dispose(); scenarioTimer = null; runningDump = null;
+                    // The dump finished, so the flash records really did go out — only now is it safe
+                    // to forget them. A mid-dump drop leaves them in pendingStored instead.
+                    if (undeliveredStored.Count > 0)
+                    {
+                        undeliveredStored = new List<Emitted>();
+                        pendingStored = new List<Emitted>();
+                    }
+                    Mirror(); Info("✓ scenario complete"); return;
+                }
+                var em = scenarioQueue[0];
+                scenarioQueue.RemoveAt(0);
+                switch (em.ItemKind)
+                {
+                    case Emitted.Kind.Raw:
+                        SendRaw(em.Wire);
+                        break;
+                    case Emitted.Kind.Malformed:
+                        Push(new LogLine(Stamp(), em.Wire + "  [malformed — app should reject]", LogLine.Kind.Drop));
+                        Transmit(Encoding.UTF8.GetBytes(em.Wire));                     // sent un-framed; the app validator rejects it
+                        break;
+                    default:
+                        Push(new LogLine(Stamp(), em.Wire, em.ItemKind == Emitted.Kind.Stored ? LogLine.Kind.Info : LogLine.Kind.Out));
+                        foreach (var f in MTPacket.Frame(em.Wire)) Queue(f);          // network effects already applied by the runner
+                        break;
+                }
+            }
+        }
+
+        // MARK: - Logging
+        private static string Stamp() => DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        private void Info(string s) => Push(new LogLine(Stamp(), s, LogLine.Kind.Info));
+
+        // Persistent on-disk log. The in-UI list is capped at 250 lines and vanishes on exit, so every
+        // LogLine is also appended here to diagnose BLE/connection problems after the fact. Path is
+        // announced in the log on startup. All file I/O is best-effort — logging must never crash the app.
+        private static readonly object logFileLock = new object();
+        private static string _logFilePath;
+        private static bool _logSessionStarted;
+        internal static string LogFilePath
+        {
+            get
+            {
+                if (_logFilePath == null)
+                {
+                    try
+                    {
+                        var dir = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "MatrackSim", "logs");
+                        Directory.CreateDirectory(dir);
+                        _logFilePath = Path.Combine(dir, "matracksim.log");
+                    }
+                    catch { _logFilePath = ""; }   // unwritable → disable file logging
+                }
+                return _logFilePath;
+            }
+        }
+
+        private static void AppendToLogFile(string time, string sym, string text)
+        {
+            var path = LogFilePath;
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                lock (logFileLock)
+                {
+                    if (!_logSessionStarted)
+                    {
+                        _logSessionStarted = true;
+                        // Keep the file from growing without bound across many sessions.
+                        try { if (File.Exists(path) && new FileInfo(path).Length > 2_000_000) File.WriteAllText(path, ""); }
+                        catch { }
+                        File.AppendAllText(path, $"{Environment.NewLine}===== MatrackSim session started {DateTime.Now:yyyy-MM-dd HH:mm:ss} ====={Environment.NewLine}");
+                    }
+                    File.AppendAllText(path, $"[{time}] {sym} {text}{Environment.NewLine}");
+                }
+            }
+            catch { /* disk full / locked / permissions — never crash on logging */ }
+        }
+
+        private void Push(LogLine l)
+        {
+            // Log is bound to the WPF ListBox; mutating it off the UI thread throws. The sim ticks on a
+            // background Timer, so marshal collection changes onto the dispatcher (see PostToUi in the
+            // presentation partial). The console echo + file write below can run on any thread.
+            PostToUi(() =>
+            {
+                Log.Add(l);
+                while (Log.Count > 250) Log.RemoveAt(0);
+                Raise(nameof(LogCountText));
+            });
+            string sym = l.LineKind == LogLine.Kind.Out ? "→" :
+                         (l.LineKind == LogLine.Kind.Inbound ? "←" :
+                         (l.LineKind == LogLine.Kind.Drop ? "⨯" : "•"));
+            Console.WriteLine($"[{l.Time}] {sym} {l.Text}");
+            AppendToLogFile(l.Time, sym, l.Text);
+        }
+
+        /// <summary>
+        /// Publish telemetry to the UI, but only the values that actually changed — otherwise the
+        /// 5 Hz clock would re-render the whole dashboard (and the map) every tick and lag interaction.
+        /// </summary>
+        private void Mirror()
+        {
+            // Position is plain (read by the map loop) — always fresh, no UI publish.
+            CurrentLat = engine.Latitude;
+            CurrentLon = engine.Longitude;
+            // Publish UI values only when the *displayed* value changes, so steady cruise doesn't
+            // re-render the dashboard every tick and starve the map's render loop.
+            if (SpeedMph != engine.SpeedMph) SpeedMph = engine.SpeedMph;
+            if (Rpm != engine.Rpm) Rpm = engine.Rpm;
+            if (Math.Round(OdometerMiles) != Math.Round(engine.OdometerMiles)) OdometerMiles = engine.OdometerMiles;
+            if (Math.Round(EngineHours * 10) != Math.Round(engine.EngineHours * 10)) EngineHours = engine.EngineHours;
+            if (Math.Round(FuelPct) != Math.Round(engine.FuelLevelPct)) FuelPct = engine.FuelLevelPct;
+            if (Math.Round(Fuel2Pct) != Math.Round(engine.FuelLevel2Pct)) Fuel2Pct = engine.FuelLevel2Pct;
+            if (Satellites != engine.Satellites) Satellites = engine.Satellites;
+            if (HeadingDeg != engine.HeadingDeg) HeadingDeg = engine.HeadingDeg;
+            if (IgnitionOn != engine.IgnitionOn) IgnitionOn = engine.IgnitionOn;
+            if (EcmActive != engine.EcmActive) EcmActive = engine.EcmActive;
+        }
+
+        // MARK: - Outbound (raw control replies vs framed data packets) + network effects
+        private void SendRaw(string s) { Transmit(Encoding.UTF8.GetBytes(s)); Push(new LogLine(Stamp(), s, LogLine.Kind.Out)); }
+
+        /// <summary>
+        /// Command reply / important state packet — always delivered cleanly.
+        /// Network effects (loss/dup/out-of-order) apply only to the live telemetry stream,
+        /// never to replies the app is actively waiting for.
+        /// </summary>
+        private void SendReliable(string payload)
+        {
+            Push(new LogLine(Stamp(), payload, LogLine.Kind.Out));
+            foreach (var f in MTPacket.Frame(payload)) Queue(f);
+        }
+
+        private void SendPacket(string payload)
+        {
+            // Out-of-order: hold this one, emit the previously-held first.
+            if (RandRange(0, 100) < Config.OutOfOrderPct && heldPacket == null)
+            {
+                heldPacket = payload;
+                Push(new LogLine(Stamp(), $"{payload}  [held: out-of-order]", LogLine.Kind.Drop));
+                return;
+            }
+            EmitNow(payload);
+            if (heldPacket != null) { var held = heldPacket; heldPacket = null; EmitNow(held); }
+        }
+
+        private void EmitNow(string payload)
+        {
+            // Weak signal adds LATENCY, never drops: real BLE retransmits at the link layer, so the app gets
+            // every packet — just later (and jittered). Silent packet loss is not a real BLE failure mode.
+            lastDataPayload = payload;                                  // F1: remember it in case the app NAKs
+            if (Config.AckGatedCadence) { awaitingAck = true; awaitingAckSince = DateTime.UtcNow; }
+            Push(new LogLine(Stamp(), payload, LogLine.Kind.Out));
+            var chunks = MTPacket.Frame(payload);
+            Action send = () => { foreach (var c in chunks) Queue(c); };
+            if (Config.ExtraDelayMs > 0)
+            {
+                double d = RandRange(0, Config.ExtraDelayMs) / 1000;
+                // Swift: DispatchQueue.main.asyncAfter — defer the send by a random fraction of a tick.
+                _ = Task.Run(async () => { await Task.Delay((int)(d * 1000)); send(); });
+            }
+            else { send(); }
+            // Duplicate
+            if (RandRange(0, 100) < Config.DuplicatePct)
+            {
+                Push(new LogLine(Stamp(), $"{payload}  [duplicate]", LogLine.Kind.Out));
+                foreach (var c in chunks) Queue(c);
+            }
+        }
+
+        private void Transmit(byte[] data) { Queue(data); }
+        private void Queue(byte[] data) { lock (pending) { pending.Add(data); } Drain(); }
+
+        private void Drain()
+        {
+            if (Config.Link == SimConfig.Transport.Esp32Serial)
+            {
+                var sp = serialPort;
+                if (sp == null || !sp.IsOpen) { lock (pending) pending.Clear(); return; }
+                List<byte[]> toSendSerial;
+                lock (pending) { if (pending.Count == 0) return; toSendSerial = new List<byte[]>(pending); pending.Clear(); }
+                foreach (var frame in toSendSerial)
+                { try { sp.Write(Encoding.UTF8.GetString(frame) + "\n"); } catch { } }   // 1 frame = 1 line = 1 BLE notify
+                return;
+            }
+            var ch = dataChar;
+            if (serviceProvider == null || ch == null) return;
+            // WinRT NotifyValueAsync delivers to all subscribed clients (CB updateValue onSubscribedCentrals:nil).
+            // It returns immediately; unlike CB there's no boolean "buffer full" back-pressure, so we send each
+            // queued frame in order and clear the queue. peripheralManagerIsReady has no WinRT equivalent.
+            List<byte[]> toSend;
+            lock (pending)
+            {
+                if (pending.Count == 0) return;
+                toSend = new List<byte[]>(pending);
+                pending.Clear();
+            }
+            foreach (var frame in toSend)
+            {
+                try
+                {
+                    var writer = new DataWriter();
+                    writer.WriteBytes(frame);
+                    var buffer = writer.DetachBuffer();
+                    _ = ch.NotifyValueAsync(buffer);
+                }
+                catch { /* central may have dropped mid-send */ }
+            }
+        }
+
+        // MARK: - Continuous sim clock (runs whether or not the app is connected)
+        private void EnsureClock()
+        {
+            lock (tickGate)
+            {
+                if (tick != null) return;
+                long period = (long)(uiTickSec * 1000);
+                tick = new Timer(_ => Step(), null, period, period);
+            }
+        }
+
+        private void StartStreaming()
+        {
+            // Do NOT clear lastIgnitionSent here. Real firmware sends LI only on an ignition CHANGE;
+            // the app has no dedup, so re-announcing on every resubscribe files a phantom
+            // PowerUp/Shutdown event per reconnect. It is still null on the first connect of a
+            // session, so the genuine opening LI is unaffected.
+            Streaming = true; lastWatchdog = DateTime.UtcNow;
+            sinceLastPacket = Config.PacketIntervalSec;          // emit the first live packet promptly
+            if (!LinkDown) { Status = "Connected · streaming"; StatusColorValue = StatusColor.Green; }  // don't override OUT OF RANGE
+            EnsureClock();
+        }
+
+        /// <summary>
+        /// One simulation step. Always advances motion + telemetry (so the map moves standalone);
+        /// only transmits packets while the app is subscribed.
+        /// </summary>
+        private void Step()
+        {
+            if (runningDump != null) return;        // scenario playback owns the stream
+            double dt = uiTickSec;
+            if (AutoSignal && !LinkDown)                 // AUTO SIGNAL: sweep link quality like real driving
+            {
+                autoSignalCountdown -= dt;
+                if (autoSignalCountdown <= 0)
+                {
+                    autoSignalCountdown = RandRange(3, 6);
+                    SetSignal(RandInt(20, 100));
+                }
+                autoSignalDipCountdown -= dt;                 // occasional dead-zone: a real out-of-range dip (tunnel / rural gap)
+                if (autoSignalDipCountdown <= 0)
+                {
+                    autoSignalDipCountdown = RandRange(300, 600);
+                    DropLink(Config.RangeOutageSec);
+                }
+            }
+            if (DrivingRoute && Route.HasRoute)
+            {
+                engine.IgnitionOn = true;
+                if (AutoDrive)                                  // AUTO: vary cruise speed like real driving
+                {
+                    autoSpeedCountdown -= dt;
+                    if (autoSpeedCountdown <= 0)
+                    {
+                        autoSpeedCountdown = RandRange(4, 9);
+                        Config.TargetSpeedMph = RandInt(38, 70);
+                    }
+                }
+                double driveDt = dt * Config.RouteTimeScale;        // compress time so the truck visibly crosses the route
+                if (engine.OutOfFuel)                               // stalled: empty tanks → coast to a stop, ignore the target
+                    engine.SpeedMph = Math.Max(0, engine.SpeedMph - Config.DecelMphPerSec * driveDt);
+                else
+                    UpdateRouteSpeed(driveDt);
+                double metersThisTick = engine.SpeedMph * 0.44704 * driveDt;
+                var pos = Route.Advance(metersThisTick);
+                if (pos.HasValue)
+                {
+                    engine.Latitude = pos.Value.Coord.Latitude; engine.Longitude = pos.Value.Coord.Longitude; engine.HeadingDeg = pos.Value.HeadingDeg;
+                }
+                if (DayDriving) RunDayViolations(dt);       // F3: bake in speeding + idle events along the day
+                double pf = Route.ProgressFraction;                  // publish only on whole-% change (avoid 5 Hz churn)
+                if ((int)(pf * 100) != (int)(RouteProgress * 100)) RouteProgress = pf;
+                engine.Advance(driveDt);
+                if (Route.IsComplete || Route.ProgressFraction >= 0.999)
+                {
+                    engine.SpeedMph = 0; DrivingRoute = false; RouteProgress = 1;
+                    if (DayDriving) { DayDriving = false; Info("✓ DRIVE MY DAY complete — full day of IFTA mileage logged"); }
+                    Info("route complete — arrived");
+                }
+            }
+            else
+            {
+                if (engine.OutOfFuel) engine.SpeedMph = 0;          // stalled: can't move on empty tanks
+                engine.Advance(dt * Config.TimeMultiplier);
+                DeadReckon(dt * Config.TimeMultiplier);             // no route loaded: still move the GPS
+            }
+            if (OdoAlternating)                                     // two ECU series: flip on every tick
+            {
+                odoSeriesHigh = !odoSeriesHigh;
+                engine.WireFaults[4] = new WireFault(odoSeriesHigh ? Config.OdoSeriesHighRaw : Config.OdoSeriesLowRaw);
+            }
+            stateSaveCountdown -= dt;                               // persist so a restart resumes, not resets
+            if (stateSaveCountdown <= 0) { stateSaveCountdown = 5; engine.Persisted.Save(); }
+            Mirror();
+            DetectLowFuel();                                        // raise the "open the Fuel App / refuel" prompt when low
+
+            // Offline flash recorder. A real tracker keeps logging while no phone is connected and hands
+            // the backlog to the app on its next readstr. Without this, driving the sim with the app
+            // disconnected produced NOTHING — the app asked, got "SAVED PACKET COUNT:0", and the whole
+            // offline drive never existed (no miles, no Unassigned Driving Period).
+            // Gate on Connected, not Streaming: streaming also goes false on a 90s watchdog lapse and
+            // between stopdata/readdata while the GATT link is alive. In those windows the app is still
+            // attached but will never re-issue readstr, so anything buffered would sit in flash forever
+            // with both sides thinking they were fine.
+            if ((!Connected || LinkDown) && engine.IgnitionOn)
+            {
+                if (!outageStartedAt.HasValue) outageStartedAt = DateTime.UtcNow;
+                sinceLastStored += dt;
+                if (sinceLastStored >= Config.StoredRecordIntervalSec)
+                {
+                    sinceLastStored = 0;
+                    if (pendingStored.Count < Config.StoredFlashCapacity)
+                    {
+                        pendingStored.Add(new Emitted(WireBuilder.ToStored(MTPacket.LivePosition(engine)), Emitted.Kind.Stored));
+                        // Tell the operator it is recording — otherwise an offline drive looks like the sim
+                        // is doing nothing, which is exactly how the missing recorder went unnoticed.
+                        if (pendingStored.Count % 20 == 0)
+                            Info($"⏺ recording offline — {pendingStored.Count} packets buffered (sent on the app's next readstr)");
+                    }
+                    else if (!flashFullWarned)
+                    {
+                        flashFullWarned = true;
+                        Info($"⚠ stored flash full ({Config.StoredFlashCapacity} packets) — older offline miles stop being recorded");
+                    }
+                }
+            }
+            else { sinceLastStored = 0; outageStartedAt = null; }
+
+            sinceLastPacket += dt;
+            // F1: when ack-gated, hold the next packet until the app's $ACK — but never stall forever
+            // (a lost ACK proceeds after 3 intervals), so the stream is robust if the app misses one.
+            bool ackReady = !Config.AckGatedCadence || !awaitingAck
+                || (awaitingAckSince.HasValue && (DateTime.UtcNow - awaitingAckSince.Value).TotalSeconds > Config.PacketIntervalSec * 3);
+            if (Streaming && !LinkDown && ackReady && sinceLastPacket >= Config.PacketIntervalSec)   // linkDown = out of range → silent
+            {
+                sinceLastPacket = 0;
+                if (lastIgnitionSent != engine.IgnitionOn) { SendReliable(MTPacket.Ignition(engine, engine.IgnitionOn)); lastIgnitionSent = engine.IgnitionOn; }
+                // Fault injection: TimeSkewSec shifts the clock the app sees in fields 10/11.
+                SendPacket(MTPacket.LivePosition(engine, DateTime.UtcNow.AddSeconds(Config.TimeSkewSec)));
+            }
+            // Real-tracker watchdog: app sends $wdg every ~20s; if it stops, the tracker stops streaming
+            // (resumes on the next readdata). 90s is a safe margin so normal operation never trips it.
+            if (Streaming && (DateTime.UtcNow - lastWatchdog).TotalSeconds > 90)
+            {
+                Streaming = false;
+                Status = "Watchdog lost — stream paused"; StatusColorValue = StatusColor.Amber;
+                Info("no watchdog ≥90s — a real tracker stops streaming (resumes on readdata)");
+            }
+        }
+
+        private void UpdateRouteSpeed(double dt)
+        {
+            double target = Config.TargetSpeedMph;
+            double remaining = Route.TotalMeters - Route.TraveledMeters;
+            double v = engine.SpeedMph * 0.44704;
+            double brakeM = (v * v) / (2 * Math.Max(0.2, Config.DecelMphPerSec * 0.44704));
+            double stepM = v * dt;                                       // distance covered this (compressed) tick
+            if (remaining <= brakeM + stepM + 8)                         // begin braking ≥1 tick early so we don't blow past the stop
+            {
+                engine.SpeedMph = Math.Max(0, engine.SpeedMph - Config.DecelMphPerSec * dt);
+            }
+            else if (engine.SpeedMph < target)
+            {
+                engine.SpeedMph = Math.Min(target, engine.SpeedMph + Config.AccelMphPerSec * dt);
+            }
+            else if (engine.SpeedMph > target)
+            {
+                engine.SpeedMph = Math.Max(target, engine.SpeedMph - Config.DecelMphPerSec * dt);
+            }
+        }
+
+        // MARK: - Command responder (mirrors real MT firmware)
+        private void HandleTrackerCommand(string raw)
+        {
+            string c = raw.ToLowerInvariant();
+            if (LinkDown) return;   // OUT OF RANGE: total silence — don't answer commands either, so the app times out and disconnects
+            if (c.StartsWith("readdata"))
+            {
+                SendRaw("ACK,DATA");
+                SendReliable(MTPacket.Version(device)); SendReliable(MTPacket.Version(device));   // ≥2 LV so app learns VIN/firmware
+                StartStreaming();
+            }
+            else if (c.StartsWith("readvin")) { SendReliable(MTPacket.Version(device)); }
+            else if (c.StartsWith("readstr"))
+            {
+                // The app sends readstr automatically after every connect, resetting its
+                // storedEventsProcessed flag to false right before it — so THIS is the moment to deliver a
+                // backlog. If a stored-replay/UDP scenario armed one (ReplayStored → ForceDisconnect), dump
+                // it now so the app actually runs replay/UDP classification. Otherwise reply empty.
+                var split = StoredRecordsWorthSending();
+                if (split.Keep.Count > 0)
+                {
+                    int n = split.Keep.Count;
+                    var q = new List<Emitted>(split.Keep);
+                    q.Add(new Emitted("LAST_STORED_PACKET", Emitted.Kind.Raw));
+                    q.Add(new Emitted("SAVED PACKET COUNT:" + n.ToString(CultureInfo.InvariantCulture), Emitted.Kind.Raw));
+                    // Keep the backlog until it has actually gone out. Real flash is not erased when the
+                    // dump STARTS — if the app drops mid-dump, clearing here loses the drive for good
+                    // and the next readstr answers "SAVED PACKET COUNT:0". PopScenario clears it once
+                    // the queue drains; a disconnect puts it back.
+                    undeliveredStored = new List<Emitted>(split.Keep);
+                    flashFullWarned = false;
+                    pendingStoredCadence = Math.Max(1.0, pendingStoredCadence);   // never dump faster than the app tolerates
+                    scenarioQueue = q;
+                    runningDump = $"Stored replay ({n})";
+                    scenarioTimer?.Dispose();
+                    long period = (long)(pendingStoredCadence * 1000);
+                    scenarioTimer = new Timer(_ => PopScenario(), null, period, period);
+                    // Don't assert an outcome the sim cannot observe: the app still has to have a vehicle
+                    // assigned, and it alone decides whether these become an Unassigned Driving Period.
+                    Info($"▶ app sent readstr → dumping {n} stored packets recorded while offline (the app decides if a UDP is filed; it needs a vehicle assigned)");
+                    if (split.Dropped > 0) Info($"   ({split.Dropped} earlier packets withheld — see the note above)");
+                }
+                else
+                {
+                    pendingStored = new List<Emitted>();
+                    SendRaw("LAST_STORED_PACKET"); SendRaw("SAVED PACKET COUNT:0");
+                }
+            }
+            else if (c.StartsWith("readdtc")) { SendReliable(MTPacket.Dtc(device.DtcCodes, engine.IgnitionOn ? 1 : 0, engine.Rpm)); }
+            else if (c.StartsWith("clrdtc")) { device.DtcCodes = new List<string>(); Faults = new List<string>(); }
+            else if (c.StartsWith("stopdata")) { SendRaw("ACK,STOP"); }
+            else if (c.StartsWith("$ack") || c.StartsWith("ack")) { awaitingAck = false; }   // F1: app confirmed the last frame (mirrors real $ACK flow control)
+            else if (c.StartsWith("$err") || c.StartsWith("err"))                            // F1: app rejected a frame → retransmit, like real firmware
+            {
+                awaitingAck = false;
+                if (lastDataPayload != null) { Push(new LogLine(Stamp(), lastDataPayload + "  [retransmit ← $ERR]", LogLine.Kind.Out)); EmitNow(lastDataPayload); }
+            }
+            else if (c.StartsWith("$wdg") || c.StartsWith("wdg")) { lastWatchdog = DateTime.UtcNow; }   // keepalive: consume like a real tracker (no reply)
+        }
+
+        // Ensure the Bluetooth radio is powered on before we try to create the GATT server.
+        // Returns true if the radio is on (or we can't tell — let GATT creation surface the real error);
+        // returns false only when the radio is off AND we could not turn it on, having already reported why.
+        private async Task<bool> EnsureRadioOnAsync(BluetoothAdapter adapter)
+        {
+            try
+            {
+                var radio = await adapter.GetRadioAsync();
+                if (radio == null) return true;                 // no radio handle — don't block; CreateAsync will report
+                if (radio.State == RadioState.On) return true;   // already on, nothing to do
+
+                // Radio is Off/Disabled — ask Windows for permission, then flip it on (the Settings toggle equivalent).
+                var access = await Radio.RequestAccessAsync();
+                if (access != RadioAccessStatus.Allowed)
+                {
+                    Status = "Bluetooth is off"; StatusColorValue = StatusColor.Red;
+                    Info($"✗ Bluetooth radio is {radio.State} and Windows denied access to turn it on ({access}) — enable it in Settings ▸ Devices ▸ Bluetooth, then relaunch");
+                    return false;
+                }
+                var setResult = await radio.SetStateAsync(RadioState.On);
+                if (setResult != RadioAccessStatus.Allowed)
+                {
+                    Status = "Bluetooth is off"; StatusColorValue = StatusColor.Red;
+                    Info($"✗ tried to turn Bluetooth on but Windows refused ({setResult}) — enable it in Settings ▸ Devices ▸ Bluetooth, then relaunch");
+                    return false;
+                }
+                Info("✓ Bluetooth radio was off — turned it on automatically");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: if we can't inspect/toggle the radio, fall through and let GATT creation report the real error.
+                Info($"⚠ could not check/enable the Bluetooth radio ({ex.Message}) — if advertising fails, turn Bluetooth on manually");
+                return true;
+            }
+        }
+
+        // MARK: - WinRT GATT peripheral (CBPeripheralManagerDelegate equivalent)
+        private async Task SetupBLEAsync()
+        {
+            try
+            {
+                Info($"log file: {LogFilePath}");
+                // Windows BLE advertising REQUIRES the adapter to support the peripheral role. Many built-in /
+                // USB adapters are central-only: StartAdvertising() then silently no-ops — nothing is broadcast,
+                // no exception is thrown — which is exactly why a generic scanner (nRF) sees nothing while the app
+                // used to claim "Advertising". Detect and report it honestly up front.
+                var adapter = await BluetoothAdapter.GetDefaultAsync();
+                if (adapter == null)
+                {
+                    Status = "No Bluetooth adapter"; StatusColorValue = StatusColor.Red;
+                    Info("✗ no Bluetooth adapter found — cannot advertise");
+                    return;
+                }
+                if (!adapter.IsLowEnergySupported)
+                {
+                    Status = "BLE unsupported"; StatusColorValue = StatusColor.Red;
+                    Info("✗ this adapter has no Bluetooth LE — cannot advertise");
+                    return;
+                }
+                if (!adapter.IsPeripheralRoleSupported)
+                {
+                    Status = "Adapter can't advertise"; StatusColorValue = StatusColor.Red;
+                    Info("✗ this Bluetooth adapter does NOT support the peripheral (advertising) role — the ELD app and BLE scanners will never see it. Fix: use a peripheral-capable USB BLE dongle, or the ESP32 advertiser.");
+                    return;
+                }
+
+                // The adapter can advertise, but GATT creation still needs the radio powered ON — otherwise
+                // CreateAsync fails with RadioNotAvailable. Turn it on for the user (same as the Settings
+                // ▸ Bluetooth toggle) instead of just reporting it off.
+                if (!await EnsureRadioOnAsync(adapter)) return;
+
+                var serviceUuid = Guid.Parse("7add0001-f286-4c78-adda-520c4ba3500c");
+                var result = await GattServiceProvider.CreateAsync(serviceUuid);
+                if (result.Error != BluetoothError.Success)
+                {
+                    Status = "Bluetooth error"; StatusColorValue = StatusColor.Red;
+                    Info($"failed to create GATT service: {result.Error}");
+                    return;
+                }
+                var provider = result.ServiceProvider;
+
+                // Write characteristic (7add0002): Write | WriteWithoutResponse
+                var writeParams = new GattLocalCharacteristicParameters
+                {
+                    CharacteristicProperties = GattCharacteristicProperties.Write | GattCharacteristicProperties.WriteWithoutResponse,
+                    WriteProtectionLevel = GattProtectionLevel.Plain,
+                };
+                var writeRes = await provider.Service.CreateCharacteristicAsync(
+                    Guid.Parse("7add0002-f286-4c78-adda-520c4ba3500c"), writeParams);
+                if (writeRes.Error != BluetoothError.Success)
+                {
+                    Status = "Bluetooth error"; StatusColorValue = StatusColor.Red;
+                    Info($"failed to add command characteristic: {writeRes.Error}");
+                    return;
+                }
+                commandChar = writeRes.Characteristic;
+                commandChar.WriteRequested += OnWriteRequested;
+
+                // Notify characteristic (7add0003): Notify
+                var notifyParams = new GattLocalCharacteristicParameters
+                {
+                    CharacteristicProperties = GattCharacteristicProperties.Notify,
+                    ReadProtectionLevel = GattProtectionLevel.Plain,
+                };
+                var notifyRes = await provider.Service.CreateCharacteristicAsync(
+                    Guid.Parse("7add0003-f286-4c78-adda-520c4ba3500c"), notifyParams);
+                if (notifyRes.Error != BluetoothError.Success)
+                {
+                    Status = "Bluetooth error"; StatusColorValue = StatusColor.Red;
+                    Info($"failed to add data characteristic: {notifyRes.Error}");
+                    return;
+                }
+                dataChar = notifyRes.Characteristic;
+                dataChar.SubscribedClientsChanged += OnSubscribedClientsChanged;
+
+                serviceProvider = provider;
+
+                // Advertise. NOTE: Windows broadcasts the machine NAME — there is no per-app local-name API.
+                // The PC must be renamed to start with "ELD-MA" for the ELD app to find it (see header comment).
+                // Only claim "Advertising" once the radio is ACTUALLY broadcasting. The status arrives async;
+                // if it ever lands on anything but Started, the link is not on air and a scanner sees nothing.
+                provider.AdvertisementStatusChanged += (s, e) => PostToUi(() =>
+                {
+                    if (e.Status == GattServiceProviderAdvertisementStatus.Started)
+                    {
+                        advertiseRetries = 0;
+                        Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
+                    }
+                    else if (e.Status == GattServiceProviderAdvertisementStatus.Aborted)
+                    {
+                        // The BT stack accepted the call then tore the advertisement down — usually a transient
+                        // radio/driver hiccup or a stale advertiser. Stop cleanly and retry a few times.
+                        if (advertiseRetries < MaxAdvertiseRetries)
+                        {
+                            advertiseRetries++;
+                            Status = $"Advert aborted — retrying ({advertiseRetries}/{MaxAdvertiseRetries})…";
+                            StatusColorValue = StatusColor.Amber;
+                            Info($"⚠ advertisement aborted by the BT stack (error: {e.Error}) — retry {advertiseRetries}/{MaxAdvertiseRetries}");
+                            _ = RetryAdvertiseAsync(s);
+                        }
+                        else
+                        {
+                            Status = "Advertising failed (aborted)"; StatusColorValue = StatusColor.Red;
+                            Info("✗ advertising keeps aborting — toggle Bluetooth off/on, close other apps using BLE (a connected device or another GATT server), or use the ESP32 advertiser");
+                        }
+                    }
+                    else
+                    {
+                        Status = $"Not advertising ({e.Status})"; StatusColorValue = StatusColor.Red;
+                        Info($"⚠ advertisement is NOT on air (status: {e.Status}, error: {e.Error}) — a scanner will see nothing");
+                    }
+                });
+
+                advertiseRetries = 0;
+                StartAdvertisingSafely(provider);
+
+                EnsureClock();
+                Info("Bluetooth on — publishing tracker service");
+                Info($"advertising as \"{AdvertisedName}\" — waiting for the ELD app");
+                Info("Windows advertises the PC NAME — rename this PC to start with \"ELD-MA\" so the ELD app can find it");
+                // Reflect the current status immediately (Started usually arrives via the event above).
+                if (provider.AdvertisementStatus == GattServiceProviderAdvertisementStatus.Started)
+                { Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber; }
+                else
+                { Status = "Starting advertisement…"; StatusColorValue = StatusColor.Amber; }
+            }
+            catch (Exception ex)
+            {
+                Status = "Bluetooth error"; StatusColorValue = StatusColor.Red;
+                Info($"BLE setup failed: {ex.Message}");
+            }
+        }
+
+        // Start advertising defensively: stop any in-flight advertisement first (a stale advertiser is a common
+        // cause of the immediate "Aborted"), then start. Swallows the rare synchronous throw so a hiccup on one
+        // attempt doesn't kill the retry loop.
+        private void StartAdvertisingSafely(GattServiceProvider p)
+        {
+            if (p == null) return;
+            try { if (p.AdvertisementStatus == GattServiceProviderAdvertisementStatus.Started) p.StopAdvertising(); }
+            catch { /* nothing to stop */ }
+            try
+            {
+                p.StartAdvertising(new GattServiceProviderAdvertisingParameters
+                {
+                    IsConnectable = true,
+                    IsDiscoverable = true,
+                });
+            }
+            catch (Exception ex) { Info($"start advertising threw: {ex.Message}"); }
+        }
+
+        // After an Aborted status: stop, wait for the radio to settle, then start again on the UI thread.
+        private async Task RetryAdvertiseAsync(GattServiceProvider p)
+        {
+            if (p == null) return;
+            try { p.StopAdvertising(); } catch { }
+            await Task.Delay(1500);
+            if (serviceProvider != p) return;                    // torn down / replaced meanwhile → abandon this retry
+            PostToUi(() => StartAdvertisingSafely(p));
+        }
+
+        // didReceiveWrite → handle each write request (read value, log inbound, handle command, respond).
+        private void OnWriteRequested(GattLocalCharacteristic sender, GattWriteRequestedEventArgs args)
+        {
+            _ = HandleWriteAsync(args);
+        }
+
+        private async Task HandleWriteAsync(GattWriteRequestedEventArgs args)
+        {
+            using (var deferral = args.GetDeferral())
+            {
+                var request = await args.GetRequestAsync();
+                if (request == null) { return; }
+                try
+                {
+                    var reader = DataReader.FromBuffer(request.Value);
+                    byte[] bytes = new byte[request.Value.Length];
+                    reader.ReadBytes(bytes);
+                    string s = Encoding.UTF8.GetString(bytes);
+                    Push(new LogLine(Stamp(), s, LogLine.Kind.Inbound));
+                    HandleTrackerCommand(s);
+                }
+                catch { /* undecodable write — ignore like CB does on nil string */ }
+                // respond like CB p.respond(to:withResult:.success). WriteWithoutResponse requests don't expect one.
+                if (request.Option == GattWriteOption.WriteWithResponse)
+                {
+                    request.Respond();
+                }
+            }
+        }
+
+        // didSubscribeTo / didUnsubscribeFrom → track connection via subscribed-client count.
+        private void OnSubscribedClientsChanged(GattLocalCharacteristic sender, object args)
+        {
+            int count = sender.SubscribedClients.Count;
+            int prev = subscriberCount;
+            subscriberCount = count;
+            if (count > prev)   // a central subscribed to the data characteristic
+            {
+                Connected = true; Status = "Device connected"; StatusColorValue = StatusColor.Green;
+                Info("✓ Device subscribed to data characteristic");
+            }
+            else if (count == 0)   // last central unsubscribed → disconnected
+            {
+                // A drop mid-dump must NOT lose the drive: restore whatever was handed to the dump but
+                // never confirmed, so the next readstr can deliver it again. Flash is only erased once read.
+                if (undeliveredStored.Count > 0)
+                {
+                    var restored = new List<Emitted>(undeliveredStored);
+                    restored.AddRange(pendingStored);
+                    pendingStored = restored;
+                    undeliveredStored = new List<Emitted>();
+                    lock (scenarioGate) { scenarioQueue.Clear(); }
+                    scenarioTimer?.Dispose(); scenarioTimer = null; runningDump = null;
+                    Info($"↩︎ link dropped mid-dump — {pendingStored.Count} stored packets kept for the next readstr");
+                }
+                Connected = false; Streaming = false; heldPacket = null; pending.Clear();   // drop stale out-of-order hold + unsent chunks
+                awaitingAck = false; awaitingAckSince = null;                               // F1: clear ack-gate so reconnect streams cleanly
+                if (runningDump != null) StopDump();             // a disconnect mid-dump clears it so live streaming resumes on reconnect
+                dropTimer?.Dispose(); dropTimer = null; LinkDown = false; DropEndsAt = null;   // out-of-range ends when the link actually drops → reconnect resumes streaming
+                Status = $"Advertising as {AdvertisedName}"; StatusColorValue = StatusColor.Amber;
+                Info("Device disconnected");
+            }
+        }
+    }
+}

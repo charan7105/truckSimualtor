@@ -1,0 +1,362 @@
+using System;
+using System.Collections.Specialized;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using MatrackSim.Core;
+
+namespace MatrackSim.App
+{
+    /// <summary>
+    /// Full cluster cockpit for the Windows tracker simulator — a faithful WPF reproduction of the
+    /// macOS SwiftUI dashboard (ContentView + the cluster widgets). All button handlers forward verbatim
+    /// to the verified <see cref="TrackerPeripheral"/> controller so behaviour matches the Mac exactly.
+    /// </summary>
+    public partial class MainWindow : Window
+    {
+        private TrackerPeripheral Sim => (TrackerPeripheral)DataContext;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            DataContext = new TrackerPeripheral();
+            Sim.Log.CollectionChanged += Log_CollectionChanged;
+            Sim.PropertyChanged += Sim_PropertyChanged;     // drive the low-fuel overlay off the controller flag
+            RefreshPorts();                                 // populate the ESP32 COM-port picker
+
+            // Fuel-app link: serve the live position on the LAN so a phone (shared WiFi / its own hotspot)
+            // can follow the drive — the Matrack Fuel App's "Link to sim" reads this.
+            SimBridge.Shared.Position = () => (Sim.CurrentLat, Sim.CurrentLon, Sim.HeadingDeg, Sim.SpeedMph,
+                string.IsNullOrEmpty(Sim.RouteFrom) ? "Free drive" : $"{Sim.RouteFrom} → {Sim.RouteTo}");
+            SimBridge.Shared.Start();
+
+            // Dark, Mac-like title bar instead of the default white Windows chrome.
+            SourceInitialized += (s, e) => EnableDarkTitleBar();
+            // A maximized WPF window overhangs the monitor by ~7px on every edge, clipping content flush to
+            // the border (the footer DTC/REPLAY buttons). Inset the cockpit by that much only when maximized.
+            StateChanged += (s, e) => { ApplyMaximizeInset(); Relayout(); };
+            Loaded += (s, e) => { ApplyMaximizeInset(); Relayout(); };
+            SizeChanged += (s, e) => Relayout();
+
+            // `demo` arg: skip the ignition sweep, load a random route and drive it — mirrors ContentView.onAppear.
+            if (Environment.GetCommandLineArgs().Length > 1 && Environment.GetCommandLineArgs()[1] == "demo")
+            {
+                Loaded += async (s, e) =>
+                {
+                    Sim.SkipStartup();
+                    await System.Threading.Tasks.Task.Delay(800);
+                    await Sim.LoadRandomRoute();
+                    Sim.StartRouteDrive();
+                };
+            }
+        }
+
+        // MARK: - Window chrome (dark title bar + maximized-overhang fix)
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+        private void EnableDarkTitleBar()
+        {
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero) return;
+                int useDark = 1;
+                // DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Win10 2004+/Win11); 19 was the pre-release value.
+                if (DwmSetWindowAttribute(hwnd, 20, ref useDark, sizeof(int)) != 0)
+                    DwmSetWindowAttribute(hwnd, 19, ref useDark, sizeof(int));
+            }
+            catch { /* DWM unavailable — fall back to default chrome */ }
+        }
+
+        private void ApplyMaximizeInset()
+        {
+            RootGrid.Margin = WindowState == WindowState.Maximized
+                ? new Thickness(SystemParameters.WindowResizeBorderThickness.Left + 1)
+                : new Thickness(0);
+        }
+
+        // FLUID layout (mirrors the Mac): lay the cockpit out at the live window WIDTH and scale to FIT the
+        // height, so the centre lane fills the screen and the side bars use the whole width — no letterbox on
+        // wide monitors. Below a comfortable minimum width we letterbox instead of crushing the columns.
+        private const double DesignHeight = 1120;
+        private const double MinCockpitWidth = 1480;   // 392 + 392 side bars + gutters + a comfortable centre
+        private void Relayout()
+        {
+            if (Cockpit == null || StageScale == null) return;
+            double inset = 24;
+            double availW = RootGrid.ActualWidth - inset * 2;
+            double availH = RootGrid.ActualHeight - inset * 2;
+            if (availW <= 0 || availH <= 0) return;
+
+            double scale = availH / DesignHeight;            // fit the height (grow on tall screens, shrink on short)
+            double w = availW / scale;                       // width that, once scaled, exactly fills availW
+            if (w < MinCockpitWidth)                         // too narrow → cap width and shrink further (letterbox top/bottom)
+            {
+                w = MinCockpitWidth;
+                scale = System.Math.Min(availH / DesignHeight, availW / MinCockpitWidth);
+            }
+            Cockpit.Width = w;
+            StageScale.ScaleX = StageScale.ScaleY = scale;
+        }
+
+        private void Log_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action != NotifyCollectionChangedAction.Add) return;
+            // Defer the auto-scroll: calling ScrollIntoView synchronously inside CollectionChanged forces a
+            // layout pass before the ListBox finishes recording this Add, which trips WPF's generator
+            // consistency check ("ItemsControl is inconsistent with its items source"). Background priority
+            // runs it after the Add is fully processed.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (LogList.Items.Count > 0)
+                    LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
+            }), DispatcherPriority.Background);
+        }
+
+        // MARK: - DRIVE
+        private void Engine_Click(object sender, RoutedEventArgs e) => Sim.SetEngine(!Sim.IgnitionOn);
+
+        // ---- Fault injection. Grouped in the XAML by WHAT THE TESTER SEES ON THE PHONE, not by
+        // protocol field, and the faults the app ignores are labelled as such rather than hidden.
+        private void FaultEcm_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(12, Sim.IsFaked(12) ? null : "0");
+
+        private void FaultClock_Click(object sender, RoutedEventArgs e)
+        {
+            Sim.Config.TimeSkewSec = Sim.Config.TimeSkewSec == 0 ? 1800 : 0;
+            Sim.RefreshFaultBindings();
+        }
+
+        private void FaultOdoMissing_Click(object sender, RoutedEventArgs e)
+        {
+            bool armed = Sim.IsFaked(4, "0");
+            Sim.SetWireOverride(4, armed ? null : "0");
+            Sim.SetWireOverride(5, armed ? null : "0");
+        }
+
+        // 1-in-5 and motion-gated: "when speed > 5, SOME packets without gps lock" is a different
+        // test from "every packet without gps lock", and a parked truck legitimately has no fix.
+        private void FaultGpsLock_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(8, Sim.IsFaked(8) ? null : "0", 0.2, true);
+
+        private void FaultTwoOdo_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetOdoAlternating(!Sim.OdoAlternating);
+
+        private void FaultBadTime_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(10, Sim.IsFaked(10) ? null : "999999", 0.2);
+
+        private void FaultDefaultOdo_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, Sim.IsFaked(4, SimConfig.OdometerUnavailableSentinel)
+                ? null : SimConfig.OdometerUnavailableSentinel, 0.2);
+
+        private void FaultOdoSource_Click(object sender, RoutedEventArgs e) => Sim.SendOdoSourcePacket(true);
+
+        private void FaultMalformed_Click(object sender, RoutedEventArgs e) => Sim.SendMalformedPacket();
+
+        // ---- Stored-packet test cases (REQ-940 future dates, REQ-942 duplicates)
+        private void StoredFuture_Click(object sender, RoutedEventArgs e) =>
+            Sim.DumpStoredPackets(5, 1.0, true,
+                new WireBuilder.StoredDumpOptions { StampedAt = SimConfig.FutureStoredPacketDate },
+                "Stored dump · future dated");
+
+        private void StoredDuplicate_Click(object sender, RoutedEventArgs e) =>
+            Sim.DumpStoredPackets(5, 1.0, true,
+                new WireBuilder.StoredDumpOptions { RepeatEachPacket = true },
+                "Stored dump · duplicated");
+
+        private void StoredRepeat_Click(object sender, RoutedEventArgs e) => Sim.RepeatLastStoredDump(1.0);
+
+        private void VinZeros_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "00000000000000000";
+        private void VinLast6_Click(object sender, RoutedEventArgs e) => BadVinBox.Text = "292058";
+
+        private void FaultOdoJump_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, "5000000");
+
+        private void FaultOdoStuck_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(4, Sim.IsFaked(4, SimConfig.OdometerUnavailableSentinel)
+                ? null : SimConfig.OdometerUnavailableSentinel);
+
+        private void FaultPowerStorm_Click(object sender, RoutedEventArgs e) => Sim.PowerCycleBurst();
+
+        private void FaultBadVin_Click(object sender, RoutedEventArgs e)
+        {
+            Sim.Vin = string.IsNullOrWhiteSpace(BadVinBox.Text) ? "00000000000000000" : BadVinBox.Text.Trim();
+            Sim.SendVinNow();
+        }
+
+        private void FaultDefaultDate_Click(object sender, RoutedEventArgs e) =>
+            Sim.SetWireOverride(11, Sim.IsFaked(11) ? null : "010100", 0.2);
+
+        private void FaultClear_Click(object sender, RoutedEventArgs e) => Sim.ClearAllFaults();
+        private void Auto_Click(object sender, RoutedEventArgs e) => Sim.SetAutoDrive(!Sim.AutoDrive);
+
+        private static string Param(object sender) =>
+            (string)((System.Windows.Controls.Primitives.ButtonBase)sender).CommandParameter;
+
+        private void SpeedPreset_Click(object sender, RoutedEventArgs e)
+        {
+            int kmh = int.Parse(Param(sender), CultureInfo.InvariantCulture);
+            Sim.SetSpeed(kmh / 1.60934);   // Swift: sim.setSpeed(Double(v) / 1.60934)
+        }
+
+        private void TimeScale_Click(object sender, RoutedEventArgs e)
+        {
+            int x = int.Parse(Param(sender), CultureInfo.InvariantCulture);
+            Sim.Config.RouteTimeScale = x;
+        }
+
+        // MARK: - ROUTE
+        private async void Plan_Click(object sender, RoutedEventArgs e) => await Sim.LoadRoute(Sim.RouteFrom, Sim.RouteTo);
+        private async void Random_Click(object sender, RoutedEventArgs e) => await Sim.LoadRandomRoute();
+
+        private void DriveRoute_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sim.DrivingRoute) Sim.StopRouteDrive();
+            else Sim.StartRouteDrive();
+        }
+
+        private async void DriveMyDay_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sim.DayDriving) Sim.StopDay();
+            else await Sim.DriveMyDay();
+        }
+
+        // MARK: - LOW-FUEL OVERLAY (centered, mirrors the Mac lowFuel overlay). Driven by the controller's
+        // ShowLowFuel flag — raised when a tank crosses the warning level or both run dry.
+        private void Sim_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(TrackerPeripheral.ShowLowFuel))
+            {
+                // ShowLowFuel is raised from the background sim tick (System.Threading.Timer → Step →
+                // DetectLowFuel), so this handler can arrive off the UI thread. Data bindings auto-marshal,
+                // but this manual handler touches WPF elements directly — marshal it or it crashes when
+                // fuel drops below the warning level.
+                if (!Dispatcher.CheckAccess())
+                {
+                    Dispatcher.BeginInvoke(new Action(() => Sim_PropertyChanged(sender, e)));
+                    return;
+                }
+                if (Sim.ShowLowFuel) ShowLowFuel(); else CloseLowFuel();
+            }
+        }
+
+        private void ShowLowFuel()
+        {
+            bool empty = Sim.FuelPct <= 0 && Sim.Fuel2Pct <= 0;
+            LowFuelHost.Content = new LowFuelView(Sim.FuelPct, empty, pct => Sim.Refuel(pct), CloseLowFuel);
+            LowFuelOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void CloseLowFuel()
+        {
+            LowFuelOverlay.Visibility = Visibility.Collapsed;
+            LowFuelHost.Content = null;
+            Sim.DismissLowFuel();
+        }
+
+        private void LowFuelBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (ReferenceEquals(e.OriginalSource, LowFuelOverlay)) CloseLowFuel();
+        }
+
+        // Click the FUEL LINK pill to copy just the IP — that's all the Fuel App needs (Link to sim → paste).
+        private void LinkPill_Copy(object sender, MouseButtonEventArgs e)
+        {
+            try { Clipboard.SetText(SimBridge.Shared.LinkIP); } catch { /* clipboard can transiently fail */ }
+            LinkCopyGlyph.Text = "\uE73E";   // Segoe MDL2 CheckMark - copied feedback
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1400) };
+            t.Tick += (s, ev) => { LinkCopyGlyph.Text = "\uE8C8"; t.Stop(); };   // Segoe MDL2 Copy glyph restored
+            t.Start();
+        }
+
+        // MARK: - CONNECTION / SIGNAL
+        private void Signal_Click(object sender, RoutedEventArgs e)
+        {
+            double pct = double.Parse(Param(sender), CultureInfo.InvariantCulture);
+            Sim.AutoSignal = false;                 // manual preset takes over from AUTO
+            Sim.SetSignal(pct);
+        }
+
+        private void AutoSignal_Click(object sender, RoutedEventArgs e) => Sim.SetAutoSignal(!Sim.AutoSignal);
+
+        // MARK: - ESP32 (USB-serial) transport
+        private void RefreshPorts()
+        {
+            string keep = PortBox.SelectedItem as string;
+            PortBox.ItemsSource = System.IO.Ports.SerialPort.GetPortNames();
+            if (keep != null) PortBox.SelectedItem = keep;
+            else if (PortBox.Items.Count > 0) PortBox.SelectedIndex = 0;
+        }
+
+        private void PortBox_DropDownOpened(object sender, EventArgs e) => RefreshPorts();
+
+        private void Flicker_Click(object sender, RoutedEventArgs e) => Sim.SetFlicker(!Sim.FlickerOn);
+
+        private void Esp32Toggle_Click(object sender, RoutedEventArgs e)
+        {
+            bool on = ((System.Windows.Controls.Primitives.ToggleButton)sender).IsChecked == true;
+            Sim.Config.SerialPortName = PortBox.SelectedItem as string ?? "";
+            Sim.SwitchTransport(on ? SimConfig.Transport.Esp32Serial : SimConfig.Transport.Ble);
+        }
+
+        private void Drop_Click(object sender, RoutedEventArgs e)
+        {
+            // Windows reconnect fix: use the soft "out of range" model (keep the GattServiceProvider alive and
+            // advertising; just go silent) instead of a hard teardown. On Windows, tearing the provider down and
+            // re-creating it on resume changes the BLE advertising identity, so the iPhone — which auto-reconnects
+            // to the peripheral identity it cached at first connect — never recognizes the re-advertised peripheral
+            // (CoreBluetooth keeps that identity stable across teardown, which is why the Mac reconnects). Keeping
+            // the same provider advertising preserves the identity, so the app times out, drops, and reconnects to
+            // the still-live peripheral — the same conditions as the initial connect, which works. See DropLink.
+            if (Sim.LinkDown) Sim.ResumeLink();
+            else { Sim.AutoSignal = false; Sim.DropLink(Sim.Config.RangeOutageSec); }
+        }
+
+        private void Dump_Click(object sender, RoutedEventArgs e) =>
+            Sim.DumpStoredPackets(Sim.Config.StoredDumpCount, Sim.Config.StoredDumpCadenceSec);
+
+        // MARK: - DIAGNOSTICS
+        private void Dtc_Click(object sender, RoutedEventArgs e) => DtcPopup.IsOpen = !DtcPopup.IsOpen;
+        private void Fault_Click(object sender, RoutedEventArgs e) => Sim.InjectFault(Param(sender));
+        private void ClearFaults_Click(object sender, RoutedEventArgs e) => Sim.ClearFaults();
+
+        // MARK: - IGNITION
+        private void Start_Click(object sender, RoutedEventArgs e) => Sim.BeginStartup();
+        private void Ignition_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!Sim.IsCold) Sim.SkipStartup();   // tap anywhere (except in the cold state) skips the sweep
+        }
+        private void ReplayIgnition_Click(object sender, RoutedEventArgs e) => Sim.RearmStartup();
+
+        // MARK: - LOG
+        private void ClearLog_Click(object sender, RoutedEventArgs e) => Sim.ClearLog();
+
+        private void ExportLog_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new SaveFileDialog
+            {
+                Title = "Export Packet Log",
+                FileName = "matrack-packets.txt",
+                Filter = "Text file (*.txt)|*.txt",
+            };
+            if (dlg.ShowDialog(this) != true) return;
+            var sb = new StringBuilder();
+            sb.AppendLine("Matrack Truck Sim — packet log");
+            sb.AppendLine($"VIN: {Sim.Vin}");
+            sb.AppendLine($"Exported: {DateTime.Now}");
+            sb.AppendLine($"Lines: {Sim.Log.Count}");
+            sb.AppendLine();
+            foreach (var l in Sim.Log) sb.AppendLine($"{l.Time}  {l.Symbol}  {l.Text}");
+            try { File.WriteAllText(dlg.FileName, sb.ToString()); } catch { /* user cancelled / locked */ }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows-only: WPF UI + WinRT BLE peripheral (Windows.Devices.Bluetooth).
+       Build this on Windows (Visual Studio 2022 or `dotnet build` on Windows). It will NOT build on macOS. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>MatrackSim.App</RootNamespace>
+    <AssemblyName>MatrackSim</AssemblyName>
+    <!-- Truck-wheel app icon (matches the macOS HaulLogo) — used for the exe, taskbar and window title bar. -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- Per-Monitor-V2 DPI awareness so the UI renders crisp at native resolution on high-DPI / 4K screens
+         instead of being bitmap-stretched (the soft, low-res "720p" look that makes everything read cheap). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Single-file publish (PublishSingleFile=true) MUST extract WPF's native helper DLLs at runtime.
+         Without this the app crashes immediately with System.DllNotFoundException in WindowsBase
+         (SetWindowLongPtrWndProc) the moment the first window opens. No effect on non-single-file builds. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MatrackSim.Core/MatrackSim.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded OpenStreetMap (Leaflet) navigation map — the Windows stand-in for MapKit. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+    <!-- USB-serial link to the ESP32 BLE advertiser (alternative transport to WinRT BLE). -->
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+  </ItemGroup>
+</Project>
