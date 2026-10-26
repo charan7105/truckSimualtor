@@ -273,6 +273,9 @@ struct NetworkPanel: View {
                     }
                     countSlider
                     cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
+                    // Offline recording rate. The real tracker writes one record every 30 minutes;
+                    // turn it down when you just want to watch the recorder work.
+                    cfgSlider("Record every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
                     NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
                                icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: isDumping) {
                         sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
@@ -393,17 +396,21 @@ struct NetworkPanel: View {
     /// deliberate setting from something you dragged days ago, and a stale value silently changes
     /// what every later test means. The default comes from `SimConfig.default`, so it can never
     /// drift out of step with the real one.
+    /// `scale` divides the stored value for display — the record interval lives in seconds but reads
+    /// far better as minutes ("30m" rather than "1800s").
     private func cfgSlider(_ label: String, _ kp: WritableKeyPath<SimConfig, Double>,
-                           _ range: ClosedRange<Double>, _ unit: String, _ dec: Int) -> some View {
-        let value = sim.config[keyPath: kp]
-        let fallback = SimConfig.default[keyPath: kp]
+                           _ range: ClosedRange<Double>, _ unit: String, _ dec: Int,
+                           scale: Double = 1) -> some View {
+        let value = sim.config[keyPath: kp] / scale
+        let fallback = SimConfig.default[keyPath: kp] / scale
         let changed = abs(value - fallback) > 0.0001
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
                 Text(label).font(.system(size: 11, design: .rounded))
                     .foregroundStyle(changed ? Theme.amber : Theme.dim)
                     .lineLimit(1).fixedSize()
-                Slider(value: Binding(get: { sim.config[keyPath: kp] }, set: { sim.config[keyPath: kp] = $0 }), in: range)
+                Slider(value: Binding(get: { sim.config[keyPath: kp] / scale },
+                                      set: { sim.config[keyPath: kp] = $0 * scale }), in: range)
                     .tint(changed ? Theme.amber : Theme.ice)
                     .frame(minWidth: 60).layoutPriority(1)
                 // Value over default, right-aligned: the value stays where the eye already looks and
@@ -420,7 +427,7 @@ struct NetworkPanel: View {
             // BEFORE touching anything, otherwise every slider reads as "probably fine".
             if changed {
                 Button {
-                    sim.config[keyPath: kp] = fallback
+                    sim.config[keyPath: kp] = fallback * scale
                     sim.info("\(label) back to the default \(String(format: "%.\(dec)f", fallback))\(unit)")
                 } label: {
                     Text("↺ back to default \(String(format: "%.\(dec)f", fallback))\(unit)")

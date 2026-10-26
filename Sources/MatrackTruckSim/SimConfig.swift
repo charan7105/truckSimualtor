@@ -102,13 +102,16 @@ struct SimConfig: Codable, Equatable {
     /// connected and hands the backlog over on the next `readstr`; without a recorder the sim simply
     /// loses every mile driven offline and answers "SAVED PACKET COUNT:0". ~83 min at 1s/packet.
     var storedFlashCapacity: Int = 5_000
-    /// How often the offline recorder writes a flash record. Deliberately COARSER than the 1s live
-    /// cadence: at 1s a 10-minute offline drive is 600 packets, and the dump goes out at ~1 packet/s
-    /// (the app breaks at ~0.5s — that is the F2 repro), so uploading it would take another 10
-    /// minutes of real time. At 30s the same drive is 20 packets and lands in ~20s.
-    /// ponytail: 30s is a plausible tracker logging interval, not a measured one — confirm against
-    /// real MT flash and retune if the hardware logs at a different rate.
-    var storedRecordIntervalSec: Double = 30
+    /// How often the offline recorder writes a flash record, in seconds.
+    ///
+    /// 30 MINUTES, confirmed by Teja (2026-10-26) as what the real tracker does: while the phone is
+    /// disconnected it creates one stored packet every half hour. This replaces an earlier 30-SECOND
+    /// guess — the old comment said outright it was plausible rather than measured, and it was 60x
+    /// too fast, so an offline drive produced a flood of packets no real tracker would send.
+    ///
+    /// Adjustable because 30 minutes per packet is unusable for a quick test: drop it to 30s when you
+    /// just want to see the recorder work, put it back for realistic data.
+    var storedRecordIntervalSec: Double = 1800
 
     // MARK: Fault injection
     /// Seconds added to the UTC stamped into fields 10/11 of every live packet. The app compares the

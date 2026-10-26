@@ -114,14 +114,16 @@ namespace MatrackSim.Core
         /// </summary>
         public int StoredFlashCapacity = 5_000;
         /// <summary>
-        /// How often the offline recorder writes a flash record. Deliberately COARSER than the 1s live
-        /// cadence: at 1s a 10-minute offline drive is 600 packets, and the dump goes out at ~1 packet/s
-        /// (the app breaks at ~0.5s — that is the F2 repro), so uploading it would take another 10
-        /// minutes of real time. At 30s the same drive is 20 packets and lands in ~20s.
-        /// ponytail: 30s is a plausible tracker logging interval, not a measured one — confirm against
-        /// real MT flash and retune if the hardware logs at a different rate.
+        /// How often the offline recorder writes a flash record, in seconds.
+        ///
+        /// 30 MINUTES, confirmed by Teja (2026-10-26) as what the real tracker does: while the phone
+        /// is disconnected it creates one stored packet every half hour. This replaces an earlier
+        /// 30-SECOND guess which was 60x too fast, so an offline drive produced a flood of packets no
+        /// real tracker would send.
+        ///
+        /// Adjustable because 30 minutes per packet is unusable for a quick test.
         /// </summary>
-        public double StoredRecordIntervalSec = 30;
+        public double StoredRecordIntervalSec = 1800;
 
         // ---- Fault injection --------------------------------------------------------------------
         /// <summary>

@@ -67,6 +67,16 @@ them.
 
 ---
 
+## How often the simulator records while offline
+
+One stored packet **every 30 minutes**, which is what the real tracker does. While the phone is
+disconnected and the engine is on, the simulator writes a flash record at that rate and hands the
+whole backlog over on the app's next `readstr`.
+
+Thirty minutes per packet is slow if you only want to see the recorder working, so the rate is
+adjustable: **CONNECTION · SIGNAL → Record every**. Drop it to 0.5m for a quick check and put it
+back to 30m for realistic data. Flash holds 5,000 records — about 104 days at the real rate.
+
 ## Getting an Unassigned Driving Period
 
 This used to be a scenario button. It is now just how the simulator behaves, so there is nothing to

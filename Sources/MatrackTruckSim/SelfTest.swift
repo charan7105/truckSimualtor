@@ -430,6 +430,20 @@ enum SelfTest {
             print("  [\(allMoving ? "OK" : "FAIL")] stored packets carry \(Int(mph)) mph — above the app's \(Int(SimConfig.movingThresholdMph)) mph driving line")
             if !allMoving { allPass = false }
 
+            // The real tracker writes one stored record every 30 minutes while disconnected
+            // (confirmed 2026-10-26). An earlier 30-SECOND default was 60x too fast and produced a
+            // flood of packets no tracker would send.
+            let interval = cfg.storedRecordIntervalSec
+            let isHalfHour = abs(interval - 1800) < 0.1
+            print("  [\(isHalfHour ? "OK" : "FAIL")] offline recorder writes one packet every \(Int(interval / 60)) minutes")
+            if !isHalfHour { allPass = false }
+
+            // Flash must still hold a long offline stretch at that rate.
+            let hoursHeld = Double(cfg.storedFlashCapacity) * interval / 3600
+            let enough = hoursHeld > 24
+            print("  [\(enough ? "OK" : "FAIL")] flash holds \(Int(hoursHeld / 24)) days of offline driving at that rate")
+            if !enough { allPass = false }
+
             // A normal dump must stay normal — no duplicates, not future dated.
             let normal = WireBuilder.storedDump(count: 4, config: cfg).filter { $0.kind == .stored }
             let noDupes = Set(normal.map { $0.wire }).count == normal.count

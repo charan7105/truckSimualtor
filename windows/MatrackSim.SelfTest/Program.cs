@@ -380,6 +380,11 @@ namespace MatrackSim.SelfTest
                 if (!dupOK) allPass = false;
 
                 // Emitted is a struct here, so Find returns a default rather than null — look it up by index.
+                // The real tracker writes one stored record every 30 minutes while disconnected.
+                bool isHalfHour = Math.Abs(cfg.StoredRecordIntervalSec - 1800) < 0.1;
+                Console.WriteLine("  [" + (isHalfHour ? "OK" : "FAIL") + "] offline recorder writes one packet every " + (int)(cfg.StoredRecordIntervalSec / 60) + " minutes");
+                if (!isHalfHour) allPass = false;
+
                 // Speed must clear the app's 5 mph line or only the on-duty branch is ever tested.
                 var speedPkts = WireBuilder.StoredDump(4, cfg).FindAll(x => x.ItemKind == Emitted.Kind.Stored);
                 bool allMoving = speedPkts.Count == 4;
