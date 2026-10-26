@@ -264,12 +264,13 @@ struct MetricTile: View {
     var tint: Color = Theme.ice
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 7) {
-                Image(systemName: icon).font(.system(size: 10.5, weight: .bold)).foregroundStyle(tint)
-                    .frame(width: 22, height: 22)
-                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(tint.opacity(0.15)))
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .rounded)).tracking(1.2)
+            // The icon used to sit in a tinted chip and the title shouted in tracked caps, six tiles
+            // across — six different accent colours that meant nothing. `tint` now reaches only the
+            // glyph, and the dock passes a real colour solely where it reports state (sats, ECM).
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(Theme.dim).lineLimit(1).minimumScaleFactor(0.7)
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -283,8 +284,8 @@ struct MetricTile: View {
             .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .glassPanel(tint)
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .glassPanel()
     }
 }
 
@@ -391,30 +392,39 @@ struct NavField: View {
 
 // MARK: - Button
 
+/// Colour here carries ONE meaning: this control is active, or it is the action you came for.
+///
+/// It used to tint every button — 23 of them on the face, each with a coloured outline and a glow,
+/// all shouting at the same volume. With nothing quiet there was no hierarchy: the eye had no way to
+/// find DRIVE among four identical amber-and-ice pills. So the resting state is now a neutral
+/// surface, and the tint appears only when `filled` is true (selected / armed / primary).
 struct NeonButton: View {
     var title: String
     var icon: String? = nil
     var tint: Color = Theme.ice
     var filled: Bool = false
+    /// Marks the one action a group exists for (DRIVE, DUMP STORED). Reads as a solid button even
+    /// when it isn't "on", so each card has exactly one obvious thing to press.
+    var prominent: Bool = false
     var action: () -> Void
+
+    private var solid: Bool { filled || prominent }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let icon { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+                if let icon { Image(systemName: icon).font(.system(size: 12, weight: .semibold)) }
                 Text(title).font(.system(size: 13, weight: .semibold, design: .rounded)).lineLimit(1).fixedSize()
             }
-            .foregroundStyle(filled ? Theme.bg0 : tint)
-            .padding(.horizontal, 10).padding(.vertical, 10)
+            .foregroundStyle(solid ? Theme.bg0 : Theme.text.opacity(0.88))
+            .padding(.horizontal, 10).padding(.vertical, 9)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(filled
-                          ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-                          : AnyShapeStyle(tint.opacity(0.12)))
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(solid ? AnyShapeStyle(tint) : AnyShapeStyle(Theme.control))
             )
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(filled ? tint.opacity(0.0) : tint.opacity(0.55), lineWidth: 1))
-            .shadow(color: filled ? tint.opacity(0.4) : .clear, radius: 9, y: 2)
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(solid ? Color.clear : Theme.stroke, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .hoverGlow()

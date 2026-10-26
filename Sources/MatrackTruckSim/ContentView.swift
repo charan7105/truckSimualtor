@@ -182,33 +182,25 @@ struct ContentView: View {
         let t1 = sim.fuelPct < 20 ? Theme.red : Theme.green
         let t2 = sim.fuel2Pct < 20 ? Theme.red : Theme.blue
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 9) {
-                Image(systemName: "fuelpump.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.green)
-                    .frame(width: 23, height: 23)
-                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.green.opacity(0.14)))
-                Text("FUEL").font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .tracking(2).foregroundStyle(Theme.text.opacity(0.92))
+            HStack(spacing: 7) {
+                Image(systemName: "fuelpump.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.dim)
+                Text("FUEL").cardTitle()
                 Spacer()
-                Text("DUAL TANK").font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .tracking(1.5).foregroundStyle(Theme.dim)
+                Text("Dual tank").sectionLabel()
             }
             HStack(spacing: 18) {
                 FuelCylinder(value: sim.fuelPct, caption: "F1", tint: t1, width: 46, height: 104)
                 FuelCylinder(value: sim.fuel2Pct, caption: "F2", tint: t2, width: 46, height: 104)
                 VStack(spacing: 16) {
-                    fuelSlider("FUEL 1", value: sim.fuelPct, set: { sim.setFuel($0) }, tint: t1)
-                    fuelSlider("FUEL 2", value: sim.fuel2Pct, set: { sim.setFuel2($0) }, tint: t2)
+                    fuelSlider("Fuel 1", value: sim.fuelPct, set: { sim.setFuel($0) }, tint: t1)
+                    fuelSlider("Fuel 2", value: sim.fuel2Pct, set: { sim.setFuel2($0) }, tint: t2)
                 }
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(.horizontal, 15).padding(.vertical, 13)
+        .padding(16)
         .frame(maxWidth: .infinity)
         .glassPanel()
-        .overlay(alignment: .top) {
-            LinearGradient(colors: [Theme.green.opacity(0.7), .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 2).clipShape(Capsule()).padding(.horizontal, 12)
-        }
     }
 
     private func fuelSlider(_ label: String, value: Double, set: @escaping (Double) -> Void, tint: Color) -> some View {

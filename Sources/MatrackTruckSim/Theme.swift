@@ -18,6 +18,9 @@ enum Theme {
     static let bg2 = Color(hex: 0x0C0E13)          // drawer / dock mid layer
     static let panel = Color(hex: 0x16181E)
     static let stroke = Color(hex: 0x2A2E37)
+    /// Resting surface for a control that is NOT active. Neutral on purpose: colour on this screen
+    /// should mean "this is on", never "this is a button".
+    static let control = Color(hex: 0x1E2128)
     static let glassTop = Color(hex: 0x171A20)     // top-lit glass panel gradient
     static let glassBot = Color(hex: 0x0E1014)
 
@@ -65,32 +68,30 @@ struct DashboardBackground: View {
 
 // MARK: - Reusable modifiers
 
+/// Same treatment as `Card`, for the panels that build their own header (fuel, packet console).
+/// Kept deliberately identical so the face reads as one surface rather than two competing styles.
 struct GlassPanel: ViewModifier {
     var tint: Color = Theme.ice
-    var radius: CGFloat = 20
+    var radius: CGFloat = 14
     func body(content: Content) -> some View {
         content
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(LinearGradient(colors: [Theme.glassTop, Theme.glassBot], startPoint: .top, endPoint: .bottom))
-            )
-            .overlay(   // dual-tone hairline: brighter at the top edge → recedes downward (glassy bevel)
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.025)],
-                                           startPoint: .top, endPoint: .bottom), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
+            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
-/// Subtle hover lift + ice glow for interactive surfaces.
+/// Hover feedback for interactive surfaces.
+///
+/// Was a 1.03 scale plus an ice glow: with 23 buttons packed into narrow columns, every pass of the
+/// pointer made a control jump and nudge its neighbours, which is most of why the panels felt
+/// restless. A brightness lift says "this is live" without moving anything.
 struct HoverGlow: ViewModifier {
     @State private var hover = false
     func body(content: Content) -> some View {
         content
-            .scaleEffect(hover ? 1.03 : 1.0)
-            .shadow(color: Theme.ice.opacity(hover ? 0.28 : 0), radius: hover ? 12 : 0)
-            .animation(.easeOut(duration: 0.18), value: hover)
+            .brightness(hover ? 0.07 : 0)
+            .animation(.easeOut(duration: 0.14), value: hover)
             .onHover { hover = $0 }
     }
 }
@@ -119,11 +120,23 @@ extension View {
     func panelReveal(_ revealed: Bool, delay: Double = 0) -> some View {
         modifier(PanelReveal(revealed: revealed, delay: delay))
     }
+    /// A sub-heading INSIDE a card. Deliberately quiet and sentence case.
+    ///
+    /// This used to be 11.5pt uppercase with 2.2 tracking — within a hair of the card titles, so a
+    /// group label shouted exactly as loud as the panel containing it and the screen read as one
+    /// undifferentiated wall of capitals. Caps and tracking now belong to `cardTitle` alone, which
+    /// is what makes the hierarchy visible.
     func sectionLabel() -> some View {
-        font(.system(size: 11.5, weight: .semibold, design: .rounded))
-            .tracking(2.2)
+        font(.system(size: 11, weight: .semibold, design: .rounded))
             .foregroundStyle(Theme.dim)
+    }
+
+    /// The top of the hierarchy: the name of a panel. The only place caps + tracking are allowed.
+    func cardTitle() -> some View {
+        font(.system(size: 11, weight: .semibold, design: .rounded))
+            .tracking(1.8)
             .textCase(.uppercase)
+            .foregroundStyle(Theme.text.opacity(0.75))
     }
 }
 

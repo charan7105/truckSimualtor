@@ -5,42 +5,35 @@ import UniformTypeIdentifiers
 // On-screen operator panels (all visible on the cluster — no hidden drawer).
 // Each reuses the existing control logic verbatim.
 
+/// A panel on the face. One fill, one hairline — that is the whole treatment.
+///
+/// It used to carry nine: a gradient fill, a gradient stroke, a glowing tinted bar across the top,
+/// a tinted icon in a rounded chip, and a drop shadow. Multiplied by eight panels, every container
+/// competed with its own contents, and the per-card `tint` spent colour on decoration — so by the
+/// time colour needed to mean something (armed, out of range, changed) it had nothing left to say.
+/// `icon` and `tint` are still accepted so call sites read the same, but they no longer draw chrome.
 private struct Card<C: View>: View {
     let title: String
     var icon: String = ""
     var tint: Color = Theme.ice
     @ViewBuilder var content: () -> C
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 9) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
                 if !icon.isEmpty {
-                    Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
-                        .frame(width: 23, height: 23)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(tint.opacity(0.14)))
+                    Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.dim)
                 }
-                Text(title).font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .tracking(2).textCase(.uppercase).foregroundStyle(Theme.text.opacity(0.92))
+                Text(title).cardTitle()
                 Spacer()
             }
             content()
         }
-        .padding(.horizontal, 15).padding(.vertical, 13)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.glassTop, Theme.glassBot], startPoint: .top, endPoint: .bottom))
-        )
-        .overlay(alignment: .top) {
-            LinearGradient(colors: [tint.opacity(0.75), tint.opacity(0.0)], startPoint: .leading, endPoint: .trailing)
-                .frame(height: 2).clipShape(Capsule()).padding(.horizontal, 12)
-                .shadow(color: tint.opacity(0.5), radius: 4)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.025)],
-                                       startPoint: .top, endPoint: .bottom), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .stroke(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
@@ -52,20 +45,22 @@ struct DrivePanel: View {
                 ToggleChip(title: "ENGINE", icon: "power", isOn: sim.ignitionOn, tint: Theme.green) { sim.setEngine(!sim.ignitionOn) }
                 ToggleChip(title: "AUTO", icon: "wand.and.stars", isOn: sim.autoDrive, tint: Theme.red) { sim.setAutoDrive(!sim.autoDrive) }
             }
-            Text("QUICK SET · KM/H").sectionLabel()
+            Text("Quick set · km/h").sectionLabel()
             HStack(spacing: 8) {
                 ForEach([0, 60, 90, 110], id: \.self) { v in
                     NeonButton(title: v == 0 ? "STOP" : "\(v)",
-                               tint: v == 0 ? Theme.red : Theme.ice,
-                               filled: presetActive(v)) {
+                               tint: Theme.ice, filled: presetActive(v)) {
                         sim.setSpeed(Double(v) / 1.60934)
                     }
                 }
             }
             // SPEED label + live MODE badge + value all on one line (mode no longer needs its own row)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("SPEED").sectionLabel()
-                Text(modeText).font(.system(size: 10, weight: .heavy, design: .rounded)).tracking(1).foregroundStyle(modeTint)
+                Text("Speed").sectionLabel()
+                Text(modeText.capitalized).font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(modeTint)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(modeTint.opacity(0.14)))
                 Spacer()
                 Text("\(Int((sim.speedMph * 1.60934).rounded()))")
                     .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
@@ -78,10 +73,10 @@ struct DrivePanel: View {
             // Was "SIM SPEED · MAP PACE", which reads as a third speed control sitting under two real
             // ones. It is not a speed: it scales how far the truck travels per tick along the route
             // (see driveDt in step()), while the speed on the wire stays whatever SPEED is set to.
-            Text("FAST-FORWARD").sectionLabel()
+            Text("Fast-forward").sectionLabel()
             HStack(spacing: 6) {
                 ForEach([1, 5, 10, 25, 30], id: \.self) { x in
-                    NeonButton(title: "\(x)×", tint: Theme.amber, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
+                    NeonButton(title: "\(x)×", tint: Theme.ice, filled: Int(sim.config.routeTimeScale.rounded()) == x) {
                         sim.config.routeTimeScale = Double(x)
                     }
                 }
@@ -136,7 +131,7 @@ struct RoutePanel: View {
                 if sim.drivingRoute {
                     NeonButton(title: "STOP", icon: "stop.fill", tint: Theme.red) { sim.stopRouteDrive() }
                 } else {
-                    NeonButton(title: "DRIVE", icon: "play.fill", tint: Theme.green, filled: sim.hasRoute) { sim.startRouteDrive() }
+                    NeonButton(title: "DRIVE", icon: "play.fill", tint: Theme.green, prominent: sim.hasRoute) { sim.startRouteDrive() }
                 }
                 if sim.dayDriving {
                     NeonButton(title: "END DAY", icon: "stop.fill", tint: Theme.amber, filled: true) { sim.stopDay() }
@@ -283,11 +278,12 @@ struct NetworkPanel: View {
 
             Divider().overlay(Theme.stroke)
 
-            Text("REPLAY A DUMP NOW").sectionLabel()
+            Text("Replay a dump now").sectionLabel()
             countSlider
             cfgSlider("Send every", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
             NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
-                       icon: "tray.and.arrow.down.fill", tint: Theme.blue, filled: isDumping) {
+                       icon: "tray.and.arrow.down.fill", tint: Theme.blue,
+                       filled: isDumping, prominent: true) {
                 sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
             }
             Text("≈500ms reproduces the disconnect · 1s is safe.")
@@ -299,7 +295,7 @@ struct NetworkPanel: View {
 
     private var setupTab: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text("ESP32 RADIO").sectionLabel()
+            Text("ESP32 radio").sectionLabel()
             HStack(spacing: 6) {
                 Picker("", selection: Binding(get: { sim.config.serialPortName }, set: { sim.config.serialPortName = $0 })) {
                     Text("Select port…").tag("")
@@ -321,7 +317,7 @@ struct NetworkPanel: View {
 
             Divider().overlay(Theme.stroke)
 
-            Text("PACKET EFFECTS").sectionLabel()
+            Text("Packet effects").sectionLabel()
             cfgSlider("Duplicate", \.duplicatePct, 0...50, "%", 0)
             cfgSlider("Out of order", \.outOfOrderPct, 0...50, "%", 0)
             cfgSlider("Packet every", \.packetIntervalSec, 0.25...3, "s", 2)
@@ -368,7 +364,7 @@ struct NetworkPanel: View {
     /// laptop cannot do, so the label follows the transport.
     private var rssiSlider: some View {
         HStack(spacing: 8) {
-            Text(sim.config.link == .esp32Serial ? "RSSI" : "SIGNAL")
+            Text(sim.config.link == .esp32Serial ? "RSSI" : "Signal")
                 .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
             Slider(value: Binding(get: { sim.config.signalPct }, set: { sim.autoSignal = false; sim.setSignal($0) }), in: 0...100).tint(Theme.ice)
             Text("\(Int(sim.config.signalPct.rounded()))%").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.ice).frame(width: 42, alignment: .trailing)
@@ -379,7 +375,7 @@ struct NetworkPanel: View {
     /// Both are forward-only while the app is connected — see TrackerPeripheral.setOdometer.
     private var setupFields: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("TEST SETUP").sectionLabel()
+            Text("Test setup").sectionLabel()
             numberField("Odo", value: sim.odometerMiles, unit: "mi", dec: 1) { sim.setOdometer($0) }
             numberField("Eng hrs", value: sim.engineHours, unit: "h", dec: 2) { sim.setEngineHours($0) }
             // Must track the same flag the setter gates on (`connected`), or the caption promises
@@ -487,7 +483,7 @@ struct PacketConsole: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text("LIVE PACKET STREAM").sectionLabel()
+                Text("Live packet stream").sectionLabel()
                 Spacer()
                 Text("\(sim.log.count) lines").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
                 Button { exportLog() } label: {
@@ -615,7 +611,7 @@ struct FaultPanel: View {
     // Ordered fastest-to-fire first, so a demo runs straight down the list.
     private var warns: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("⚠ THE PHONE WILL WARN").sectionLabel()
+            Text("⚠ The phone will warn").sectionLabel()
 
             faultToggle(title: "ENGINE SYNC LOST", on: sim.activeFaults.contains { $0.field == 12 },
                         subtitle: "Tells the phone the engine computer stopped answering while the key is on.",
@@ -649,7 +645,7 @@ struct FaultPanel: View {
 
     private var noWarning: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("◐ WRONG NUMBER, NO WARNING").sectionLabel()
+            Text("◐ Wrong number, no warning").sectionLabel()
 
             faultButton(title: "ODOMETER JUMP  +58,000 mi",
                         subtitle: "One jump to a different ECU odometer series.",
