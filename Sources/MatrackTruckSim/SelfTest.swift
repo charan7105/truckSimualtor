@@ -352,6 +352,26 @@ enum SelfTest {
             cases.append(("odometer-source packet is well formed",
                           MTPacket.odoSource(virtualEnabled: true, activeSource: 1).hasSuffix("$$")))
 
+            // MAC variants ride LV field 8 verbatim, and our mirror of the app's ^[0-9A-F]{12}$
+            // check agrees with what each one should do. The 0xFF-padded value is the case Teja
+            // reported from a real tracker (2026-10-29): 9 hex characters plus three 0xFF bytes.
+            let macCases: [(String, Bool)] = [
+                ("87CB6819AFFF", true),                      // 12 uppercase hex — the only shape that passes
+                ("87CB6819A\u{FF}\u{FF}\u{FF}", false),      // 0xFF filler
+                ("87cb6819afff", false),                     // lowercase
+                ("87CB6819A",    false),                     // too short
+                ("",             false),                     // the simulator's own DEFAULT
+                ("87CB6819AFFFF", false),                    // too long
+            ]
+            var macRides = true, macVerdicts = true
+            for (mac, shouldPass) in macCases {
+                var d = DeviceInfo(); d.deviceMAC = mac
+                if MTPacket.version(d).components(separatedBy: ",")[8] != mac { macRides = false }
+                if SimController.macPassesAppCheck(mac) != shouldPass { macVerdicts = false }
+            }
+            cases.append(("every MAC variant rides LV field 8 verbatim", macRides))
+            cases.append(("MAC check mirror agrees on all \(macCases.count) variants", macVerdicts))
+
             for (name, ok) in cases {
                 print("  [\(ok ? "OK" : "FAIL")] \(name)")
                 if !ok { allPass = false }

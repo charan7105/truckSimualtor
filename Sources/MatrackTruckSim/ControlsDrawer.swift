@@ -547,6 +547,45 @@ struct FaultPanel: View {
     @EnvironmentObject var sim: SimController
     @State private var showIgnored = false
     @State private var customVin = "00000000000000000"
+    @State private var macCase: MACCase = .blank
+
+    /// The device-ID cases worth testing, named by what SHOULD HAPPEN rather than by their bytes.
+    enum MACCase: String, CaseIterable, Identifiable {
+        case good, filler, lower, tooShort, blank, custom
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .good:     return "Correct ID — phone should accept"
+            case .filler:   return "Short ID with filler — phone should reject"
+            case .lower:    return "Small letters — phone should reject"
+            case .tooShort: return "Too short — phone should reject"
+            case .blank:    return "Blank — phone should reject"
+            case .custom:   return "My own value"
+            }
+        }
+        /// `nil` for `.custom`, which keeps whatever is typed in the box.
+        var value: String? {
+            switch self {
+            case .good:     return "87CB6819AFFF"
+            case .filler:   return "87CB6819A\u{FF}\u{FF}\u{FF}"   // 9 hex + three 0xFF filler bytes
+            case .lower:    return "87cb6819afff"
+            case .tooShort: return "87CB6819A"
+            case .blank:    return ""
+            case .custom:   return nil
+            }
+        }
+        var help: String {
+            switch self {
+            case .good:     return "A normal device ID. The phone should connect with no complaint."
+            case .filler:   return "The real tracker case: the ID is 9 characters and the rest is filler. The phone should refuse it."
+            case .lower:    return "Right characters, wrong case. The phone only accepts capitals, so it should refuse it."
+            case .tooShort: return "Only 9 characters. The phone needs exactly 12, so it should refuse it."
+            case .blank:    return "No ID at all. This is what the simulator sends by default."
+            case .custom:   return "Type any value in the box above to try it."
+            }
+        }
+    }
 
     private var armedSummary: String {
         var parts = sim.activeFaults.map { "\($0.name) = \($0.value)" }
@@ -563,6 +602,8 @@ struct FaultPanel: View {
                 if embedded { embeddedHeader } else { EmptyView() }
                 legend
                 warns
+                Divider().overlay(Theme.stroke)
+                macSection
                 Divider().overlay(Theme.stroke)
                 noWarning
                 Divider().overlay(Theme.stroke)
@@ -721,6 +762,7 @@ struct FaultPanel: View {
                     NeonButton(title: "LAST 6 ONLY", tint: Theme.dim, filled: false) { customVin = "292058" }
                 }
 
+
                 faultToggle(title: "DEFAULT DATE ON 1 IN 5 PACKETS",
                             on: sim.activeFaults.contains { $0.field == 11 },
                             subtitle: "A tracker that lost its clock reports 01-01-00.",
@@ -763,6 +805,61 @@ struct FaultPanel: View {
                     sim.sendOdoSourcePacket(virtual: true)
                 }
             }
+        }
+    }
+
+    /// Device MAC — field 8 of the LV packet, which the app validates with `^[0-9A-F]{12}$`
+    /// (check added app-side 2026-10-29).
+    ///
+    /// Written for someone who does not know what a MAC is. The first version of this was five
+    /// buttons reading 0xFF PAD / lowercase / SHORT / EMPTY / VALID — every one of them described
+    /// the BYTES rather than the test, so you had to already know the answer to pick the right one.
+    /// Now it is one plain-English list that names the expected outcome, a field you can actually
+    /// see, and one button.
+    private var macSection: some View {
+        let ok = SimController.macPassesAppCheck(sim.deviceMAC)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Device ID sent to the phone").sectionLabel()
+
+            Picker("", selection: $macCase) {
+                ForEach(MACCase.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).tint(Theme.ice)
+            .onChange(of: macCase) { newCase in
+                if let v = newCase.value { sim.deviceMAC = v }
+            }
+
+            // A real, visible box — the old one was borderless, so an empty MAC looked like no
+            // control at all until you happened to click where the text would have been.
+            HStack(spacing: 8) {
+                TextField("", text: $sim.deviceMAC)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.text)
+                    .overlay(alignment: .leading) {
+                        if sim.deviceMAC.isEmpty {
+                            Text("(blank — nothing is sent)")
+                                .font(.system(size: 12, design: .rounded)).foregroundStyle(Theme.dim)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .onChange(of: sim.deviceMAC) { _ in macCase = .custom }
+                Text(ok ? "phone accepts" : "phone rejects")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(ok ? Theme.green : Theme.amber).fixedSize()
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.bg0.opacity(0.45)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.stroke, lineWidth: 1))
+
+            NeonButton(title: "SEND TO PHONE NOW", icon: "arrow.up.circle.fill",
+                       tint: Theme.blue, prominent: true) { sim.sendMACNow() }
+
+            Text(macCase.help)
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("The phone reads this when it connects, so pick it BEFORE connecting. Use the button if the phone is already connected.")
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

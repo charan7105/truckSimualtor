@@ -65,6 +65,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     // Identity / diagnostics
     @Published var vin = "" { didSet { device.vin = vin } }   // editable; flows into the LV/VIN packet
+    /// Device MAC, field 8 of the LV packet. Editable so the app's MAC validation can be exercised:
+    /// Teja added `^[0-9A-F]{12}$` on the app side (2026-10-29), and a real tracker can report a
+    /// short MAC padded with 0xFF filler ("87CB6819A" + three 0xFF) which has to be rejected.
+    /// NOTE the default is EMPTY, which already fails that regex — see sendMACNow().
+    @Published var deviceMAC = "" { didSet { device.deviceMAC = deviceMAC } }
     @Published var firmware = ""
     @Published var faults: [String] = []
     @Published var log: [LogLine] = []
@@ -130,6 +135,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         super.init()
         applyConfigToEngine()
         vin = device.vin
+        deviceMAC = device.deviceMAC
         firmware = "\(device.mcuFW) · BLE \(device.bleFW)"
         // Fuel-app link: broadcast the live position on the LAN (the Fuel App's "Link to sim" reads it).
         // Started here — not in a view's onAppear — so it runs at launch regardless of window rendering.
@@ -464,6 +470,23 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
     func sendVINNow() { sendReliable(MTPacket.version(device)); info("↻ VIN packet sent (\(device.vin.isEmpty ? "empty" : device.vin))") }
+
+    /// Resend the LV packet after changing the MAC. The app reads the MAC from the LV it gets on
+    /// connect (readdata sends two, readvin one), so setting the MAC before the phone connects is
+    /// what reproduces "the first LV packet after connect is invalid"; this button covers the case
+    /// where the phone is already attached and you do not want to reconnect it.
+    func sendMACNow() {
+        sendReliable(MTPacket.version(device))
+        let shown = deviceMAC.isEmpty ? "empty" : deviceMAC
+        info("↻ LV packet sent — MAC \(shown)\(Self.macPassesAppCheck(deviceMAC) ? "" : "  [fails the app's ^[0-9A-F]{12}$ check]")")
+    }
+
+    /// Mirror of the app's MAC validation so the simulator can say, in its own log, whether what it
+    /// just sent should be accepted. Kept beside the sender for the same reason MTPacketDecoder
+    /// exists: a test is only useful if both sides agree on what the expected verdict was.
+    static func macPassesAppCheck(_ mac: String) -> Bool {
+        mac.count == 12 && mac.allSatisfy { $0.isNumber || ("A"..."F").contains(String($0)) }
+    }
 
     // MARK: - Fault injection
 
