@@ -480,6 +480,37 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (odoSane ? "OK" : "FAIL") + "] the backlog continues the live truck's odometer and never goes backwards");
                 if (!odoSane) allPass = false;
 
+                // The carry-forward IS the fix for the backward jump, and it had no test at all: the
+                // checks above only exercised the packet builder. Mirrors the Swift selftest.
+                var endT = WireBuilder.TelemetryOf(cont[cont.Count - 1].Wire);
+                double endOdo = endT == null ? 0 : endT.Value.OdometerMiles;
+                double endHrs = endT == null ? 0 : endT.Value.EngineHours;
+                var pulledUp = WireBuilder.CarryForward(cont, 41234.5, 900.25);
+                var aheadKept = WireBuilder.CarryForward(cont, endOdo + 500, endHrs + 50);
+                bool carryOK = pulledUp.OdometerMiles >= endOdo && pulledUp.EngineHours >= endHrs
+                    && Math.Abs(aheadKept.OdometerMiles - (endOdo + 500)) < 0.001
+                    && Math.Abs(aheadKept.EngineHours - (endHrs + 50)) < 0.001;
+                Console.WriteLine("  [" + (carryOK ? "OK" : "FAIL") + "] the live engine is carried to the backlog's end, and never dragged back");
+                if (!carryOK) allPass = false;
+
+                // StoredDumpOptions is a CLASS here and a STRUCT in Swift. Filling the start
+                // telemetry must COPY, or one dump's odometer gets pinned into the caller's object
+                // and silently changes the next dump — something the Swift build cannot do.
+                var caller = new WireBuilder.StoredDumpOptions { RepeatEachPacket = true };
+                var filled = caller.WithStart(777.0, 88.0);
+                bool noMutate = caller.StartOdometerMiles == null && caller.StartEngineHours == null
+                    && filled.StartOdometerMiles == 777.0 && filled.StartEngineHours == 88.0
+                    && filled.RepeatEachPacket == caller.RepeatEachPacket
+                    && !ReferenceEquals(filled, caller);
+                Console.WriteLine("  [" + (noMutate ? "OK" : "FAIL") + "] filling dump options copies, matching Swift's value semantics");
+                if (!noMutate) allPass = false;
+
+                // An empty batch must leave the live engine exactly where it was.
+                var noop = WireBuilder.CarryForward(new List<Emitted>(), 41234.5, 900.25);
+                bool noopOK = Math.Abs(noop.OdometerMiles - 41234.5) < 0.001 && Math.Abs(noop.EngineHours - 900.25) < 0.001;
+                Console.WriteLine("  [" + (noopOK ? "OK" : "FAIL") + "] an empty backlog leaves the live engine untouched");
+                if (!noopOK) allPass = false;
+
                 // Teja (2026-10-30): the backlog must end with the key going off, and records must
                 // sit one StoredRecordIntervalSec apart ending at the connect moment. At the old
                 // PacketIntervalSec spacing, 80 records covered 80 SECONDS and every one fell inside

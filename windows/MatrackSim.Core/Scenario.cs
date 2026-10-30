@@ -148,6 +148,41 @@ namespace MatrackSim.Core
             public double? StartOdometerMiles;
             public double? StartEngineHours;
             public static StoredDumpOptions Normal => new StoredDumpOptions();
+
+            /// <summary>
+            /// A COPY with the start telemetry filled in. This type is a class here and a struct in
+            /// Swift, where assignment already copies; filling the defaults in place would pin one
+            /// dump's odometer into a caller's object and change the next dump — behaviour the Swift
+            /// build cannot reproduce. Returning a copy keeps the two platforms identical.
+            /// </summary>
+            public StoredDumpOptions WithStart(double odometerMiles, double engineHours)
+            {
+                return new StoredDumpOptions
+                {
+                    StampedAt = this.StampedAt,
+                    RepeatEachPacket = this.RepeatEachPacket,
+                    StartOdometerMiles = this.StartOdometerMiles ?? odometerMiles,
+                    StartEngineHours = this.StartEngineHours ?? engineHours,
+                };
+            }
+        }
+
+        /// <summary>
+        /// Where the LIVE engine must stand once a backlog has been handed to the app: at or past
+        /// the newest stored record, never behind it. Pulled out of DumpStoredPackets so both
+        /// selftests can exercise the carry-forward itself rather than only the packet builder.
+        /// Mirrors WireBuilder.carryForward in the Swift build.
+        /// </summary>
+        public static (double OdometerMiles, double EngineHours) CarryForward(
+            List<Emitted> batch, double odometerMiles, double engineHours)
+        {
+            // Emitted is a STRUCT, so FindLast(...) != null does not compile — index it.
+            int idx = batch.FindLastIndex(x => x.ItemKind == Emitted.Kind.Stored);
+            if (idx < 0) return (odometerMiles, engineHours);
+            var end = TelemetryOf(batch[idx].Wire);
+            if (end == null) return (odometerMiles, engineHours);
+            return (Math.Max(odometerMiles, end.Value.OdometerMiles),
+                    Math.Max(engineHours, end.Value.EngineHours));
         }
 
         public static List<Emitted> StoredDump(int count, SimConfig config, StoredDumpOptions options = null)

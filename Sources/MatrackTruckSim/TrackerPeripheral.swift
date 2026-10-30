@@ -961,11 +961,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         if options.startOdometerMiles == nil { options.startOdometerMiles = engine.odometerMiles }
         if options.startEngineHours == nil { options.startEngineHours = engine.engineHours }
         let batch = WireBuilder.storedDump(count: count, config: config, options: options)
-        if let lastStored = batch.last(where: { $0.kind == .stored }),
-           let end = WireBuilder.telemetryOf(lastStored.wire) {
-            engine.odometerMiles = max(engine.odometerMiles, end.odometerMiles)
-            engine.engineHours = max(engine.engineHours, end.engineHours)
-        }
+        let carried = WireBuilder.carryForward(batch, odometerMiles: engine.odometerMiles,
+                                               engineHours: engine.engineHours)
+        engine.odometerMiles = carried.odometerMiles
+        engine.engineHours = carried.engineHours
         // Kept so the same bytes can be sent again after a reconnect — the cross-connection
         // duplicate test needs the SECOND dump to be identical to the first, not merely similar.
         lastStoredBatch = batch

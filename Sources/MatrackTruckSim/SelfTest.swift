@@ -506,6 +506,25 @@ enum SelfTest {
             print("  [\(odoSane ? "OK" : "FAIL")] the backlog continues the live truck's odometer and never goes backwards")
             if !odoSane { allPass = false }
 
+            // The carry-forward IS the fix for the backward jump, and it had no test at all: the
+            // checks above only exercised the packet builder. A live engine sitting BEHIND the
+            // backlog must be pulled up to its newest record, never left behind it, and never
+            // dragged backwards when it is already ahead.
+            let endOdo = WireBuilder.telemetryOf(cont.last?.wire ?? "")?.odometerMiles ?? 0
+            let endHrs = WireBuilder.telemetryOf(cont.last?.wire ?? "")?.engineHours ?? 0
+            let pulledUp = WireBuilder.carryForward(cont, odometerMiles: here, engineHours: hours)
+            let aheadKept = WireBuilder.carryForward(cont, odometerMiles: endOdo + 500, engineHours: endHrs + 50)
+            let carryOK = pulledUp.odometerMiles >= endOdo && pulledUp.engineHours >= endHrs
+                && aheadKept.odometerMiles == endOdo + 500 && aheadKept.engineHours == endHrs + 50
+            print("  [\(carryOK ? "OK" : "FAIL")] the live engine is carried to the backlog's end, and never dragged back")
+            if !carryOK { allPass = false }
+
+            // An empty batch must leave the live engine exactly where it was.
+            let noop = WireBuilder.carryForward([], odometerMiles: here, engineHours: hours)
+            let noopOK = noop.odometerMiles == here && noop.engineHours == hours
+            print("  [\(noopOK ? "OK" : "FAIL")] an empty backlog leaves the live engine untouched")
+            if !noopOK { allPass = false }
+
             // Teja (2026-10-30): the backlog must end with the key going off — last record stopped
             // and ignition 0 — because that is what a tracker's final flash write looks like.
             let tail = fields.last ?? []

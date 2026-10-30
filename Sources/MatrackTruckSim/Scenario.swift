@@ -87,6 +87,17 @@ enum WireBuilder {
         start.addingTimeInterval(Double(i) * dt)
     }
 
+    /// Where the LIVE engine must stand once a backlog has been handed to the app: at or past the
+    /// newest stored record, never behind it. Pulled out of `dumpStoredPackets` so both selftests
+    /// can exercise the carry-forward itself rather than only the packet builder — the carry-forward
+    /// IS the fix for the backward odometer jump, and it had no test on either platform.
+    static func carryForward(_ batch: [Emitted], odometerMiles: Double, engineHours: Double)
+        -> (odometerMiles: Double, engineHours: Double) {
+        guard let last = batch.last(where: { $0.kind == .stored }),
+              let end = telemetryOf(last.wire) else { return (odometerMiles, engineHours) }
+        return (max(odometerMiles, end.odometerMiles), max(engineHours, end.engineHours))
+    }
+
     /// F2: the exact wire sequence a real `readstr` dump produces — N stored 'S' packets + footers.
     /// Played back at a configurable cadence to reproduce the fast-dump disconnect (≈0.5s breaks, 1s is fine).
     /// How a stored dump should deviate from a normal one, for the REQ-940 / REQ-942 test cases.

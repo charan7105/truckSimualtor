@@ -1230,21 +1230,16 @@ namespace MatrackSim.App
             // the live stream then resumed 2,400 miles BEHIND the newest stored record. The app saw
             // the odometer and engine hours jump backwards.
             // Mirrors dumpStoredPackets in the Swift build.
-            var opts = options ?? WireBuilder.StoredDumpOptions.Normal;
-            if (opts.StartOdometerMiles == null) opts.StartOdometerMiles = engine.OdometerMiles;
-            if (opts.StartEngineHours == null) opts.StartEngineHours = engine.EngineHours;
+            // StoredDumpOptions is a CLASS here and a STRUCT in Swift, so `var opts = options` aliases
+            // the caller's object instead of copying it. Filling the defaults in place would pin the
+            // first dump's odometer into the caller's options and silently change the second dump —
+            // behaviour the Swift build cannot reproduce. Copy first.
+            var opts = (options ?? WireBuilder.StoredDumpOptions.Normal)
+                .WithStart(engine.OdometerMiles, engine.EngineHours);
             var batch = WireBuilder.StoredDump(count, Config, opts);
-            // Emitted is a STRUCT, so FindLast(...) != null does not compile — index it.
-            int lastStoredIdx = batch.FindLastIndex(x => x.ItemKind == Emitted.Kind.Stored);
-            if (lastStoredIdx >= 0)
-            {
-                var end = WireBuilder.TelemetryOf(batch[lastStoredIdx].Wire);
-                if (end != null)
-                {
-                    engine.OdometerMiles = Math.Max(engine.OdometerMiles, end.Value.OdometerMiles);
-                    engine.EngineHours = Math.Max(engine.EngineHours, end.Value.EngineHours);
-                }
-            }
+            var carried = WireBuilder.CarryForward(batch, engine.OdometerMiles, engine.EngineHours);
+            engine.OdometerMiles = carried.OdometerMiles;
+            engine.EngineHours = carried.EngineHours;
             // Kept so the same bytes can be sent again after a reconnect — the cross-connection
             // duplicate test needs the SECOND dump to be identical, not merely similar.
             lastStoredBatch = batch;
