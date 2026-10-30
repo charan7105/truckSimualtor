@@ -435,17 +435,45 @@ namespace MatrackSim.SelfTest
                 if (!isHalfHour) allPass = false;
 
                 // Speed must clear the app's 5 mph line or only the on-duty branch is ever tested.
+                // The FINAL record is exempt: it is the shutdown, and a shutdown at 60 mph is not a
+                // thing a tracker writes. Mirrors the same change in the Swift selftest.
                 var speedPkts = WireBuilder.StoredDump(4, cfg).FindAll(x => x.ItemKind == Emitted.Kind.Stored);
                 bool allMoving = speedPkts.Count == 4;
                 double mph = 0;
-                foreach (var em in speedPkts)
+                for (int i = 0; i < speedPkts.Count - 1; i++)
                 {
-                    double kmh = double.Parse(em.Wire.Split(',')[3], CultureInfo.InvariantCulture);
+                    double kmh = double.Parse(speedPkts[i].Wire.Split(',')[3], CultureInfo.InvariantCulture);
                     mph = kmh / 1.60934;
                     if (mph <= SimConfig.MovingThresholdMph) allMoving = false;
                 }
                 Console.WriteLine("  [" + (allMoving ? "OK" : "FAIL") + "] stored packets carry " + (int)mph + " mph — above the app's " + (int)SimConfig.MovingThresholdMph + " mph driving line");
                 if (!allMoving) allPass = false;
+
+                // Teja (2026-10-30): the backlog must end with the key going off, and records must
+                // sit one StoredRecordIntervalSec apart ending at the connect moment. At the old
+                // PacketIntervalSec spacing, 80 records covered 80 SECONDS and every one fell inside
+                // the app's still-open driving event — no Unassigned Driving Period.
+                var tailF = speedPkts[speedPkts.Count - 1].Wire.Split(',');
+                bool endsShutdown = tailF.Length > 3 && tailF[0] == "SI" && tailF[1] == "0" && tailF[3] == "0";
+                Console.WriteLine("  [" + (endsShutdown ? "OK" : "FAIL") + "] the backlog ends with a shutdown record (ignition 0, speed 0)");
+                if (!endsShutdown) allPass = false;
+
+                bool spacingOK = true;
+                DateTime? prev = null;
+                foreach (var em in speedPkts)
+                {
+                    var u = WireBuilder.UtcOf(em.Wire);
+                    if (u == null) { spacingOK = false; break; }
+                    if (prev != null && Math.Abs((u.Value - prev.Value).TotalSeconds - cfg.StoredRecordIntervalSec) > 1.5) spacingOK = false;
+                    prev = u;
+                }
+                Console.WriteLine("  [" + (spacingOK ? "OK" : "FAIL") + "] records sit " + (int)(cfg.StoredRecordIntervalSec / 60) + " min apart, like real flash writes");
+                if (!spacingOK) allPass = false;
+
+                var newest = WireBuilder.UtcOf(speedPkts[speedPkts.Count - 1].Wire);
+                bool endsNow = newest != null && Math.Abs((DateTime.UtcNow - newest.Value).TotalSeconds) < 90;
+                Console.WriteLine("  [" + (endsNow ? "OK" : "FAIL") + "] the newest record lands at the connect moment");
+                if (!endsNow) allPass = false;
 
                 int footerIdx = dup.FindIndex(x => x.Wire.StartsWith("SAVED PACKET COUNT:"));
                 bool footerOK = footerIdx >= 0 && dup[footerIdx].Wire == "SAVED PACKET COUNT:" + dupStored.Count;

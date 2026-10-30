@@ -29,8 +29,11 @@ enum WireBuilder {
         return "S" + live.dropFirst()
     }
 
-    static func backdated(_ i: Int, _ count: Int, _ dt: Double) -> Date {
-        Date(timeIntervalSinceNow: -Double(count - i) * dt)
+    /// Stamp for record `i` of `count`, spaced `dt` apart and ENDING at `endingAt` (default now).
+    /// The last record lands on `endingAt` itself — a real backlog runs right up to the moment the
+    /// phone connects, and the app reads the newest record as "where the truck was when I arrived".
+    static func backdated(_ i: Int, _ count: Int, _ dt: Double, endingAt: Date = Date()) -> Date {
+        endingAt.addingTimeInterval(-Double(count - 1 - i) * dt)
     }
 
     /// Split a flash backlog into what the app can actually use and what it would silently discard.
@@ -115,12 +118,25 @@ enum WireBuilder {
         // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
         // speed >= 5. Without this every dump exercised only half the stored-packet handling.
         e.speedMph = config.storedDumpSpeedMph
-        let dt = config.packetIntervalSec
+        // Flash records, NOT live packets. The old spacing was packetIntervalSec — one SECOND apart —
+        // so "80 stored packets" covered the last 80 seconds instead of the last 40 hours. Every one
+        // of them then landed inside the driving event the app still has open (appDrivingCloseSec),
+        // got classified as already assigned, and produced no Unassigned Driving Period at all.
+        // A real tracker writes one record every storedRecordIntervalSec while the phone is away.
+        let dt = config.storedRecordIntervalSec
+        let last = max(0, count) - 1
         var out: [Emitted] = []
         for i in 0..<max(0, count) {
             e.advance(dt: dt)
+            // The newest record is the key going off: a tracker's final flash write before it sleeps
+            // is a shutdown, so the backlog ends stopped rather than mid-drive at 60 mph.
+            if i == last {
+                e.speedMph = 0
+                e.ignitionOn = false
+            }
             let at = options.stampedAt ?? backdated(i, count, dt)
-            let wire = toStored(MTPacket.livePosition(e, date: at))
+            let wire = toStored(i == last ? MTPacket.ignition(e, on: false, date: at)
+                                          : MTPacket.livePosition(e, date: at))
             out.append(Emitted(wire: wire, kind: .stored))
             // Byte-identical repeat, immediately after — the only shape the app's de-dup looks for.
             if options.repeatEachPacket { out.append(Emitted(wire: wire, kind: .stored)) }

@@ -467,13 +467,39 @@ enum SelfTest {
 
             // Speed must clear the app's 5 mph line, or every stored packet takes the on-duty branch
             // and the driving branch is never tested. Field 3 is km/h; the app divides by 1.60934.
-            let speeds = WireBuilder.storedDump(count: 4, config: cfg)
-                .filter { $0.kind == .stored }
-                .compactMap { Double($0.wire.components(separatedBy: ",")[3]) }
-            let allMoving = speeds.count == 4 && speeds.allSatisfy { $0 / 1.60934 > SimConfig.movingThresholdMph }
-            let mph = speeds.first.map { $0 / 1.60934 } ?? 0
+            // The FINAL record is exempt: it is the shutdown, and a shutdown at 60 mph is not a
+            // thing a tracker writes.
+            let dumped = WireBuilder.storedDump(count: 4, config: cfg).filter { $0.kind == .stored }
+            let fields = dumped.map { $0.wire.components(separatedBy: ",") }
+            let driving = fields.dropLast().compactMap { Double($0[3]) }
+            let allMoving = driving.count == 3 && driving.allSatisfy { $0 / 1.60934 > SimConfig.movingThresholdMph }
+            let mph = driving.first.map { $0 / 1.60934 } ?? 0
             print("  [\(allMoving ? "OK" : "FAIL")] stored packets carry \(Int(mph)) mph — above the app's \(Int(SimConfig.movingThresholdMph)) mph driving line")
             if !allMoving { allPass = false }
+
+            // Teja (2026-10-30): the backlog must end with the key going off — last record stopped
+            // and ignition 0 — because that is what a tracker's final flash write looks like.
+            let tail = fields.last ?? []
+            let endsShutdown = tail.count > 3 && tail[0] == "SI" && tail[1] == "0" && tail[3] == "0"
+            print("  [\(endsShutdown ? "OK" : "FAIL")] the backlog ends with a shutdown record (ignition 0, speed 0)")
+            if !endsShutdown { allPass = false }
+
+            // Records are spaced one storedRecordIntervalSec apart and the newest lands at the
+            // connect moment. At the old packetIntervalSec spacing, 80 records covered 80 SECONDS
+            // and every one fell inside the app's still-open driving event — no Unassigned Driving.
+            let stamps = fields.compactMap { WireBuilder.utcOf($0.joined(separator: ",")) }
+            var spacingOK = stamps.count == 4
+            if spacingOK {
+                for i in 1..<stamps.count {
+                    let gap = stamps[i].timeIntervalSince(stamps[i - 1])
+                    if abs(gap - cfg.storedRecordIntervalSec) > 1.5 { spacingOK = false }
+                }
+            }
+            let endsNow = (stamps.last.map { abs($0.timeIntervalSinceNow) } ?? 999) < 90
+            print("  [\(spacingOK ? "OK" : "FAIL")] records sit \(Int(cfg.storedRecordIntervalSec / 60)) min apart, like real flash writes")
+            if !spacingOK { allPass = false }
+            print("  [\(endsNow ? "OK" : "FAIL")] the newest record lands at the connect moment")
+            if !endsNow { allPass = false }
 
             // The real tracker writes one stored record every 30 minutes while disconnected
             // (confirmed 2026-10-26). An earlier 30-SECOND default was 60x too fast and produced a

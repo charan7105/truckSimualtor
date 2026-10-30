@@ -279,6 +279,9 @@ struct NetworkPanel: View {
             Divider().overlay(Theme.stroke)
 
             Text("Stored dump").sectionLabel()
+            Text("Builds a backlog ending right now: one record every \(Int(sim.config.storedRecordIntervalSec / 60)) min, the last one a shutdown.")
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
             countSlider
             cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
             NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
@@ -288,6 +291,7 @@ struct NetworkPanel: View {
             }
             Text("A small gap can make the phone disconnect — that is the bug this reproduces. 1 second is safe.")
                 .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)   // without this it clips to one line
         }
     }
 

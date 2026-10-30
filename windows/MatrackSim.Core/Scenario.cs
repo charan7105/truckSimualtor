@@ -115,9 +115,15 @@ namespace MatrackSim.Core
             return start.AddSeconds(i * dt);
         }
 
+        /// <summary>
+        /// Stamp for record i of count, spaced dt apart and ENDING at the connect moment. The last
+        /// record lands on "now": a real backlog runs right up to the moment the phone connects, and
+        /// the app reads the newest record as where the truck was when it arrived.
+        /// Mirrors WireBuilder.backdated in the Swift build.
+        /// </summary>
         public static DateTime Backdated(int i, int count, double dt)
         {
-            return DateTime.UtcNow.AddSeconds(-(double)(count - i) * dt);
+            return DateTime.UtcNow.AddSeconds(-(double)(count - 1 - i) * dt);
         }
 
         /// <summary>
@@ -150,15 +156,25 @@ namespace MatrackSim.Core
             // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
             // speed >= 5. Without this every dump exercised only half the stored-packet handling.
             e.SpeedMph = config.StoredDumpSpeedMph;
-            double dt = config.PacketIntervalSec;
+            // Flash records, NOT live packets. The old spacing was PacketIntervalSec — one SECOND
+            // apart — so "80 stored packets" covered the last 80 seconds instead of the last 40
+            // hours. Every one then landed inside the driving event the app still has open
+            // (AppDrivingCloseSec), was classified as already assigned, and produced no Unassigned
+            // Driving Period. A real tracker writes one record every StoredRecordIntervalSec.
+            double dt = config.StoredRecordIntervalSec;
             var opts = options ?? StoredDumpOptions.Normal;
             var output = new List<Emitted>();
             int n = Math.Max(0, count);
+            int last = n - 1;
             for (int i = 0; i < n; i++)
             {
                 e.Advance(dt);
+                // The newest record is the key going off: a tracker's final flash write before it
+                // sleeps is a shutdown, so the backlog ends stopped rather than mid-drive at 60 mph.
+                if (i == last) { e.SpeedMph = 0; e.IgnitionOn = false; }
                 var at = opts.StampedAt ?? Backdated(i, count, dt);
-                string wire = ToStored(MTPacket.LivePosition(e, at));
+                string wire = ToStored(i == last ? MTPacket.Ignition(e, false, at)
+                                                 : MTPacket.LivePosition(e, at));
                 output.Add(new Emitted(wire, Emitted.Kind.Stored));
                 // Byte-identical repeat, immediately after — the only shape the app's de-dup looks for.
                 if (opts.RepeatEachPacket) output.Add(new Emitted(wire, Emitted.Kind.Stored));
