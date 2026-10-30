@@ -24,7 +24,11 @@ struct ContentView: View {
             let w = designSize.width * scale, h = designSize.height * scale
             ZStack {
                 DashboardBackground()            // fills the actual window (unscaled)
-                if uiZoom <= 1 {
+                // Scroll whenever the face is larger than the window — not merely when zoomed. At
+                // zoom 1 the fit math guarantees it fits, so this picks the centred path as before;
+                // but tying the guarantee to "does it actually fit" rather than to the zoom value
+                // means no part of the UI can ever end up unreachable.
+                if w <= geo.size.width && h <= geo.size.height {
                     // Unzoomed: fit and centre, exactly as before. No ScrollView in this path —
                     // inside one the face is measured at its pre-scale 1800x1120, so the window
                     // shows a crop of an oversized canvas instead of the whole fitted cockpit.
@@ -33,8 +37,8 @@ struct ContentView: View {
                         .scaleEffect(scale, anchor: .center)                         // fit to the window, never clips
                         .frame(width: geo.size.width, height: geo.size.height)       // constrain footprint → centers
                 } else {
-                    // Zoomed past fit the face is bigger than the window, so it has to scroll —
-                    // clipping it would silently cut off controls.
+                    // Bigger than the window (zoomed in, or a window smaller than the layout needs):
+                    // it has to scroll, because clipping would silently cut off controls.
                     ScrollView([.horizontal, .vertical]) {
                         face
                             .frame(width: designSize.width, height: designSize.height)
@@ -48,10 +52,16 @@ struct ContentView: View {
         }
         // maxWidth/Height .infinity makes the GeometryReader report the ACTUAL window size (not the ideal),
         // so the fit math uses real dimensions; idealWidth/Height just sets the default open size.
-        // The minimum was 1000x660, which forced a 0.56 fit scale and rendered the smallest labels at
-        // 5.6pt. 1280x820 holds the scale at 0.71 or better, so nothing drops under ~8pt unzoomed.
-        .frame(minWidth: 1280, idealWidth: 1560, maxWidth: .infinity,
-               minHeight: 820, idealHeight: 980, maxHeight: .infinity)
+        // The minimum MUST fit inside the usable area of the smallest Mac this runs on, or the window
+        // cannot be placed and macOS refuses to enter full screen at all.
+        //
+        // A 1280x832 laptop (very common) leaves 737pt once the menu bar and Dock are out, and 807pt
+        // in full screen. An earlier attempt to fix small text by raising this to 1280x820 therefore
+        // broke both at once: the bottom of the panel sat under the Dock, and the green button did
+        // nothing because 820 > 807. Text size is the ZOOM command's job (View ▸ Zoom In, ⌘=), not
+        // this number's — a minimum that does not fit is not an accessibility win.
+        .frame(minWidth: 900, idealWidth: 1560, maxWidth: .infinity,
+               minHeight: 600, idealHeight: 980, maxHeight: .infinity)
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
