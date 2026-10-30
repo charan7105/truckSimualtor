@@ -196,6 +196,11 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
 .s2 h4{font-weight:700;font-size:17px;margin-bottom:6px;letter-spacing:-.012em}
 .s2 p{color:var(--ink-2);font-size:15px}.s2 p b{color:var(--ink);font-weight:600}
 .s2 .mini{margin-top:8px;font-size:13.5px;color:var(--ink-3)}.s2 .mini b{color:var(--ink-2);font-weight:600}
+/* Build stamp — filled in at load from the GitHub release, so it can never go stale by hand. */
+.bstamp{display:none;align-items:center;gap:6px;margin-top:9px;font-size:13px;color:var(--ink-3)}
+.bstamp.on{display:inline-flex}
+.bstamp b{color:var(--ink-2);font-weight:650}
+.bstamp .dot{width:6px;height:6px;border-radius:50%;background:#32D74B;flex:none}
 .cmd{position:relative;background:#0f1320;border-radius:12px;margin:13px 0 2px;box-shadow:var(--sh);max-width:640px}
 .cmd pre{margin:0;padding:14px 64px 14px 16px;overflow-x:auto;font-family:var(--m);font-size:12.5px;color:#dfe6f5;line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .cmd .cp{position:absolute;top:9px;right:9px;background:#1e2535;border:1px solid #2c3650;color:#aeb9c9;border-radius:7px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--f);transition:.15s}
@@ -269,6 +274,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <p>Grab the Mac build and double-click the <kbd>.zip</kbd> to unzip — you'll get <b>MatrackTruckSim.app</b>.</p>
       <a class="dl" style="margin-top:13px" target="_blank" rel="noopener" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackTruckSim-mac.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Mac · universal</a>
       <div class="mini">From the project's GitHub Release — universal (Intel + Apple Silicon).</div>
+      <div class="bstamp" data-asset="MatrackTruckSim-mac.zip"><span class="dot"></span><span class="txt"></span></div>
     </div></div>
     <div class="s2"><div class="n">2</div><div>
       <h4>Open it — first time only</h4>
@@ -296,6 +302,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <p>Grab the Windows build, unzip it, and run <kbd>MatrackSim.exe</kbd> — it's <b>self-contained</b>, so no .NET install is needed.</p>
       <a class="dl" style="margin-top:13px" target="_blank" rel="noopener" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackSim-win-x64.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download for Windows · win-x64</a>
       <div class="mini">From the project's GitHub Release (sign in with your repo access). Built &amp; self-tested automatically on every change.</div>
+      <div class="bstamp" data-asset="MatrackSim-win-x64.zip"><span class="dot"></span><span class="txt"></span></div>
     </div></div>
     <div class="s2"><div class="n">2</div><div>
       <h4>Check Bluetooth supports “peripheral”</h4>
@@ -324,6 +331,7 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       <h4>Android · install the APK</h4>
       <p>Download the signed <b>release</b> build and install it directly — version <kbd>1.0.2</kbd>.</p>
       <a class="dl" style="margin-top:13px" target="_blank" rel="noopener" href="https://github.com/charan7105/truckSimualtor/releases/latest/download/MatrackFuelApp-android.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>Download Android APK · v1.0.2</a>
+      <div class="bstamp" data-asset="MatrackFuelApp-android.apk"><span class="dot"></span><span class="txt"></span></div>
       <div class="mini">On the phone: allow <b>“Install unknown apps”</b> for your browser when prompted, then tap the file → <b>Install</b>. Signed by Matrack Inc.</div>
     </div></div>
     <div class="s2"><div class="n"><svg viewBox="0 0 24 24" fill="currentColor" style="width:19px;height:19px"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.83 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.31 2.65 1.33-.05 1.83-.86 3.44-.86 1.6 0 2.05.86 3.46.83 1.43-.02 2.33-1.3 3.2-2.58.4-.6.71-1.16.97-1.74-2.55-.97-2.96-3.49-2.96-3.51zm-2.6-7.16c.73-.89 1.22-2.12 1.09-3.35-1.05.04-2.32.7-3.07 1.59-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.36-.59 3.08-1.48z"/></svg></div><div>
@@ -672,6 +680,32 @@ body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opa
       ga.href=base+(isMac?'MatrackTruckSim-mac.zip':'MatrackSim-win-x64.zip');
       if(lbl) lbl.textContent=isMac?'Get the app · Mac':'Get the app · Windows';
     }
+  })();
+  // Build stamp: read the real dates off the GitHub release so nobody has to remember to bump
+  // a hardcoded version. Stays hidden if the call fails — better blank than wrong.
+  (function(){
+    var stamps=document.querySelectorAll('.bstamp[data-asset]');
+    if(!stamps.length) return;
+    fetch('https://api.github.com/repos/charan7105/truckSimualtor/releases/latest')
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(rel){
+        var by={}; (rel.assets||[]).forEach(function(a){ by[a.name]=a; });
+        var newest=0;
+        Object.keys(by).forEach(function(k){ var t=Date.parse(by[k].updated_at); if(t>newest) newest=t; });
+        stamps.forEach(function(el){
+          var a=by[el.dataset.asset]; if(!a) return;
+          var d=new Date(a.updated_at);
+          var when=d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+          var mb=(a.size/1048576).toFixed(1);
+          // "Latest" only on the asset that was actually rebuilt most recently, so a stale
+          // platform is visibly older rather than quietly looking current.
+          var fresh=Math.abs(Date.parse(a.updated_at)-newest)<36e5;
+          el.querySelector('.txt').innerHTML='Updated <b>'+when+'</b> · '+mb+' MB'+(fresh?' · latest build':'');
+          el.querySelector('.dot').style.background=fresh?'#32D74B':'#F5A623';
+          el.classList.add('on');
+        });
+      })
+      .catch(function(){ /* leave the stamps hidden */ });
   })();
   // --- enhancements: scroll reveals, hero count-up, scroll-spy ---
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
