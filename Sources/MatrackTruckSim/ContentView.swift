@@ -28,7 +28,12 @@ struct ContentView: View {
                 // zoom 1 the fit math guarantees it fits, so this picks the centred path as before;
                 // but tying the guarantee to "does it actually fit" rather than to the zoom value
                 // means no part of the UI can ever end up unreachable.
-                if w <= geo.size.width && h <= geo.size.height {
+                // Half-point tolerance, because the comparison is floating point: at zoom 1,
+                // designSize.width * (geo.width / designSize.width) can land ~1e-13 ABOVE geo.width.
+                // Measured: an exact check misfires on ~2% of realistic window sizes, and each one
+                // drops the unzoomed case into the ScrollView path — the cropped oversized-canvas
+                // bug this branch exists to avoid. The overshoot is far below one pixel.
+                if w <= geo.size.width + 0.5 && h <= geo.size.height + 0.5 {
                     // Unzoomed: fit and centre, exactly as before. No ScrollView in this path —
                     // inside one the face is measured at its pre-scale 1800x1120, so the window
                     // shows a crop of an oversized canvas instead of the whole fitted cockpit.
