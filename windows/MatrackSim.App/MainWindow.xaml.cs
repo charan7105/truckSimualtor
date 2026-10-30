@@ -208,6 +208,23 @@ namespace MatrackSim.App
             Sim.SetSpeed(mph);             // Swift: sim.setSpeed(Double(v)) — presets are mph
         }
 
+        /// <summary>
+        /// Device-ID presets. "FILLER" is Teja's reported case: 9 hex characters padded out with
+        /// three 0xFF bytes, which the wire sends as real single bytes (Latin-1), not as UTF-8 pairs.
+        /// "CUSTOM" leaves whatever is typed in the box. Mirrors the Swift MACCase list.
+        /// </summary>
+        private void DeviceMacCase_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (Sim == null) return;
+            var item = DeviceMacCase.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            string tag = (item.Tag as string) ?? "";
+            if (tag == "CUSTOM") return;
+            Sim.DeviceMAC = tag == "FILLER" ? "87CB6819A\u00FF\u00FF\u00FF" : tag;
+        }
+
+        private void SendDeviceMac_Click(object sender, RoutedEventArgs e) => Sim.SendMacNow();
+
         private void TimeScale_Click(object sender, RoutedEventArgs e)
         {
             int x = int.Parse(Param(sender), CultureInfo.InvariantCulture);

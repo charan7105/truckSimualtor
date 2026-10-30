@@ -70,6 +70,9 @@ namespace MatrackSim.App
                     Raise(nameof(SpeedSliderMph)); Raise(nameof(SpeedMphText)); Raise(nameof(ModeText)); Raise(nameof(ModeBrush));
                     Raise(nameof(SpeedFraction)); Raise(nameof(SpeedCenterText)); Raise(nameof(GearValue));
                     break;
+                case nameof(DeviceMAC):
+                    Raise(nameof(DeviceMacVerdict)); Raise(nameof(DeviceMacVerdictBrush));
+                    break;
                 case nameof(Rpm):
                     Raise(nameof(TachFraction)); Raise(nameof(RpmText)); Raise(nameof(TachHot));
                     break;
@@ -164,6 +167,17 @@ namespace MatrackSim.App
 
         public string SpeedMphText =>
             ((int)Math.Round(SpeedMph, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// What the phone should do with the device ID currently set — shown before you send it, so
+        /// a tester knows the expected answer instead of guessing afterwards. Uses the Core mirror of
+        /// the app's ^[0-9A-F]{12}$ check. Mirrors the Swift macSection verdict.
+        /// </summary>
+        public string DeviceMacVerdict =>
+            DeviceInfo.MacPassesAppCheck(DeviceMAC) ? "phone accepts" : "phone rejects";
+
+        public Brush DeviceMacVerdictBrush =>
+            DeviceInfo.MacPassesAppCheck(DeviceMAC) ? ThemeBrushes.Green : ThemeBrushes.Amber;
 
         public string ModeText
         {

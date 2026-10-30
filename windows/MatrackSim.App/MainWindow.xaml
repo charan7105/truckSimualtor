@@ -668,8 +668,23 @@
 
                         <!-- CONNECTION · SIGNAL panel (moves here, fills to the bottom) -->
                         <ctl:Card Grid.Row="2" Title="CONNECTION · SIGNAL" Glyph="&#xE704;" Tint="{StaticResource Blue}">
-                            <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel>
+                                    <StackPanel>
+                                      <!-- Link state stays put across every tab: it is the one thing you must be able to read
+                                           while doing something else. Mirrors the Swift liveStatusRow. -->
+                                      <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding SignalState}" FontSize="11" FontWeight="Black" Foreground="{Binding SignalBrush}" />
+                                        <TextBlock Text="{Binding OutageCountdown}" HorizontalAlignment="Right" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Amber}"
+                                                   Visibility="{Binding LinkDownVisible, Converter={StaticResource BoolVis}}" />
+                                      </DockPanel>
+                                      <!-- Four tabs, one per job. This replaced ONE ScrollViewer with its scrollbar HIDDEN that
+                                           stacked signal, ESP32, every fault, test setup, raw effects and the stored dump — so the
+                                           lower half was invisible with nothing on screen hinting it could scroll at all.
+                                           Mirrors the Swift NetworkPanel. -->
+                                      <TabControl Background="Transparent" BorderThickness="0">
+                                    <TabItem Header="Signal">
+                                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel Margin="0,8,4,0">
                                     <DockPanel Margin="0,0,0,10">
                                         <TextBlock Text="SIGNAL" Style="{StaticResource Sec}" />
                                         <TextBlock Text="{Binding SignalState}" HorizontalAlignment="Right" FontSize="11"
@@ -696,15 +711,9 @@
                                             </Button.Style>
                                         </Button>
                                     </UniformGrid>
-                                    <!-- ESP32 (USB-serial) transport: pick the port + toggle BLE ⇄ ESP32. -->
-                                    <DockPanel Margin="0,0,0,6">
-                                        <TextBlock Text="ESP32" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <ToggleButton Content="LINK" DockPanel.Dock="Right" Width="50" Margin="6,0,0,0"
-                                                      Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
-                                                      IsChecked="{Binding UseEsp32, Mode=OneWay}" Click="Esp32Toggle_Click"
-                                                      ToolTip="Route telemetry through the ESP32 over USB serial (enables real RSSI)" />
-                                        <ComboBox x:Name="PortBox" DropDownOpened="PortBox_DropDownOpened" ToolTip="ESP32 serial port" />
-                                    </DockPanel>
+                                    <StackPanel Visibility="{Binding LinkDownVisible, Converter={StaticResource BoolVis}}" Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding OutageCountdown}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Amber}" />
+                                    </StackPanel>
                                     <!-- RSSI = ESP32 real BLE TX power. 0% = out of range (-12 dBm), 100% = full (+9 dBm). -->
                                     <DockPanel Margin="0,0,0,6">
                                         <TextBlock Text="{Binding SignalSliderLabel}" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
@@ -712,6 +721,12 @@
                                                    FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
                                         <Slider Minimum="0" Maximum="100" Value="{Binding SignalSlider, Mode=TwoWay}"
                                                 ToolTip="Bluetooth signal strength → ESP32 BLE TX power" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Auto-return" Width="70" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding RangeOutageText}" Width="46" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="15" Maximum="180" Value="{Binding RangeOutageSec, Mode=TwoWay}" />
                                     </DockPanel>
                                     <!-- FLICKER: edge-of-range wobble — signal flaps weak⇄almost-gone so the phone's link flickers. -->
                                     <DockPanel Margin="0,0,0,8">
@@ -721,16 +736,52 @@
                                                       IsChecked="{Binding FlickerOn, Mode=OneWay}" Click="Flicker_Click"
                                                       ToolTip="Wobble the signal at the edge of range — the phone's connection flickers like a real weak spot" />
                                     </DockPanel>
-                                    <StackPanel Visibility="{Binding LinkDownVisible, Converter={StaticResource BoolVis}}" Margin="0,0,0,6">
-                                        <TextBlock Text="{Binding OutageCountdown}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Amber}" />
-                                    </StackPanel>
-                                    <DockPanel Margin="0,0,0,8">
-                                        <TextBlock Text="Auto-return" Width="70" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding RangeOutageText}" Width="46" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="15" Maximum="180" Value="{Binding RangeOutageSec, Mode=TwoWay}" />
+                                        </StackPanel>
+                                      </ScrollViewer>
+                                    </TabItem>
+                                    <TabItem Header="Stored">
+                                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel Margin="0,8,4,0">
+                                    <DockPanel Margin="0,0,0,6">
+                                        <TextBlock Text="STORED DUMP" Style="{StaticResource Sec}" />
+                                        <TextBlock Text="{Binding StoredDumpCountText}" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="10" Foreground="{StaticResource Dim}" />
                                     </DockPanel>
-                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Count" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding StoredDumpCount}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0" Maximum="300" Value="{Binding StoredDumpCount, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Cadence" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding StoredDumpCadenceText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                        <Slider Minimum="0.25" Maximum="1.5" Value="{Binding StoredDumpCadenceSec, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <Button Click="Dump_Click" Margin="0,0,0,4">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
+                                                <Setter Property="Content" Value="⤓ DUMP STORED" />
+                                                <Setter Property="Foreground" Value="{StaticResource Blue}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDumping}" Value="True">
+                                                        <Setter Property="Content" Value="⤓ DUMPING…" />
+                                                        <Setter Property="Background" Value="{StaticResource Blue}" />
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Blue}" />
+                                                        <Setter Property="Foreground" Value="#FF08090B" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <TextBlock Text="≈500ms reproduces the disconnect · 1s is safe." FontSize="9" Foreground="{StaticResource Dim}" />
+                                        </StackPanel>
+                                      </ScrollViewer>
+                                    </TabItem>
+                                    <TabItem Header="Bad data">
+                                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel Margin="0,8,4,0">
                                     <!-- FAULT INJECTION. Grouped by what the tester will SEE on the phone, not by
                                          protocol field. Four of these are silently ignored by the ELD app; they are
                                          labelled that way rather than hidden, so nobody demos a button waiting for an
@@ -764,6 +815,37 @@
                                     <Button Content="POWER CYCLE STORM x10" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultPowerStorm_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Phone speaks 'Vehicle Power up' each time. It never raises Power Compliance." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
 
+                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+                                    <!-- Device ID (LV field 8). The app validates it with ^[0-9A-F]{12}$ (added
+                                         app-side 2026-10-29). Named by OUTCOME rather than by bytes, so a support
+                                         agent can pick the right test without knowing what a MAC is.
+                                         Mirrors the Swift macSection. -->
+                                    <TextBlock Text="Device ID sent to the phone" Style="{StaticResource Sec}" Margin="0,0,0,6" />
+                                    <ComboBox x:Name="DeviceMacCase" SelectedIndex="4" Margin="0,0,0,6"
+                                              SelectionChanged="DeviceMacCase_Changed">
+                                        <ComboBoxItem Content="Correct ID — phone should accept" Tag="87CB6819AFFF" />
+                                        <ComboBoxItem Content="Short ID with filler — phone should reject" Tag="FILLER" />
+                                        <ComboBoxItem Content="Small letters — phone should reject" Tag="87cb6819afff" />
+                                        <ComboBoxItem Content="Too short — phone should reject" Tag="87CB6819A" />
+                                        <ComboBoxItem Content="Blank — phone should reject" Tag="" />
+                                        <ComboBoxItem Content="My own value" Tag="CUSTOM" />
+                                    </ComboBox>
+                                    <Border Background="#7308090B" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                            CornerRadius="10" Padding="12,10" Margin="0,0,0,6">
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding DeviceMacVerdict}" DockPanel.Dock="Right"
+                                                       FontSize="11" FontWeight="SemiBold" Foreground="{Binding DeviceMacVerdictBrush}"
+                                                       VerticalAlignment="Center" Margin="8,0,0,0" />
+                                            <TextBox x:Name="DeviceMacBox" Text="{Binding DeviceMAC, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}"
+                                                     FontFamily="{StaticResource Mono}" FontSize="12" />
+                                        </DockPanel>
+                                    </Border>
+                                    <Button Content="SEND TO PHONE NOW" Style="{StaticResource NeonButton}"
+                                            Click="SendDeviceMac_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="The phone reads this when it connects, so pick it BEFORE connecting. Use the button if the phone is already connected. Default is blank, which already fails the check."
+                                               Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+
                                     <TextBlock Text="THE PHONE IGNORES THESE" Style="{StaticResource Sec}" Foreground="{StaticResource Dim}" Margin="0,0,0,4" />
                                     <TextBlock Text="Verified against the app source. Send these to PROVE the app ignores them, not to wait for an alert." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4" />
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -791,6 +873,21 @@
                                     <TextBlock Text="The xO packet that says the odometer source changed. Phone: nothing at all — it parses this into a variable with no readers." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
 
+                                        </StackPanel>
+                                      </ScrollViewer>
+                                    </TabItem>
+                                    <TabItem Header="Setup">
+                                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel Margin="0,8,4,0">
+                                    <!-- ESP32 (USB-serial) transport: pick the port + toggle BLE ⇄ ESP32. -->
+                                    <DockPanel Margin="0,0,0,6">
+                                        <TextBlock Text="ESP32" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                        <ToggleButton Content="LINK" DockPanel.Dock="Right" Width="50" Margin="6,0,0,0"
+                                                      Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
+                                                      IsChecked="{Binding UseEsp32, Mode=OneWay}" Click="Esp32Toggle_Click"
+                                                      ToolTip="Route telemetry through the ESP32 over USB serial (enables real RSSI)" />
+                                        <ComboBox x:Name="PortBox" DropDownOpened="PortBox_DropDownOpened" ToolTip="ESP32 serial port" />
+                                    </DockPanel>
                                     <!-- TEST SETUP: dial the truck to a starting state instead of driving to it.
                                          Forward-only while the app is connected (see SetOdometer). -->
                                     <TextBlock Text="TEST SETUP" Style="{StaticResource Sec}" Margin="0,0,0,6" />
@@ -833,43 +930,11 @@
                                                    FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
                                         <Slider Minimum="0.25" Maximum="3" Value="{Binding PacketIntervalSec, Mode=TwoWay}" />
                                     </DockPanel>
-                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,8,0,8" />
-                                    <DockPanel Margin="0,0,0,6">
-                                        <TextBlock Text="STORED DUMP" Style="{StaticResource Sec}" />
-                                        <TextBlock Text="{Binding StoredDumpCountText}" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="10" Foreground="{StaticResource Dim}" />
-                                    </DockPanel>
-                                    <DockPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Count" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding StoredDumpCount}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0" Maximum="300" Value="{Binding StoredDumpCount, Mode=TwoWay}" />
-                                    </DockPanel>
-                                    <DockPanel Margin="0,0,0,8">
-                                        <TextBlock Text="Cadence" Width="56" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding StoredDumpCadenceText}" Width="42" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
-                                        <Slider Minimum="0.25" Maximum="1.5" Value="{Binding StoredDumpCadenceSec, Mode=TwoWay}" />
-                                    </DockPanel>
-                                    <Button Click="Dump_Click" Margin="0,0,0,4">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource NeonButton}">
-                                                <Setter Property="Content" Value="⤓ DUMP STORED" />
-                                                <Setter Property="Foreground" Value="{StaticResource Blue}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsDumping}" Value="True">
-                                                        <Setter Property="Content" Value="⤓ DUMPING…" />
-                                                        <Setter Property="Background" Value="{StaticResource Blue}" />
-                                                        <Setter Property="BorderBrush" Value="{StaticResource Blue}" />
-                                                        <Setter Property="Foreground" Value="#FF08090B" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
-                                    <TextBlock Text="≈500ms reproduces the disconnect · 1s is safe." FontSize="9" Foreground="{StaticResource Dim}" />
-                                </StackPanel>
-                            </ScrollViewer>
+                                        </StackPanel>
+                                      </ScrollViewer>
+                                    </TabItem>
+                                      </TabControl>
+                                    </StackPanel>
                         </ctl:Card>
                     </Grid>
                 </Grid>
