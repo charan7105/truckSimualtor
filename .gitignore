@@ -22,3 +22,8 @@ MatrackSim-for-ESP32.zip
 
 # Build artifacts that were committed by accident — they belong on the Release, not in git
 *.zip
+
+# Built app bundles dropped into the site folder for local testing — the real downloads
+# come from the GitHub release, not from the repo. This is how a 70MB zip got committed before.
+site/downloads/*.app/
+site/downloads/*.zip
