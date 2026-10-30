@@ -69,6 +69,7 @@ namespace MatrackSim.App
                 case nameof(SpeedMph):
                     Raise(nameof(SpeedSliderMph)); Raise(nameof(SpeedMphText)); Raise(nameof(ModeText)); Raise(nameof(ModeBrush));
                     Raise(nameof(SpeedFraction)); Raise(nameof(SpeedCenterText)); Raise(nameof(GearValue));
+                    RaiseNextStep();
                     break;
                 case nameof(DeviceMAC):
                     Raise(nameof(DeviceMacVerdict)); Raise(nameof(DeviceMacVerdictBrush));
@@ -92,6 +93,7 @@ namespace MatrackSim.App
                     Raise(nameof(ModeText)); Raise(nameof(ModeBrush)); Raise(nameof(IsDumping)); Raise(nameof(FooterStatusText));
                     Raise(nameof(GearValue));
                     Raise(nameof(SetupHint));   // TEST SETUP hint flips with the connection
+                    RaiseNextStep();            // every one of these changes what to do next
                     break;
                 case nameof(LinkDown):
                 case nameof(DropEndsAt):
@@ -167,6 +169,48 @@ namespace MatrackSim.App
 
         public string SpeedMphText =>
             ((int)Math.Round(SpeedMph, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+        // ---- NEXT STEP ----------------------------------------------------------------------------
+        // The one thing to do now, derived from live state. The order below is the real dependency
+        // chain, so following it top to bottom is always a working run. "Moving" counts a hand-set
+        // speed and auto-cruise, not just a planned route, because most testers never touch the
+        // route controls. Mirrors the Swift NextStep exactly.
+
+        private bool NextMoving => DrivingRoute || AutoDrive || SpeedMph > 0.5;
+
+        public string NextStepTitle =>
+            !IgnitionOn ? "Turn the engine on"
+            : !NextMoving ? (HasRoute ? "Start driving" : "Get the truck moving")
+            : !Connected ? "Connect the phone"
+            : !Streaming ? "Waiting for the app to ask for data"
+            : "Running — the phone is getting live data";
+
+        public string NextStepDetail =>
+            !IgnitionOn ? "Nothing is sent to the phone while the key is off."
+            : !NextMoving ? (HasRoute ? "The route is planned and ready."
+                                      : "Press a speed under DRIVE, or plan a route and press DRIVE.")
+            : !Connected ? "Open the Matrack ELD app and connect to ELD-MA."
+            : !Streaming ? "The phone is connected. It sends readdata when it is ready."
+            : "Pick a test from the CONNECTION panel on the right.";
+
+        public string NextStepButton =>
+            !IgnitionOn ? "ENGINE ON"
+            : !NextMoving ? (HasRoute ? "DRIVE" : "RANDOM ROUTE")
+            : "";
+
+        public bool NextStepHasAction => NextStepButton.Length > 0;
+
+        public Brush NextStepBrush =>
+            !IgnitionOn ? ThemeBrushes.Green
+            : !NextMoving ? (HasRoute ? ThemeBrushes.Green : ThemeBrushes.Ice)
+            : !Connected || !Streaming ? ThemeBrushes.Amber
+            : ThemeBrushes.Green;
+
+        private void RaiseNextStep()
+        {
+            Raise(nameof(NextStepTitle)); Raise(nameof(NextStepDetail));
+            Raise(nameof(NextStepButton)); Raise(nameof(NextStepHasAction)); Raise(nameof(NextStepBrush));
+        }
 
         /// <summary>
         /// What the phone should do with the device ID currently set — shown before you send it, so

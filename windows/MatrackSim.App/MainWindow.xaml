@@ -113,7 +113,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- ================= TOP RAIL ================= -->
-                <Grid Grid.Row="0" Margin="0,0,0,16">
+                <StackPanel Grid.Row="0">
+                <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -193,6 +194,23 @@
                         </Border>
                     </StackPanel>
                 </Grid>
+                <!-- NEXT STEP: the one thing to do now, derived from live state. Without it the
+                     face is forty controls and no sequence — nothing says the engine must be on
+                     before anything is sent, or that the phone must connect before a stored dump
+                     means anything. Mirrors the Swift NextStep. -->
+                <Border CornerRadius="12" Background="{StaticResource Panel}" BorderThickness="1"
+                        BorderBrush="{Binding NextStepBrush}" Padding="14,8" Margin="0,0,0,16">
+                    <DockPanel>
+                        <Button Content="{Binding NextStepButton}" DockPanel.Dock="Right" Width="150"
+                                Style="{StaticResource NeonButton}" Click="NextStep_Click"
+                                Visibility="{Binding NextStepHasAction, Converter={StaticResource BoolVis}}" />
+                        <TextBlock Text="{Binding NextStepTitle}" FontFamily="{StaticResource Rounded}" FontSize="12"
+                                   FontWeight="SemiBold" Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding NextStepDetail}" Margin="10,0,0,0" FontSize="12"
+                                   Foreground="{StaticResource Dim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                </Border>
+                </StackPanel>
 
                 <!-- ================= MAIN BODY — three independent columns (mirrors Mac clusterFace) ================= -->
                 <Grid Grid.Row="1">

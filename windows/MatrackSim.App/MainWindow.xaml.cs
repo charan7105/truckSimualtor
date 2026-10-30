@@ -225,6 +225,14 @@ namespace MatrackSim.App
 
         private void SendDeviceMac_Click(object sender, RoutedEventArgs e) => Sim.SendMacNow();
 
+        /// <summary>Runs whatever the Next-step strip is currently offering. Mirrors the Swift NextStep.run.</summary>
+        private async void NextStep_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Sim.IgnitionOn) { Sim.SetEngine(true); return; }
+            if (Sim.HasRoute) { Sim.StartRouteDrive(); return; }
+            await Sim.LoadRandomRoute();
+        }
+
         private void TimeScale_Click(object sender, RoutedEventArgs e)
         {
             int x = int.Parse(Param(sender), CultureInfo.InvariantCulture);
