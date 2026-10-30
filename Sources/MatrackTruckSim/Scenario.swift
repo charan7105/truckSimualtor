@@ -102,18 +102,28 @@ enum WireBuilder {
     struct StoredDumpOptions {
         var stampedAt: Date?
         var repeatEachPacket = false
+        /// Where the backlog starts counting from. Defaults to the config's starting telemetry, but
+        /// the live sim passes its CURRENT odometer/hours so the recorded drive continues the truck
+        /// the app has already been watching instead of restarting it somewhere else.
+        var startOdometerMiles: Double?
+        var startEngineHours: Double?
         static let normal = StoredDumpOptions()
     }
 
     static func storedDump(count: Int, config: SimConfig,
                            options: StoredDumpOptions = .normal) -> [Emitted] {
         let e = EngineState()
-        e.odometerMiles = config.startOdometerMiles
-        e.engineHours = config.startEngineHours
+        e.odometerMiles = options.startOdometerMiles ?? config.startOdometerMiles
+        e.engineHours = options.startEngineHours ?? config.startEngineHours
         e.fuelLevelPct = config.startFuelPct
         e.idleRpmConfig = config.idleRpm
         e.rpmPerMphConfig = config.rpmPerMph
-        e.fuelBurnPctPerMile = config.fuelBurnPctPerMile
+        // A backlog does NOT burn fuel. At 30-minute spacing each record covers ~30 miles, which at
+        // the normal burn rate empties a 30% tank by the THIRD record — so 77 of an 80-record dump
+        // reported 0% and the app was told the truck drove two days on an empty tank. Modelling
+        // refuelling across a backlog is not what this dump is for; holding the level is the honest
+        // reading. EngineState.advance clamps at 0, so nothing ever flagged it.
+        e.fuelBurnPctPerMile = 0
         e.ignitionOn = true
         // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
         // speed >= 5. Without this every dump exercised only half the stored-packet handling.

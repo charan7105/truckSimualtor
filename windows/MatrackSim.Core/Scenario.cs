@@ -140,18 +140,31 @@ namespace MatrackSim.Core
         {
             public DateTime? StampedAt;
             public bool RepeatEachPacket;
+            /// <summary>
+            /// Where the backlog starts counting from. Defaults to the config's starting telemetry,
+            /// but the live sim passes its CURRENT odometer/hours so the recorded drive continues the
+            /// truck the app has already been watching instead of restarting it somewhere else.
+            /// </summary>
+            public double? StartOdometerMiles;
+            public double? StartEngineHours;
             public static StoredDumpOptions Normal => new StoredDumpOptions();
         }
 
         public static List<Emitted> StoredDump(int count, SimConfig config, StoredDumpOptions options = null)
         {
+            var optsEarly = options ?? StoredDumpOptions.Normal;
             var e = new EngineState();
-            e.OdometerMiles = config.StartOdometerMiles;
-            e.EngineHours = config.StartEngineHours;
+            e.OdometerMiles = optsEarly.StartOdometerMiles ?? config.StartOdometerMiles;
+            e.EngineHours = optsEarly.StartEngineHours ?? config.StartEngineHours;
             e.FuelLevelPct = config.StartFuelPct;
             e.IdleRpmConfig = config.IdleRpm;
             e.RpmPerMphConfig = config.RpmPerMph;
-            e.FuelBurnPctPerMile = config.FuelBurnPctPerMile;
+            // A backlog does NOT burn fuel. At 30-minute spacing each record covers ~30 miles, which
+            // at the normal burn rate empties a 30% tank by the THIRD record — so 77 of an 80-record
+            // dump reported 0% and the app was told the truck drove two days on an empty tank.
+            // Modelling refuelling across a backlog is not what this dump is for; holding the level
+            // is the honest reading. EngineState.Advance clamps at 0, so nothing ever flagged it.
+            e.FuelBurnPctPerMile = 0;
             e.IgnitionOn = true;
             // A stored packet with speed 0 takes the app's on-duty branch; the driving branch needs
             // speed >= 5. Without this every dump exercised only half the stored-packet handling.

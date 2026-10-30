@@ -952,7 +952,20 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     func dumpStoredPackets(count: Int, cadenceSec: Double, stopDrive: Bool = true,
                            options: WireBuilder.StoredDumpOptions = .normal, label: String? = nil) {
         if stopDrive { autoDrive = false; drivingRoute = false; dayDriving = false }   // app-issued readstr keeps the drive (resumes when queue drains)
+        // The backlog is the SAME truck, so it starts where the live one is now and the live one
+        // carries on where the backlog ended. Without this the dump ran its own odometer from the
+        // config's start value — at 30-minute spacing that is ~2,400 miles over 80 records — and the
+        // live stream then resumed 2,400 miles BEHIND the newest stored record. The app saw the
+        // odometer and engine hours jump backwards, which is the same shape as the restart bug.
+        var options = options
+        if options.startOdometerMiles == nil { options.startOdometerMiles = engine.odometerMiles }
+        if options.startEngineHours == nil { options.startEngineHours = engine.engineHours }
         let batch = WireBuilder.storedDump(count: count, config: config, options: options)
+        if let lastStored = batch.last(where: { $0.kind == .stored }),
+           let end = WireBuilder.telemetryOf(lastStored.wire) {
+            engine.odometerMiles = max(engine.odometerMiles, end.odometerMiles)
+            engine.engineHours = max(engine.engineHours, end.engineHours)
+        }
         // Kept so the same bytes can be sent again after a reconnect — the cross-connection
         // duplicate test needs the SECOND dump to be identical to the first, not merely similar.
         lastStoredBatch = batch

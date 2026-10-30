@@ -465,6 +465,7 @@ enum SelfTest {
             print("  [\(footerOK ? "OK" : "FAIL")] footer reports the real count (\(footer))")
             if !footerOK { allPass = false }
 
+
             // Speed must clear the app's 5 mph line, or every stored packet takes the on-duty branch
             // and the driving branch is never tested. Field 3 is km/h; the app divides by 1.60934.
             // The FINAL record is exempt: it is the shutdown, and a shutdown at 60 mph is not a
@@ -476,6 +477,34 @@ enum SelfTest {
             let mph = driving.first.map { $0 / 1.60934 } ?? 0
             print("  [\(allMoving ? "OK" : "FAIL")] stored packets carry \(Int(mph)) mph — above the app's \(Int(SimConfig.movingThresholdMph)) mph driving line")
             if !allMoving { allPass = false }
+
+            // A backlog must not starve the truck. 30-minute records cover ~30 miles each, so at the
+            // normal burn rate a 30% tank emptied by the third record and the rest of the dump
+            // reported 0% — advance() clamps at 0, so no test or UI ever complained.
+            let longDump = WireBuilder.storedDump(count: 80, config: cfg)
+                .filter { $0.kind == .stored }
+                .map { $0.wire.components(separatedBy: ",") }
+            let fuels = longDump.compactMap { Double($0[13]) }
+            let fuelHeld = fuels.count == 80 && fuels.allSatisfy { $0 > 0 }
+            print("  [\(fuelHeld ? "OK" : "FAIL")] an 80-record backlog never reports an empty tank (min \(String(format: "%.1f", fuels.min() ?? -1))%)")
+            if !fuelHeld { allPass = false }
+
+            // ...and must not rewind the odometer. A 40-hour backlog SHOULD cover real miles — the
+            // bug was that it ran them from the config's start value while the live engine stayed
+            // put, so the live stream resumed thousands of miles BEHIND the newest stored record.
+            // The contract that prevents it: the dump starts where the caller says, and the caller
+            // (dumpStoredPackets) then carries the live engine to where the dump ended.
+            let here = 41_234.5, hours = 900.25
+            let cont = WireBuilder.storedDump(count: 80, config: cfg,
+                                              options: .init(startOdometerMiles: here, startEngineHours: hours))
+                .filter { $0.kind == .stored }
+            let contOdo = cont.map { $0.wire.components(separatedBy: ",") }.compactMap { Double($0[4]) }.map { $0 * 0.0621371 }
+            let startsHere = (contOdo.first ?? 0) >= here
+            let monotonic = zip(contOdo, contOdo.dropFirst()).allSatisfy { $0 <= $1 + 0.001 }
+            let endReadable = WireBuilder.telemetryOf(cont.last?.wire ?? "").map { $0.odometerMiles >= here } ?? false
+            let odoSane = startsHere && monotonic && endReadable
+            print("  [\(odoSane ? "OK" : "FAIL")] the backlog continues the live truck's odometer and never goes backwards")
+            if !odoSane { allPass = false }
 
             // Teja (2026-10-30): the backlog must end with the key going off — last record stopped
             // and ignition 0 — because that is what a tracker's final flash write looks like.

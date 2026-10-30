@@ -1224,7 +1224,27 @@ namespace MatrackSim.App
                                       WireBuilder.StoredDumpOptions options = null, string label = null)
         {
             if (stopDrive) { AutoDrive = false; DrivingRoute = false; DayDriving = false; }   // app-issued readstr keeps the drive (resumes when queue drains)
-            var batch = WireBuilder.StoredDump(count, Config, options);
+            // The backlog is the SAME truck, so it starts where the live one is now and the live one
+            // carries on where the backlog ended. Without this the dump ran its own odometer from the
+            // config's start value — at 30-minute spacing that is ~2,400 miles over 80 records — and
+            // the live stream then resumed 2,400 miles BEHIND the newest stored record. The app saw
+            // the odometer and engine hours jump backwards.
+            // Mirrors dumpStoredPackets in the Swift build.
+            var opts = options ?? WireBuilder.StoredDumpOptions.Normal;
+            if (opts.StartOdometerMiles == null) opts.StartOdometerMiles = engine.OdometerMiles;
+            if (opts.StartEngineHours == null) opts.StartEngineHours = engine.EngineHours;
+            var batch = WireBuilder.StoredDump(count, Config, opts);
+            // Emitted is a STRUCT, so FindLast(...) != null does not compile — index it.
+            int lastStoredIdx = batch.FindLastIndex(x => x.ItemKind == Emitted.Kind.Stored);
+            if (lastStoredIdx >= 0)
+            {
+                var end = WireBuilder.TelemetryOf(batch[lastStoredIdx].Wire);
+                if (end != null)
+                {
+                    engine.OdometerMiles = Math.Max(engine.OdometerMiles, end.Value.OdometerMiles);
+                    engine.EngineHours = Math.Max(engine.EngineHours, end.Value.EngineHours);
+                }
+            }
             // Kept so the same bytes can be sent again after a reconnect — the cross-connection
             // duplicate test needs the SECOND dump to be identical, not merely similar.
             lastStoredBatch = batch;

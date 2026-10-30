@@ -449,6 +449,37 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (allMoving ? "OK" : "FAIL") + "] stored packets carry " + (int)mph + " mph — above the app's " + (int)SimConfig.MovingThresholdMph + " mph driving line");
                 if (!allMoving) allPass = false;
 
+                // A backlog must not starve the truck. 30-minute records cover ~30 miles each, so at
+                // the normal burn rate a 30% tank emptied by the third record and the rest of the
+                // dump reported 0% — Advance() clamps at 0, so nothing ever complained.
+                var longDump = WireBuilder.StoredDump(80, cfg).FindAll(x => x.ItemKind == Emitted.Kind.Stored);
+                bool fuelHeld = longDump.Count == 80;
+                double minFuel = 999;
+                foreach (var em in longDump)
+                {
+                    double f = double.Parse(em.Wire.Split(',')[13], CultureInfo.InvariantCulture);
+                    if (f < minFuel) minFuel = f;
+                    if (f <= 0) fuelHeld = false;
+                }
+                Console.WriteLine("  [" + (fuelHeld ? "OK" : "FAIL") + "] an 80-record backlog never reports an empty tank (min " + minFuel.ToString("0.0", CultureInfo.InvariantCulture) + "%)");
+                if (!fuelHeld) allPass = false;
+
+                // ...and must continue the live truck's odometer rather than running its own from the
+                // config start, which left the live stream resuming thousands of miles behind.
+                var contOpts = new WireBuilder.StoredDumpOptions { StartOdometerMiles = 41234.5, StartEngineHours = 900.25 };
+                var cont = WireBuilder.StoredDump(80, cfg, contOpts).FindAll(x => x.ItemKind == Emitted.Kind.Stored);
+                bool odoSane = cont.Count == 80;
+                double prevOdo = -1;
+                foreach (var em in cont)
+                {
+                    double miles = double.Parse(em.Wire.Split(',')[4], CultureInfo.InvariantCulture) * 0.0621371;
+                    if (miles + 0.001 < prevOdo) odoSane = false;
+                    prevOdo = miles;
+                }
+                if (prevOdo < 41234.5) odoSane = false;
+                Console.WriteLine("  [" + (odoSane ? "OK" : "FAIL") + "] the backlog continues the live truck's odometer and never goes backwards");
+                if (!odoSane) allPass = false;
+
                 // Teja (2026-10-30): the backlog must end with the key going off, and records must
                 // sit one StoredRecordIntervalSec apart ending at the connect moment. At the old
                 // PacketIntervalSec spacing, 80 records covered 80 SECONDS and every one fell inside
