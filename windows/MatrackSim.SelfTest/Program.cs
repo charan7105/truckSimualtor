@@ -371,6 +371,14 @@ namespace MatrackSim.SelfTest
                 else for (int i = 0; i < utf8.Length; i++) if (utf8[i] != wire[i]) { sameAsUtf8 = false; break; }
                 cases.Add(Tuple.Create("ASCII packets are byte-identical under the new encoding", sameAsUtf8));
 
+                // Same assertion as the Swift selftest, same expected bytes — the two builds used to
+                // disagree here (Swift fell back to UTF-8 for the whole string, this side substituted).
+                byte[] oor = MTPacket.WireBytes("LV,A\u20ACB\U0001F600C");
+                byte[] want = { 0x4C, 0x56, 0x2C, 0x41, 0x3F, 0x42, 0x3F, 0x3F, 0x43 };
+                bool oorOk = oor.Length == want.Length;
+                if (oorOk) for (int i = 0; i < want.Length; i++) if (oor[i] != want[i]) { oorOk = false; break; }
+                cases.Add(Tuple.Create("characters above U+00FF become '?' (0x3F), matching the Swift build", oorOk));
+
                 foreach (var c in cases)
                 {
                     Console.WriteLine("  [" + (c.Item2 ? "OK" : "FAIL") + "] " + c.Item1);

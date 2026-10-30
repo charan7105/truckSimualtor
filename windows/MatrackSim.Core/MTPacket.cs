@@ -153,7 +153,12 @@ namespace MatrackSim.Core
         /// simulator builds is otherwise ASCII where the two encodings are byte-identical — so
         /// nothing else on the wire changes. It also makes Frame's chunk arithmetic honest: it
         /// slices by CHARACTER count, which only equals the byte count at one byte per character.
-        /// Mirrors MTPacket.wireBytes in the Swift build.
+        /// Anything above U+00FF cannot be put on the wire by a real tracker, so it is replaced with
+        /// '?' (0x3F) — one per UTF-16 code unit, which is why an emoji yields two. Swift spells the
+        /// same rule out by hand rather than relying on an encoder fallback, because its optional
+        /// `data(using:)` API previously fell back to UTF-8 for the whole string while this side
+        /// substituted, giving different wire bytes for the same input.
+        /// Mirrors MTPacket.wireBytes in the Swift build — verified byte-for-byte in both selftests.
         /// </summary>
         public static byte[] WireBytes(string s) => Latin1.GetBytes(s);
 

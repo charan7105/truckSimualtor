@@ -389,6 +389,14 @@ enum SelfTest {
             cases.append(("ASCII packets are byte-identical under the new encoding",
                           MTPacket.wireBytes(plain) == Data(plain.utf8)))
 
+            // A character above U+00FF cannot ride a real tracker's wire, so it becomes '?' — one
+            // per UTF-16 code unit. These exact bytes are asserted in the C# selftest too: the two
+            // builds previously disagreed here (Swift fell back to UTF-8 for the whole string,
+            // C# substituted), which is a silent parity break nothing would have caught.
+            let outOfRange = MTPacket.wireBytes("LV,A\u{20AC}B\u{1F600}C")
+            cases.append(("characters above U+00FF become '?' (0x3F), matching the C# build",
+                          [UInt8](outOfRange) == [0x4C, 0x56, 0x2C, 0x41, 0x3F, 0x42, 0x3F, 0x3F, 0x43]))
+
             for (name, ok) in cases {
                 print("  [\(ok ? "OK" : "FAIL")] \(name)")
                 if !ok { allPass = false }

@@ -108,8 +108,15 @@ enum MTPacket {
     /// two encodings are byte-identical — so nothing else on the wire changes.
     /// It also makes the chunk arithmetic in `frame` honest: that slices by CHARACTER count, which
     /// only equals the byte count when one character is one byte.
+    ///
+    /// Anything above U+00FF cannot be put on the wire by a real tracker, so it is replaced with
+    /// '?' (0x3F) — one per UTF-16 code unit, which is why an emoji yields two. That is exactly what
+    /// `Encoding.GetEncoding(28591)` does in the C# build, and matching it matters: the previous
+    /// version fell back to UTF-8 for the WHOLE string while C# silently substituted, so the same
+    /// input produced different bytes on the two platforms. Written as a total function on purpose —
+    /// the optional `data(using:)` API is what forced a fallback decision and caused that split.
     static func wireBytes(_ s: String) -> Data {
-        s.data(using: .isoLatin1) ?? Data(s.utf8)
+        Data(s.utf16.map { $0 <= 0xFF ? UInt8($0) : 0x3F })
     }
 
     static func frame(_ payload: String) -> [Data] {
