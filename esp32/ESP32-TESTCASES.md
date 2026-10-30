@@ -56,7 +56,7 @@ Check: phone reconnects once ELD-MA returns.
 
 ## Stress
 
-**15.** Do: scenario 8 (300 stored packets), then SEND SAVED DATA at 0.5s.
+**15.** Do: scenario 8 (300 stored packets), then DUMP STORED at 0.5s.
 Check: all arrive, no freeze.
 
 **16.** Do: scenario 11 (garbage packet).

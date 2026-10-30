@@ -2,7 +2,7 @@
 
 Covers the `storepacketchanges` branch of the ELD app (REQ-940, REQ-942).
 Controls are in the simulator's **Bad data** tab (CONNECTION panel, or the footer BAD DATA button),
-under *Show the ones the phone ignores* (expand it).
+under *THE PHONE IGNORES THIS* (expand it).
 
 ---
 
@@ -35,7 +35,7 @@ mechanism (below).
 
 ## Test case 1 — future-dated stored packets
 
-**Button:** `Saved data dated in the future (2030)` — five stored packets, all stamped 1 Jan 2030.
+**Button:** `STORED: FUTURE DATE (2030)` — five stored packets, all stamped 1 Jan 2030.
 
 **Expected:** every packet skipped. Nothing recorded, no events, no mileage.
 
@@ -60,7 +60,7 @@ and is **never reset** — not on connect, not on disconnect.
 Two consequences worth testing, and one worth knowing:
 
 ### 2a — same connection
-**Button:** `Same saved data sent twice` — each packet sent twice, back to back.
+**Button:** `STORED: DUPLICATES, SAME CONNECTION` — each packet sent twice, back to back.
 
 Sequence: `connect → lp → ss → ss(duplicate)`
 
@@ -68,7 +68,7 @@ Sequence: `connect → lp → ss → ss(duplicate)`
 exactly the shape the comparison catches.
 
 ### 2b — across connections
-**Button:** `Send the same saved data again after reconnect` — re-sends the previous dump byte for byte.
+**Button:** `STORED: REPEAT AFTER RECONNECT` — re-sends the previous dump byte for byte.
 
 Sequence: `connect → lp → ss → LAST_STORED_PACKET → disconnect → connect → lp → ss(same) → LAST_STORED_PACKET`
 

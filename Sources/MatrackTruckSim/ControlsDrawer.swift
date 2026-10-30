@@ -258,7 +258,7 @@ struct NetworkPanel: View {
             // RSSI only in ESP32 mode — see rssiSlider for why the label follows the transport.
             rssiSlider
             cfgSlider("Back in range after", \.rangeOutageSec, 15...180, "s", 0)
-            NeonButton(title: "〰 KEEP DROPPING IN AND OUT", tint: Theme.amber, filled: sim.flickerOn) {
+            NeonButton(title: "〰 FLICKER", tint: Theme.amber, filled: sim.flickerOn) {
                 sim.setFlicker(!sim.flickerOn)
             }
             Text("Puts the phone right at the edge of range, so it keeps losing the tracker and finding it again.")
@@ -274,14 +274,14 @@ struct NetworkPanel: View {
             Text("When the phone is not connected, the tracker keeps saving data on its own. It hands the whole lot over the next time the phone connects (the app asks with readstr).")
                 .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
-            cfgSlider("Save one every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
+            cfgSlider("Record every", \.storedRecordIntervalSec, 0.5...60, "m", 1, scale: 60)
 
             Divider().overlay(Theme.stroke)
 
-            Text("Send saved data now").sectionLabel()
+            Text("Stored dump").sectionLabel()
             countSlider
-            cfgSlider("Gap between them", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
-            NeonButton(title: isDumping ? "SENDING…" : "SEND SAVED DATA",
+            cfgSlider("Cadence", \.storedDumpCadenceSec, 0.25...1.5, "s", 2)
+            NeonButton(title: isDumping ? "DUMPING…" : "DUMP STORED",
                        icon: "tray.and.arrow.down.fill", tint: Theme.blue,
                        filled: isDumping, prominent: true) {
                 sim.dumpStoredPackets(count: sim.config.storedDumpCount, cadenceSec: sim.config.storedDumpCadenceSec)
@@ -317,10 +317,10 @@ struct NetworkPanel: View {
 
             Divider().overlay(Theme.stroke)
 
-            Text("Message problems").sectionLabel()
-            cfgSlider("Send duplicates", \.duplicatePct, 0...50, "%", 0)
-            cfgSlider("Send out of order", \.outOfOrderPct, 0...50, "%", 0)
-            cfgSlider("Send one message every", \.packetIntervalSec, 0.25...3, "s", 2)
+            Text("Packet effects").sectionLabel()
+            cfgSlider("Duplicate", \.duplicatePct, 0...50, "%", 0)
+            cfgSlider("Out of order", \.outOfOrderPct, 0...50, "%", 0)
+            cfgSlider("Packet every", \.packetIntervalSec, 0.25...3, "s", 2)
         }
     }
     private var isDumping: Bool { sim.runningDump?.hasPrefix("Stored dump") == true }
@@ -375,7 +375,7 @@ struct NetworkPanel: View {
     /// Both are forward-only while the app is connected — see TrackerPeripheral.setOdometer.
     private var setupFields: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Starting numbers").sectionLabel()
+            Text("Test setup").sectionLabel()
             numberField("Odometer", value: sim.odometerMiles, unit: "mi", dec: 1) { sim.setOdometer($0) }
             numberField("Engine hours", value: sim.engineHours, unit: "h", dec: 2) { sim.setEngineHours($0) }
             // Must track the same flag the setter gates on (`connected`), or the caption promises
@@ -398,7 +398,7 @@ struct NetworkPanel: View {
         let changed = value != fallback
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
-                Text("How many records").font(.system(size: 11, design: .rounded))
+                Text("Count").font(.system(size: 11, design: .rounded))
                     .foregroundStyle(changed ? Theme.amber : Theme.dim)
                     .lineLimit(1).fixedSize()
                 Slider(value: Binding(get: { Double(sim.config.storedDumpCount) }, set: { sim.config.storedDumpCount = Int($0) }), in: 0...300)
@@ -413,7 +413,7 @@ struct NetworkPanel: View {
             if changed {
                 Button {
                     sim.config.storedDumpCount = fallback
-                    sim.info("How many records back to the default \(fallback)")
+                    sim.info("Count back to the default \(fallback)")
                 } label: {
                     Text("↺ back to default \(fallback)")
                         .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.amber)
@@ -483,7 +483,7 @@ struct PacketConsole: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text("Live messages").sectionLabel()
+                Text("Live packet stream").sectionLabel()
                 Spacer()
                 Text("\(sim.log.count) lines").font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.dim)
                 Button { exportLog() } label: {
@@ -623,7 +623,7 @@ struct FaultPanel: View {
                 .foregroundStyle(sim.faultsArmed ? Theme.red : Theme.dim)
                 .fixedSize(horizontal: false, vertical: true)
             if sim.faultsArmed {
-                NeonButton(title: "Stop sending bad data", tint: Theme.red, filled: true) { sim.clearAllFaults() }
+                NeonButton(title: "RESET TO CLEAN DATA", tint: Theme.red, filled: true) { sim.clearAllFaults() }
             }
         }
     }
@@ -652,21 +652,21 @@ struct FaultPanel: View {
     // Ordered fastest-to-fire first, so a demo runs straight down the list.
     private var warns: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("⚠ The phone shows a warning").sectionLabel()
+            Text("⚠ The phone will warn").sectionLabel()
 
-            faultToggle(title: "Engine computer stops answering", on: sim.activeFaults.contains { $0.field == 12 },
+            faultToggle(title: "ENGINE SYNC LOST", on: sim.activeFaults.contains { $0.field == 12 },
                         subtitle: "Tells the phone the engine computer stopped answering while the key is on.",
                         look: "Phone: Data Diagnostic 2 within about 3 seconds.") {
                 sim.setWireOverride(field: 12, value: sim.activeFaults.contains { $0.field == 12 } ? nil : "0")
             }
 
-            faultToggle(title: "Clock is 30 minutes wrong", on: sim.config.timeSkewSec != 0,
+            faultToggle(title: "CLOCK AHEAD +30 MIN", on: sim.config.timeSkewSec != 0,
                         subtitle: "Stamps every packet with a time that is wrong by half an hour.",
                         look: "Phone: red bar reading Malfunction(T) after about 20 seconds. One good packet clears it.") {
                 sim.config.timeSkewSec = sim.config.timeSkewSec == 0 ? 1800 : 0
             }
 
-            faultToggle(title: "No odometer or engine hours", on: sim.activeFaults.contains { $0.field == 4 && $0.value == "0" },
+            faultToggle(title: "ODOMETER & HOURS MISSING", on: sim.activeFaults.contains { $0.field == 4 && $0.value == "0" },
                         subtitle: "Sends odometer 0 and engine hours 0, like a tracker with no ECU data.",
                         look: "Phone: change duty status while this is on → Data Diagnostic 3. Nothing happens until you change status.") {
                 let armed = sim.activeFaults.contains { $0.field == 4 && $0.value == "0" }
@@ -674,7 +674,7 @@ struct FaultPanel: View {
                 sim.setWireOverride(field: 5, value: armed ? nil : "0")
             }
 
-            faultToggle(title: "GPS drops out now and then, only while moving",
+            faultToggle(title: "GPS LOCK LOST — 1 IN 5 PACKETS, ONLY WHILE MOVING",
                         on: sim.activeFaults.contains { $0.field == 8 },
                         subtitle: "Randomly drops the GPS fix on about a fifth of packets, and only above 5 mph.",
                         look: "Phone: nothing quickly. The app's positioning check never fires — see the audit doc.") {
@@ -686,28 +686,28 @@ struct FaultPanel: View {
 
     private var noWarning: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("◐ Wrong data, but no warning").sectionLabel()
+            Text("◐ Wrong number, no warning").sectionLabel()
 
-            faultButton(title: "Odometer jumps up by 58,000 miles",
+            faultButton(title: "ODOMETER JUMP  +58,000 mi",
                         subtitle: "One jump to a different ECU odometer series.",
                         look: "Phone: Logs → today → the Driving event's odometer jumps and stays. No warning at all.") {
                 sim.setWireOverride(field: 4, value: "5000000")
             }
 
-            faultToggle(title: "Odometer stops moving", on: sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel },
+            faultToggle(title: "ODOMETER STUCK", on: sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel },
                         subtitle: "Sends the tracker's \"odometer not available\" value.",
                         look: "Phone: keeps showing the LAST odometer as if it were live. Nothing changes on screen — that is the finding.") {
                 let armed = sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel }
                 sim.setWireOverride(field: 4, value: armed ? nil : SimConfig.odometerUnavailableSentinel)
             }
 
-            faultToggle(title: "Two different odometer readings", on: sim.odoAlternating,
+            faultToggle(title: "TWO ECU ODOMETERS", on: sim.odoAlternating,
                         subtitle: "The ECU reports two different odometers about 3,700 miles apart, flipping every packet.",
                         look: "Phone: Help → Bluetooth → BLE Values, the odometer visibly flips. No warning — this is the finding.") {
                 sim.setOdoAlternating(!sim.odoAlternating)
             }
 
-            faultToggle(title: "Wrong time now and then",
+            faultToggle(title: "BAD TIME ON 1 IN 5 PACKETS",
                         on: sim.activeFaults.contains { $0.field == 10 },
                         subtitle: "Scatters an impossible time through the stream instead of corrupting every packet.",
                         look: "Phone: intermittent, so watch the event list rather than expecting a banner.") {
@@ -715,7 +715,7 @@ struct FaultPanel: View {
                                     probability: 0.2)
             }
 
-            faultToggle(title: "Odometer goes missing now and then",
+            faultToggle(title: "DEFAULT ODOMETER ON 1 IN 5 PACKETS",
                         on: sim.activeFaults.contains { $0.field == 4 && $0.value == SimConfig.odometerUnavailableSentinel && $0.probability < 1 },
                         subtitle: "Scatters the tracker's \"odometer not available\" value through the stream.",
                         look: "Phone: nothing live. Only a stored dump carries it into the FMCSA file.") {
@@ -724,7 +724,7 @@ struct FaultPanel: View {
                                     probability: 0.2)
             }
 
-            faultButton(title: "Truck powers on and off 10 times",
+            faultButton(title: "POWER CYCLE STORM  ×10",
                         subtitle: "Ten power-up/shutdown pairs, two per second.",
                         look: "Phone: speaks \"Vehicle Power up\" each time and re-shows the popups. It never raises Power Compliance — no code in the app can.") {
                 sim.powerCycleBurst()
@@ -737,7 +737,7 @@ struct FaultPanel: View {
             Button { withAnimation { showIgnored.toggle() } } label: {
                 HStack(spacing: 6) {
                     Image(systemName: showIgnored ? "chevron.down" : "chevron.right").font(.system(size: 10))
-                    Text("∅ Show the ones the phone ignores").font(.system(size: 11, weight: .bold, design: .rounded))
+                    Text("∅ The phone ignores these").font(.system(size: 11, weight: .bold, design: .rounded))
                 }.foregroundStyle(Theme.dim)
             }.buttonStyle(.plain)
 
@@ -749,7 +749,7 @@ struct FaultPanel: View {
                     TextField("VIN", text: $customVin)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.text)
-                    NeonButton(title: "Send this VIN", tint: Theme.dim, filled: false) {
+                    NeonButton(title: "SEND BAD VIN", tint: Theme.dim, filled: false) {
                         sim.vin = customVin
                         sim.sendVINNow()
                     }
@@ -763,7 +763,7 @@ struct FaultPanel: View {
                 }
 
 
-                faultToggle(title: "Wrong date now and then",
+                faultToggle(title: "DEFAULT DATE ON 1 IN 5 PACKETS",
                             on: sim.activeFaults.contains { $0.field == 11 },
                             subtitle: "A tracker that lost its clock reports 01-01-00.",
                             look: "Phone: nothing. Both the MT and PT parsers rewrite the packet date to phone time.") {
@@ -771,7 +771,7 @@ struct FaultPanel: View {
                                         probability: 0.2)
                 }
 
-                faultButton(title: "Saved data dated in the future (2030)",
+                faultButton(title: "STORED: FUTURE DATE (2030)",
                             subtitle: "Dumps stored packets all stamped 1 Jan 2030.",
                             look: "Phone: each one should be SKIPPED, not recorded. Check Troubleshoot → support dump; the audit rows read \"Stored packet skipped: packet time ... is N days from now\".") {
                     sim.dumpStoredPackets(count: 5, cadenceSec: 1.0,
@@ -779,7 +779,7 @@ struct FaultPanel: View {
                                           label: "Stored dump · future dated")
                 }
 
-                faultButton(title: "Same saved data sent twice",
+                faultButton(title: "STORED: DUPLICATES, SAME CONNECTION",
                             subtitle: "Each stored packet sent twice, back to back, in one dump.",
                             look: "Phone: the second copy of each pair should be dropped — it only compares against the packet immediately before it.") {
                     sim.dumpStoredPackets(count: 5, cadenceSec: 1.0,
@@ -787,19 +787,19 @@ struct FaultPanel: View {
                                           label: "Stored dump · duplicated")
                 }
 
-                faultButton(title: "Send the same saved data again after reconnect",
+                faultButton(title: "STORED: REPEAT AFTER RECONNECT",
                             subtitle: "Sends the previous dump again, byte for byte. Disconnect and reconnect first.",
                             look: "Phone: whether it de-dups across a connection. Run a dump, drop the link, reconnect, then press this.") {
                     sim.repeatLastStoredDump(cadenceSec: 1.0)
                 }
 
-                faultButton(title: "Send one broken message",
+                faultButton(title: "MALFORMED PACKET",
                             subtitle: "One packet that is not valid at all.",
                             look: "Phone: should reject it and carry on. A crash or a stalled stream is the bug.") {
                     sim.sendMalformedPacket()
                 }
 
-                faultButton(title: "Change where the odometer comes from",
+                faultButton(title: "ODOMETER SOURCE → VIRTUAL",
                             subtitle: "The xO packet that tells the app the odometer source changed.",
                             look: "Phone: nothing at all. It parses this into a variable with no readers and posts a notification with no observers.") {
                     sim.sendOdoSourcePacket(virtual: true)

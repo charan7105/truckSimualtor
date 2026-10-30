@@ -68,11 +68,11 @@ disconnect. The forced **DROP** has no such wait — it drops immediately.
 
 ## Reproducing the stored-packet-dump disconnect (Harshith's bug)
 
-Separate from signal/range — this is **SEND SAVED DATA**, in the same panel's **Stored** tab.
+Separate from signal/range — this is **DUMP STORED**, in the same panel's **Stored** tab.
 
 - **Cause (identified):** the app pulls stored packets after connect (`readstr`); when they are dumped
   too fast, the tracker disconnects. ~**500 ms** cadence breaks it; **1 s** is safe.
-- **Reproduce:** set **Count** (e.g. 80) and **Cadence = 0.50 s**, press **SEND SAVED DATA** → reproduces
+- **Reproduce:** set **Count** (e.g. 80) and **Cadence = 0.50 s**, press **DUMP STORED** → reproduces
   the disconnect. Set **Cadence = 1.0 s** → completes cleanly.
 - **Note:** `readstr` does **not** auto-dump (the app sends it on every connect; auto-dumping at
   500 ms would self-trigger the disconnect on every connection). The dump is **on-demand only**, via
@@ -103,7 +103,7 @@ Separate from signal/range — this is **SEND SAVED DATA**, in the same panel's 
 2. **WEAK / POOR** → packet stream shows `[dropped: packet loss]`, app updates get patchy, stays connected.
 3. **DROP** → phone disconnects within ~1–2 s.
 4. **BACK** → phone rescans and reconnects, stream resumes.
-5. **SEND SAVED DATA @ 0.5 s** → reproduces the disconnect; **@ 1.0 s** → completes cleanly.
+5. **STORED DUMP @ 0.5 s** → reproduces the disconnect; **@ 1.0 s** → completes cleanly.
 
 ---
 

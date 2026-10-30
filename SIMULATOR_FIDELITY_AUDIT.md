@@ -220,7 +220,7 @@ odometer jump is booked as driven miles in full. A downward jump is silently dro
 `odoInception > eventStartOdo` guard (`:1812`), freezing the event's mileage with no diagnostic.
 
 **This is the answer to "when the odometer fluctuates, shouldn't the app alert?" — it does not, and
-no code exists that could.** Demonstrate with the simulator's `Two different odometer readings` control.
+no code exists that could.** Demonstrate with the simulator's `TWO ECU ODOMETERS` control.
 
 ### A6 — the odometer-source channel is parsed and then discarded
 The MT `xO,…$$` packet is dispatched at `BleClass.swift:3272`, parsed by
@@ -244,7 +244,7 @@ to have three different causes that need separating before anyone acts on them:
 By contrast `R` (data recording) is genuinely live with 32 call sites, but every one fires on a
 **database write failure** (e.g. `LatestDB_New.swift:7396`), never on implausible telemetry.
 
-**Consequence for the simulator:** `Truck powers on and off 10 times`, `Send this VIN` and `GPS LOCK LOST` emit
+**Consequence for the simulator:** `POWER CYCLE STORM`, `SEND BAD VIN` and `GPS LOCK LOST` emit
 exactly the right wire data and can never produce a malfunction. App gap, not a simulator
 limitation; the controls are labelled accordingly.
 
