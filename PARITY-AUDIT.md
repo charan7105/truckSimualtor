@@ -55,7 +55,7 @@ two-advertising-set regression on the Realtek adapter, which can't be hardware-t
 | 8 | DROP button | flips to filled "BACK" when down | static "DROP" | DROP↔BACK trigger |
 | 9 | DRIVE ROUTE button | red "STOP" while driving | static "DRIVE ROUTE" | DRIVE ROUTE↔STOP trigger |
 | 10 | DRIVE MY DAY button | amber "END DAY" while running | static label | DRIVE MY DAY↔END DAY trigger |
-| 11 | DUMP STORED button | "DUMPING…" while dumping | static label | DUMP↔DUMPING trigger |
+| 11 | SEND SAVED DATA button | "DUMPING…" while dumping | static label | DUMP↔DUMPING trigger |
 | 12 | Footer DTC | "DTC (n)" live count | no count | "DIAGNOSTICS · DTC (n)" |
 | 13 | Fuel cylinder wave | amplitude 2 | amplitude 3 | amplitude 2 |
 | 14 | SegmentedProgress glow | 0.70 | 0.47 | 0.70 |

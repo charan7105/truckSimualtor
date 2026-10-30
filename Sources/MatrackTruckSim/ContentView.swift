@@ -265,7 +265,7 @@ struct ContentView: View {
                 .help("Tap to copy the address, then paste it into the phone's Fuel App → Link to sim. Phone + this computer must share WiFi (or the phone's hotspot).")
             }
             Spacer()
-            footerButton("DTC", sim.faults.isEmpty ? "DTC" : "DTC (\(sim.faults.count))",
+            footerButton("DTC", sim.faults.isEmpty ? "FAULT CODES" : "FAULT CODES (\(sim.faults.count))",
                          icon: "wrench.and.screwdriver.fill",
                          tint: sim.faults.isEmpty ? Theme.dim : Theme.amber) { showDTC.toggle() }
                 .popover(isPresented: $showDTC, arrowEdge: .bottom) {
@@ -281,7 +281,7 @@ struct ContentView: View {
                          icon: "exclamationmark.triangle.fill",
                          tint: sim.faultsArmed ? Theme.red : Theme.dim) { sim.inspectorTab = .faults }
                 .help("Opens the Bad data tab in the CONNECTION panel.")
-            footerButton("REPLAY", "REPLAY IGNITION", icon: "arrow.clockwise", tint: Theme.dim) {
+            footerButton("REPLAY", "REPLAY STARTUP", icon: "arrow.clockwise", tint: Theme.dim) {
                 sim.rearmStartup()
             }
         }

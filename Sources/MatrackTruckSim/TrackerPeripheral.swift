@@ -24,7 +24,7 @@ struct LogLine: Identifiable {
 /// Lives here rather than in the view so the footer can jump straight to a tab.
 enum InspectorTab: String, CaseIterable, Identifiable {
     case signal = "Signal"
-    case stored = "Stored"
+    case stored = "Saved data"
     case faults = "Bad data"
     case setup  = "Setup"
     var id: String { rawValue }

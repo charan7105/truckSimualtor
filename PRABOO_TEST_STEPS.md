@@ -9,7 +9,7 @@ Every requirement from the 2026-09 request, with the exact steps and what to exp
    nothing.
 3. Open **BAD DATA** in the bottom bar (it opens the Bad data tab in the CONNECTION panel).
 4. Arm **one fault at a time**. Two at once makes the result impossible to attribute.
-5. **RESET TO CLEAN DATA** when finished.
+5. **Stop sending bad data** when finished.
 
 Legend: ⚠ the phone warns · ◐ bad data, no warning · ∅ the phone does nothing
 
@@ -17,7 +17,7 @@ Legend: ⚠ the phone warns · ◐ bad data, no warning · ∅ the phone does no
 
 ## 1. Virtual odo → ECU odo switching ∅
 
-**Do:** expand *THE PHONE IGNORES THESE* → click **ODOMETER SOURCE → VIRTUAL**.
+**Do:** expand *THE PHONE IGNORES THESE* → click **Change where the odometer comes from**.
 
 **Expect:** nothing on the phone. Ever.
 
@@ -29,7 +29,7 @@ is invisible to the app by construction. Run this to *demonstrate* that, not to 
 
 ## 2. Two ECU odo switching ◐
 
-**Do:** click **TWO ECU ODOMETERS**. Leave it on for ~30 seconds.
+**Do:** click **Two different odometer readings**. Leave it on for ~30 seconds.
 
 **Look:** phone → Help → Bluetooth → **BLE Values**. The odometer visibly flips between two series
 about 3,700 miles apart, every packet.
@@ -46,7 +46,7 @@ mileage accrual when the odometer reads below where the duty event started, with
 
 ## 3. VIN all zeros ∅
 
-**Do:** expand *THE PHONE IGNORES THESE* → **ALL ZEROS** → **SEND BAD VIN**.
+**Do:** expand *THE PHONE IGNORES THESE* → **ALL ZEROS** → **Send this VIN**.
 
 **Look:** phone → Troubleshoot → **Run Diagnostic Check**. The VIN row goes red.
 
@@ -56,7 +56,7 @@ mileage accrual when the odometer reads below where the duty event started, with
 
 ## 4. Partial VIN, last 6 characters ∅
 
-**Do:** same panel → **LAST 6 ONLY** → **SEND BAD VIN**.
+**Do:** same panel → **LAST 6 ONLY** → **Send this VIN**.
 
 **Expect:** identical to #3. Both values fail the same check, so the app cannot tell them apart. One
 control covers both; the presets exist so you can show the difference is *not* observable.
@@ -71,7 +71,7 @@ Two versions, depending on what you are testing.
 carry an impossible time. Watch the **event list**, not for a banner — scattered faults do not trip
 the threshold detector.
 
-**Constant (fastest visible malfunction):** click **CLOCK AHEAD +30 MIN** instead. After ~20 seconds
+**Constant (fastest visible malfunction):** click **Clock is 30 minutes wrong** instead. After ~20 seconds
 the phone's dashboard turns red and the title reads **Malfunction(T)**. One good packet clears it, so
 leave it armed while you look.
 
@@ -102,7 +102,7 @@ for 10+ minutes with this armed, then reconnect. It lands in the generated FMCSA
 
 ## 8. Excessive power up / shutdown ◐
 
-**Do:** click **POWER CYCLE STORM ×10** (ten power-up/shutdown pairs at 2 per second). One-shot.
+**Do:** click **Truck powers on and off 10 times ×10** (ten power-up/shutdown pairs at 2 per second). One-shot.
 
 **Expect:** the phone **speaks** "Vehicle Power up" / "Vehicle Shutdown" on each one and re-shows its
 shutdown/PC popups. Turn the volume up — the audio is the clearest signal.
@@ -130,8 +130,8 @@ stationary proves nothing.
 ## The Scenarios panel is gone
 
 All twelve scenarios were reachable from the dashboard. Engine on/off, idle, driving and stopping are
-buttons; duplicate and out-of-order packets are the PACKET EFFECTS sliders in CONNECTION → Setup;
-stored backlogs are DUMP STORED in CONNECTION → Stored,
+buttons; duplicate and out-of-order packets are the Message problems sliders in CONNECTION → Setup;
+stored backlogs are SEND SAVED DATA in CONNECTION → Saved data,
 with the Count slider; a disconnect mid-drive is DROP, and the offline recorder captures the gap by
 itself. The malformed packet is now a control in BAD DATA.
 
@@ -151,11 +151,11 @@ reacting to something.
 
 | Click | Phone shows | How fast |
 |---|---|---|
-| **ENGINE SYNC LOST** | Data Diagnostic 2 | ~3 seconds |
-| **CLOCK AHEAD +30 MIN** | Red bar, `Malfunction(T)` | ~20 seconds |
-| **ODOMETER & HOURS MISSING** | Data Diagnostic 3 | on the next duty-status change |
+| **Engine computer stops answering** | Data Diagnostic 2 | ~3 seconds |
+| **Clock is 30 minutes wrong** | Red bar, `Malfunction(T)` | ~20 seconds |
+| **No odometer or engine hours** | Data Diagnostic 3 | on the next duty-status change |
 
-`ODOMETER & HOURS MISSING` does nothing until you change duty status on the phone. That is the app's
+`No odometer or engine hours` does nothing until you change duty status on the phone. That is the app's
 rule, not a simulator limitation.
 
 ---

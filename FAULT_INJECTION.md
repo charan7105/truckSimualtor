@@ -5,7 +5,7 @@ footer, which jumps there). The footer button turns red and reads
 `BAD DATA ▸ SENDING` whenever anything is armed, so you can see from the dashboard that the wire is
 dirty without opening the panel.
 
-One rule: **`RESET TO CLEAN DATA` puts everything back.** You never have to remember what you armed.
+One rule: **`Stop sending bad data` puts everything back.** You never have to remember what you armed.
 
 ---
 
@@ -18,7 +18,7 @@ grouping is the whole point, and it comes from reading the ELD app's source:
 |---|---|
 | ⚠ **THE PHONE WILL WARN** | A real malfunction or diagnostic appears in the app. |
 | ◐ **WRONG NUMBER, NO WARNING** | The app accepts bad data and shows it. No alert. |
-| ∅ **THE PHONE IGNORES THIS** | Nothing happens anywhere. Send it to *prove* that. |
+| ∅ **Show the ones the phone ignores** | Nothing happens anywhere. Send it to *prove* that. |
 
 If a control is in the ∅ section, the app genuinely does nothing with that fault. That is a verified
 finding, not a simulator limitation — see `SIMULATOR_FIDELITY_AUDIT.md` for the `file:line` evidence.
@@ -30,9 +30,9 @@ Do not demo those expecting an alert.
 
 | Control | What it sends | Where to look, and when |
 |---|---|---|
-| **ENGINE SYNC LOST** | ECM flag = 0 while the key is on | Data Diagnostic 2, within about 3 seconds |
-| **CLOCK AHEAD +30 MIN** | Every packet stamped half an hour wrong | Red bar reading `Malfunction(T)`, after about 20 seconds. One good packet clears it |
-| **ODOMETER & HOURS MISSING** | Odometer 0 and engine hours 0 | Data Diagnostic 3 — **but only after you change duty status.** Nothing happens until you do |
+| **Engine computer stops answering** | ECM flag = 0 while the key is on | Data Diagnostic 2, within about 3 seconds |
+| **Clock is 30 minutes wrong** | Every packet stamped half an hour wrong | Red bar reading `Malfunction(T)`, after about 20 seconds. One good packet clears it |
+| **No odometer or engine hours** | Odometer 0 and engine hours 0 | Data Diagnostic 3 — **but only after you change duty status.** Nothing happens until you do |
 | **GPS LOCK LOST** | Drops the fix on ~1 in 5 packets, only above 5 mph | Nothing quickly. See the note below |
 
 **About GPS LOCK LOST.** The app's positioning-compliance check cannot fire — its location rows are
@@ -45,12 +45,12 @@ control sends correct bad data; the app's detector is broken. Filed in the audit
 
 | Control | What it sends | Where to look |
 |---|---|---|
-| **TWO ECU ODOMETERS** | Two odometer series ~3,700 mi apart, flipping every packet | Help → Bluetooth → BLE Values: the odometer visibly flips. No warning — that *is* the finding |
+| **Two different odometer readings** | Two odometer series ~3,700 mi apart, flipping every packet | Help → Bluetooth → BLE Values: the odometer visibly flips. No warning — that *is* the finding |
 | **ODOMETER JUMP +58,000 mi** | One packet with a huge odometer | Logs → today: the Driving event's odometer jumps and stays. No warning at all |
-| **ODOMETER STUCK** | The "odometer not available" value | The app keeps showing the **last** odometer as if it were live. Nothing changes on screen |
+| **Odometer stops moving** | The "odometer not available" value | The app keeps showing the **last** odometer as if it were live. Nothing changes on screen |
 | **BAD TIME ON 1 IN 5 PACKETS** | An impossible time, scattered | Intermittent — watch the event list, don't wait for a banner |
 | **DEFAULT ODOMETER ON 1 IN 5** | The unavailable sentinel, scattered | Nothing live. Only a stored dump carries it into the FMCSA file |
-| **POWER CYCLE STORM ×10** | Ten power-up/shutdown pairs at 2/s | The app speaks "Vehicle Power up" each time and re-shows its popups. It never raises Power Compliance — no code in the app can |
+| **Truck powers on and off 10 times ×10** | Ten power-up/shutdown pairs at 2/s | The app speaks "Vehicle Power up" each time and re-shows its popups. It never raises Power Compliance — no code in the app can |
 
 ---
 
@@ -61,10 +61,10 @@ them.
 
 | Control | Why nothing happens |
 |---|---|
-| **SEND BAD VIN** (ALL ZEROS / LAST 6 ONLY) | Both fail the same check and behave identically. Only Troubleshoot → Run Diagnostic Check shows the VIN row red |
+| **Send this VIN** (ALL ZEROS / LAST 6 ONLY) | Both fail the same check and behave identically. Only Troubleshoot → Run Diagnostic Check shows the VIN row red |
 | **DEFAULT DATE ON 1 IN 5 PACKETS** | Both the MT and PT parsers rewrite the packet date to phone time |
-| **ODOMETER SOURCE → VIRTUAL** | The app parses this packet into a variable with **zero readers** and posts a notification with **zero observers** |
-| **MALFORMED PACKET** | Sends one packet that is not valid at all. The app should reject it and carry on — a crash or a stalled stream is the bug. This is the only fault the live path cannot produce on its own, which is why it lives here rather than needing a scenario |
+| **Change where the odometer comes from** | The app parses this packet into a variable with **zero readers** and posts a notification with **zero observers** |
+| **Send one broken message** | Sends one packet that is not valid at all. The app should reject it and carry on — a crash or a stalled stream is the bug. This is the only fault the live path cannot produce on its own, which is why it lives here rather than needing a scenario |
 
 ---
 
@@ -75,7 +75,7 @@ disconnected and the engine is on, the simulator writes a flash record at that r
 whole backlog over on the app's next `readstr`.
 
 Thirty minutes per packet is slow if you only want to see the recorder working, so the rate is
-adjustable: **CONNECTION → Stored → Record every**. Drop it to 0.5m for a quick check and put it
+adjustable: **CONNECTION → Saved data → Save one every**. Drop it to 0.5m for a quick check and put it
 back to 30m for realistic data. Flash holds 5,000 records — about 104 days at the real rate.
 
 ## Getting an Unassigned Driving Period

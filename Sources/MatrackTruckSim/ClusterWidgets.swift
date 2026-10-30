@@ -254,8 +254,10 @@ struct NumberEntry: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            // 56pt fitted the old abbreviations ("Odo", "Eng hrs"); the spelled-out labels support
+            // needs ("Engine hours") were truncating to "Engine h...".
             Text(label).font(.system(size: 11, design: .rounded))
-                .foregroundStyle(Theme.dim).frame(width: 56, alignment: .leading)
+                .foregroundStyle(Theme.dim).frame(width: 84, alignment: .leading)
             if editing {
                 TextField("", text: $text)
                     .textFieldStyle(.plain)
