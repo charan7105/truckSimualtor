@@ -216,7 +216,7 @@
 
                         <!-- Speed gauge (negative bottom margin reclaims the dial's open bottom, like Mac) -->
                         <ctl:DialGauge Grid.Row="0" Mode="Speed" Width="286" Height="286" HorizontalAlignment="Center" Margin="0,0,0,-24"
-                                       Fraction="{Binding SpeedFraction}" CenterText="{Binding SpeedCenterText}" Unit="KM/H" />
+                                       Fraction="{Binding SpeedFraction}" CenterText="{Binding SpeedCenterText}" Unit="MPH" />
                         <!-- Gear -->
                         <ctl:GearIndicator Grid.Row="1" Gear="{Binding GearValue}" HorizontalAlignment="Center" Margin="0,6,0,14" />
 
@@ -327,16 +327,16 @@
                                                   Tag="{StaticResource Red}" IsChecked="{Binding AutoDrive, Mode=OneWay}"
                                                   Click="Auto_Click" />
                                 </Grid>
-                                <TextBlock Text="QUICK SET · KM/H" Style="{StaticResource Sec}" Margin="0,0,0,6" />
+                                <TextBlock Text="QUICK SET · MPH" Style="{StaticResource Sec}" Margin="0,0,0,6" />
                                 <UniformGrid Columns="4" Margin="0,0,0,10">
                                     <ToggleButton Content="STOP" Style="{StaticResource NeonToggle}" Tag="{StaticResource Red}"
                                                   CommandParameter="0" IsChecked="{Binding ActiveSpeedStop, Mode=OneWay}" Click="SpeedPreset_Click" Margin="0,0,8,0" />
-                                    <ToggleButton Content="60" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
-                                                  CommandParameter="60" IsChecked="{Binding ActiveSpeed60, Mode=OneWay}" Click="SpeedPreset_Click" Margin="0,0,8,0" />
-                                    <ToggleButton Content="90" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
-                                                  CommandParameter="90" IsChecked="{Binding ActiveSpeed90, Mode=OneWay}" Click="SpeedPreset_Click" Margin="0,0,8,0" />
-                                    <ToggleButton Content="110" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
-                                                  CommandParameter="110" IsChecked="{Binding ActiveSpeed110, Mode=OneWay}" Click="SpeedPreset_Click" />
+                                    <ToggleButton Content="35" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
+                                                  CommandParameter="35" IsChecked="{Binding ActiveSpeed35, Mode=OneWay}" Click="SpeedPreset_Click" Margin="0,0,8,0" />
+                                    <ToggleButton Content="55" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
+                                                  CommandParameter="55" IsChecked="{Binding ActiveSpeed55, Mode=OneWay}" Click="SpeedPreset_Click" Margin="0,0,8,0" />
+                                    <ToggleButton Content="70" Style="{StaticResource NeonToggle}" Tag="{StaticResource Ice}"
+                                                  CommandParameter="70" IsChecked="{Binding ActiveSpeed70, Mode=OneWay}" Click="SpeedPreset_Click" />
                                 </UniformGrid>
                                 <!-- SPEED label + live MODE badge + value on one line (mode no longer has its own row) -->
                                 <DockPanel Margin="0,0,0,2">
@@ -344,12 +344,12 @@
                                     <TextBlock Text="{Binding ModeText}" Margin="8,0,0,0" FontSize="10" FontWeight="Black"
                                                Foreground="{Binding ModeBrush}" VerticalAlignment="Center" />
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <TextBlock Text="{Binding SpeedKmhText}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Ice}" />
-                                        <TextBlock Text=" km/h" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Dim}"
+                                        <TextBlock Text="{Binding SpeedMphText}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Ice}" />
+                                        <TextBlock Text=" mph" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Dim}"
                                                    VerticalAlignment="Bottom" Margin="0,0,0,3" />
                                     </StackPanel>
                                 </DockPanel>
-                                <Slider Minimum="0" Maximum="130" Value="{Binding SpeedKmh, Mode=TwoWay}" />
+                                <Slider Minimum="0" Maximum="85" Value="{Binding SpeedSliderMph, Mode=TwoWay}" />
                                 <TextBlock Text="SIM SPEED · MAP PACE" Style="{StaticResource Sec}" Margin="0,10,0,6" />
                                 <UniformGrid Columns="5">
                                     <ToggleButton Content="1×" Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}" CommandParameter="1" IsChecked="{Binding ActiveT1, Mode=OneWay}" Click="TimeScale_Click" Margin="0,0,6,0" />
@@ -990,7 +990,7 @@
             <StackPanel Visibility="{Binding SweepVisible, Converter={StaticResource BoolVis}}" VerticalAlignment="Center" HorizontalAlignment="Center">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <ctl:DialGauge Mode="Speed" Width="240" Height="240" Margin="0,0,45,0"
-                                   Fraction="{Binding SweepFraction}" CenterText="{Binding SweepSpeedText}" Unit="KM/H" />
+                                   Fraction="{Binding SweepFraction}" CenterText="{Binding SweepSpeedText}" Unit="MPH" />
                     <ctl:DialGauge Mode="Tach" Width="240" Height="240" Margin="45,0,0,0"
                                    Fraction="{Binding SweepFraction}" CenterText="{Binding SweepRpmText}" Unit="RPM" />
                 </StackPanel>

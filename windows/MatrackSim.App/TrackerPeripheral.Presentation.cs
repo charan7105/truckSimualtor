@@ -9,7 +9,7 @@ namespace MatrackSim.App
 {
     // Presentation/view-model surface for the WPF operator panel. The verified BLE + sim engine lives in
     // TrackerPeripheral.cs; this partial only adds the *display* adapters (formatted text, theme brushes,
-    // km/h conversion, the scenario picker) and the two-way slider/toggle plumbing the XAML binds to.
+    // speed display in mph, the scenario picker) and the two-way slider/toggle plumbing the XAML binds to.
     // Nothing here touches the wire protocol — it mirrors what ControlsDrawer.swift presented on macOS.
     public sealed partial class TrackerPeripheral
     {
@@ -46,7 +46,7 @@ namespace MatrackSim.App
 
         private void RaiseActiveStates()
         {
-            Raise(nameof(ActiveSpeedStop)); Raise(nameof(ActiveSpeed60)); Raise(nameof(ActiveSpeed90)); Raise(nameof(ActiveSpeed110));
+            Raise(nameof(ActiveSpeedStop)); Raise(nameof(ActiveSpeed35)); Raise(nameof(ActiveSpeed55)); Raise(nameof(ActiveSpeed70));
             Raise(nameof(ActiveT1)); Raise(nameof(ActiveT5)); Raise(nameof(ActiveT10)); Raise(nameof(ActiveT25)); Raise(nameof(ActiveT30));
             Raise(nameof(ActiveSigFull)); Raise(nameof(ActiveSigAuto)); Raise(nameof(ActiveSigPoor));
             Raise(nameof(SignalSlider)); Raise(nameof(SignalDbmLabel)); Raise(nameof(SignalSliderLabel));
@@ -67,7 +67,7 @@ namespace MatrackSim.App
             switch (e.PropertyName)
             {
                 case nameof(SpeedMph):
-                    Raise(nameof(SpeedKmh)); Raise(nameof(SpeedKmhText)); Raise(nameof(ModeText)); Raise(nameof(ModeBrush));
+                    Raise(nameof(SpeedSliderMph)); Raise(nameof(SpeedMphText)); Raise(nameof(ModeText)); Raise(nameof(ModeBrush));
                     Raise(nameof(SpeedFraction)); Raise(nameof(SpeedCenterText)); Raise(nameof(GearValue));
                     break;
                 case nameof(Rpm):
@@ -145,22 +145,25 @@ namespace MatrackSim.App
         // ---- DRIVE --------------------------------------------------------------------------------
         private const double MphPerKmh = 1.0 / 1.60934;
 
-        /// <summary>Speed in km/h for the slider (engine state is the source of truth, in mph).</summary>
-        public double SpeedKmh
+        /// <summary>
+        /// Speed in MPH for the slider. The display reads mph because that is what the ELD app on
+        /// the phone shows, and a tester's job is comparing the two screens. The WIRE is unchanged:
+        /// field 3 is still km/h, converted in MTPacket. Mirrors the Swift build.
+        /// </summary>
+        public double SpeedSliderMph
         {
-            get => SpeedMph * 1.60934;
+            get => SpeedMph;
             set
             {
-                // Mac applies a route-speed floor: while driving a route the slider cannot go below 8 km/h.
-                double kmh = DrivingRoute ? Math.Max(8, value) : value;
-                double mph = kmh * MphPerKmh;
+                // Mac applies a route-speed floor: while driving a route the slider cannot go below 5 mph.
+                double mph = DrivingRoute ? Math.Max(5, value) : value;
                 if (Math.Abs(mph - SpeedMph) < 0.05) return;   // ignore the binding echo after we update SpeedMph
                 SetSpeed(mph);
             }
         }
 
-        public string SpeedKmhText =>
-            ((int)Math.Round(SpeedMph * 1.60934, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+        public string SpeedMphText =>
+            ((int)Math.Round(SpeedMph, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
 
         public string ModeText
         {
@@ -176,11 +179,10 @@ namespace MatrackSim.App
         // ---- SCENARIO -----------------------------------------------------------------------------
 
         // ---- Active button states (filled highlight, mirrors NeonButton filled:) ------------------
-        private double Kmh => SpeedMph * 1.60934;
         public bool ActiveSpeedStop => SpeedMph < 0.5;
-        public bool ActiveSpeed60 => Math.Abs(Kmh - 60) < 4;
-        public bool ActiveSpeed90 => Math.Abs(Kmh - 90) < 4;
-        public bool ActiveSpeed110 => Math.Abs(Kmh - 110) < 4;
+        public bool ActiveSpeed35 => Math.Abs(SpeedMph - 35) < 3;
+        public bool ActiveSpeed55 => Math.Abs(SpeedMph - 55) < 3;
+        public bool ActiveSpeed70 => Math.Abs(SpeedMph - 70) < 3;
         public bool ActiveT1 => (int)Math.Round(Config.RouteTimeScale) == 1;
         public bool ActiveT5 => (int)Math.Round(Config.RouteTimeScale) == 5;
         public bool ActiveT10 => (int)Math.Round(Config.RouteTimeScale) == 10;
@@ -335,8 +337,8 @@ namespace MatrackSim.App
         public string TempText => $"· {AmbientTempC}°";
 
         // ---- Gauges -------------------------------------------------------------------------------
-        public double SpeedFraction => Math.Max(0, Math.Min(1, SpeedMph * 1.60934 / 200.0));
-        public string SpeedCenterText => ((int)Math.Round(SpeedMph * 1.60934, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+        public double SpeedFraction => Math.Max(0, Math.Min(1, SpeedMph / 120.0));   // dial reads 0-120 mph
+        public string SpeedCenterText => ((int)Math.Round(SpeedMph, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
         public double TachFraction => Math.Max(0, Math.Min(1, Rpm / 3000.0));
         public bool TachHot => Rpm / 3000.0 > 0.82;
         public string RpmText => Rpm.ToString(CultureInfo.InvariantCulture);

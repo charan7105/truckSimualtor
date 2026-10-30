@@ -62,7 +62,7 @@ struct IgnitionView: View {
         let target: Double = sim.phase == .sweep ? 1.0 : (sim.phase == .settle ? 0.12 : 0.0)
         return VStack(spacing: 34) {
             HStack(spacing: 90) {
-                SweepDial(frac: target, arc: Theme.speedArc, big: "\(Int(target * 150))", unit: "KM/H")
+                SweepDial(frac: target, arc: Theme.speedArc, big: "\(Int(target * 95))", unit: "MPH")
                 SweepDial(frac: target, arc: Theme.tachArc, big: "\(Int(target * 3000))", unit: "RPM")
             }
             .animation(.easeOut(duration: sim.phase == .sweep ? 0.7 : 0.5), value: sim.phase)

@@ -45,12 +45,12 @@ struct DrivePanel: View {
                 ToggleChip(title: "ENGINE", icon: "power", isOn: sim.ignitionOn, tint: Theme.green) { sim.setEngine(!sim.ignitionOn) }
                 ToggleChip(title: "AUTO", icon: "wand.and.stars", isOn: sim.autoDrive, tint: Theme.red) { sim.setAutoDrive(!sim.autoDrive) }
             }
-            Text("Quick set · km/h").sectionLabel()
+            Text("Quick set · mph").sectionLabel()
             HStack(spacing: 8) {
-                ForEach([0, 60, 90, 110], id: \.self) { v in
+                ForEach([0, 35, 55, 70], id: \.self) { v in
                     NeonButton(title: v == 0 ? "STOP" : "\(v)",
                                tint: Theme.ice, filled: presetActive(v)) {
-                        sim.setSpeed(Double(v) / 1.60934)
+                        sim.setSpeed(Double(v))
                     }
                 }
             }
@@ -62,13 +62,13 @@ struct DrivePanel: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(modeTint.opacity(0.14)))
                 Spacer()
-                Text("\(Int((sim.speedMph * 1.60934).rounded()))")
+                Text("\(Int(sim.speedMph.rounded()))")
                     .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Theme.ice)
-                Text("km/h").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
+                Text("mph").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Theme.dim)
             }
-            Slider(value: Binding(get: { sim.speedMph * 1.60934 },
-                                  set: { sim.setSpeed(sim.drivingRoute ? max(8, $0) / 1.60934 : $0 / 1.60934) }),
-                   in: 0...130).tint(Theme.ice)
+            Slider(value: Binding(get: { sim.speedMph },
+                                  set: { sim.setSpeed(sim.drivingRoute ? max(5, $0) : $0) }),
+                   in: 0...85).tint(Theme.ice)
 
             // Was "SIM SPEED · MAP PACE", which reads as a third speed control sitting under two real
             // ones. It is not a speed: it scales how far the truck travels per tick along the route
@@ -98,8 +98,7 @@ struct DrivePanel: View {
         return sim.ignitionOn ? Theme.ice : Theme.dim
     }
     private func presetActive(_ v: Int) -> Bool {
-        let kmh = sim.speedMph * 1.60934
-        return v == 0 ? sim.speedMph < 0.5 : abs(kmh - Double(v)) < 4
+        return v == 0 ? sim.speedMph < 0.5 : abs(sim.speedMph - Double(v)) < 3
     }
 }
 

@@ -55,7 +55,7 @@ namespace MatrackSim.App.Controls
 
         public static readonly DependencyProperty UnitProperty = DependencyProperty.Register(
             nameof(Unit), typeof(string), typeof(DialGauge),
-            new FrameworkPropertyMetadata("KM/H", FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata("MPH", FrameworkPropertyMetadataOptions.AffectsRender));
         public string Unit { get => (string)GetValue(UnitProperty); set => SetValue(UnitProperty, value); }
 
         public static readonly DependencyProperty HotProperty = DependencyProperty.Register(
@@ -111,7 +111,9 @@ namespace MatrackSim.App.Controls
             var arcStops = new[] { Ice, Blue };
             var labels = tach
                 ? new (double, string)[] { (0, "0"), (0.333, "1k"), (0.667, "2k"), (1.0, "3k") }
-                : new (double, string)[] { (0, "0"), (0.2, "40"), (0.4, "80"), (0.6, "120"), (0.8, "160"), (1.0, "200") };
+                // Speed dial reads 0-120 MPH, matching the ELD app on the phone. Mirrors SpeedGauge
+                // in the Swift build; the wire is unaffected (field 3 is still km/h).
+                : new (double, string)[] { (0, "0"), (0.2, "25"), (0.4, "50"), (0.6, "75"), (0.8, "100"), (1.0, "120") };
 
             // ---- tick marks ----
             for (int i = 0; i <= tickCount; i++)

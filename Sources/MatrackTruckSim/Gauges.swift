@@ -100,24 +100,27 @@ private struct GaugeRing: View {
 
 struct SpeedGauge: View {
     var speed: Double                              // mph (source of truth)
-    var maxKmh: Double = 200                        // full dial == 200 km/h
+    /// The dial reads in MPH because that is what the ELD app on the phone shows. A tester's whole
+    /// job is comparing this screen against that one, and the sim used to display km/h — so every
+    /// check meant converting in your head. The WIRE is unchanged: field 3 is still km/h, converted
+    /// in MTPacket, because that is what the tracker protocol carries.
+    var maxMph: Double = 120                        // full dial == 120 mph
     var diameter: CGFloat = 300
-    private let labels: [(Double, String)] = [(0, "0"), (0.2, "40"), (0.4, "80"), (0.6, "120"), (0.8, "160"), (1.0, "200")]
+    private let labels: [(Double, String)] = [(0, "0"), (0.2, "25"), (0.4, "50"), (0.6, "75"), (0.8, "100"), (1.0, "120")]
     var body: some View {
-        let kmh = speed * 1.60934
         ZStack {
-            GaugeRing(frac: kmh / maxKmh, arc: Theme.speedArc, diameter: diameter,
+            GaugeRing(frac: speed / maxMph, arc: Theme.speedArc, diameter: diameter,
                       labels: labels, redTickFrom: 0.9, showRedlineBand: true, redlineStart: 0.9,
                       showCometTip: true, tipColor: Theme.ice)
             VStack(spacing: 4) {
-                Text("\(Int(kmh.rounded()))")
+                Text("\(Int(speed.rounded()))")
                     .font(.system(size: diameter * 0.225, weight: .semibold, design: .rounded))
                     .monospacedDigit().kerning(-1)
                     .foregroundStyle(Theme.text)
                     .contentTransition(.numericText())
                     .animation(.easeOut(duration: 0.3), value: speed)
                 Rectangle().fill(Color.white.opacity(0.08)).frame(width: diameter * 0.2, height: 1)
-                Text("KM/H").font(.system(size: diameter * 0.05, weight: .semibold, design: .rounded))
+                Text("MPH").font(.system(size: diameter * 0.05, weight: .semibold, design: .rounded))
                     .tracking(2).foregroundStyle(Theme.dim)
             }
         }

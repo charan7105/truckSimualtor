@@ -204,8 +204,8 @@ namespace MatrackSim.App
 
         private void SpeedPreset_Click(object sender, RoutedEventArgs e)
         {
-            int kmh = int.Parse(Param(sender), CultureInfo.InvariantCulture);
-            Sim.SetSpeed(kmh / 1.60934);   // Swift: sim.setSpeed(Double(v) / 1.60934)
+            int mph = int.Parse(Param(sender), CultureInfo.InvariantCulture);
+            Sim.SetSpeed(mph);             // Swift: sim.setSpeed(Double(v)) — presets are mph
         }
 
         private void TimeScale_Click(object sender, RoutedEventArgs e)
