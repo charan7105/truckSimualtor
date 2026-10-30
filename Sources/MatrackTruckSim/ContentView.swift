@@ -85,6 +85,16 @@ struct ContentView: View {
             if ProcessInfo.processInfo.arguments.contains("dash") {
                 sim.skipStartup()                    // jump straight to the live dashboard (static, for screenshots)
             }
+            // `tab=stored` etc. opens the inspector on a given tab at launch. Same purpose as `dash`:
+            // capturing each panel for the manual without clicking, so documentation screenshots are
+            // reproducible instead of depending on someone driving the mouse.
+            if let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("tab=") }),
+               let tab = InspectorTab.allCases.first(where: {
+                   $0.rawValue.lowercased().replacingOccurrences(of: " ", with: "")
+                       == arg.dropFirst(4).lowercased()
+               }) {
+                sim.inspectorTab = tab
+            }
             if ProcessInfo.processInfo.arguments.contains("demo") {
                 Task { @MainActor in
                     sim.beginStartup()
