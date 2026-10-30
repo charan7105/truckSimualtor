@@ -226,7 +226,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
 
     private func serialWrite(_ s: String) {
         guard serialFD >= 0 else { return }
-        let bytes = Array(s.utf8)
+        let bytes = Array(MTPacket.wireBytes(s))
         _ = bytes.withUnsafeBytes { write(serialFD, $0.baseAddress, bytes.count) }
     }
 
@@ -485,7 +485,11 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// just sent should be accepted. Kept beside the sender for the same reason MTPacketDecoder
     /// exists: a test is only useful if both sides agree on what the expected verdict was.
     static func macPassesAppCheck(_ mac: String) -> Bool {
-        mac.count == 12 && mac.allSatisfy { $0.isNumber || ("A"..."F").contains(String($0)) }
+        // Spelled out rather than isNumber/ranges: Character.isNumber accepts Unicode digits such
+        // as "\u{663}" and "\u{BD}", and a String range "A"..."F" accepts "A" plus a combining mark —
+        // all of which the app's ^[0-9A-F]{12}$ rejects. The mirror has to agree, or it reports
+        // "phone accepts" for a value the phone throws away.
+        mac.count == 12 && mac.allSatisfy { "0123456789ABCDEF".contains($0) }
     }
 
     // MARK: - Fault injection
@@ -977,7 +981,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             sendRaw(em.wire)
         case .malformed:
             push(LogLine(time: stamp(), text: em.wire + "  [malformed — app should reject]", kind: .drop))
-            transmit(Data(em.wire.utf8))                     // sent un-framed; the app validator rejects it
+            transmit(MTPacket.wireBytes(em.wire))            // sent un-framed; the app validator rejects it
         default:
             push(LogLine(time: stamp(), text: em.wire, kind: em.kind == .stored ? .info : .out))
             MTPacket.frame(em.wire).forEach { queue($0) }    // network effects already applied by the runner
@@ -1063,7 +1067,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     }
 
     // MARK: - Outbound (raw control replies vs framed data packets) + network effects
-    private func sendRaw(_ s: String) { transmit(Data(s.utf8)); push(LogLine(time: stamp(), text: s, kind: .out)) }
+    private func sendRaw(_ s: String) { transmit(MTPacket.wireBytes(s)); push(LogLine(time: stamp(), text: s, kind: .out)) }
 
     /// Command reply / important state packet — always delivered cleanly.
     /// Network effects (loss/dup/out-of-order) apply only to the live telemetry stream,

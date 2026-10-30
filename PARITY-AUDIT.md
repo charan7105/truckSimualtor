@@ -75,6 +75,13 @@ Not blocking; noted for follow-up. Mostly justified platform substitutes or micr
 - **DEF vs FUEL 2** second-tank label, RingGauge (unused) — need a Mac-layout design decision.
 - **Map tiles:** CARTO Voyager (Win) vs Apple Maps (Mac) — Apple tiles are unavailable off-platform.
 - **`demo`-mode** bootstrap timing differs (Win skips ignition + 800 ms vs Mac 4 s) — affects demo only.
+- **Device-ID control is macOS-only (2026-10-30).** The *logic* is mirrored: `MTPacket.WireBytes`,
+  `DeviceInfo.MacPassesAppCheck`, `TrackerPeripheral.DeviceMAC` / `SendMacNow`, and the six MAC
+  self-test cases all exist on both sides and both self-tests pass. What is missing on Windows is the
+  **XAML control** for picking a bad MAC, because the inspector redesign (tabs, Next-step strip,
+  plain-language labels) has not been ported either — WPF cannot be rendered or visually checked from
+  the Mac this was built on. A Windows dev can set `TrackerPeripheral.DeviceMAC` and call
+  `SendMacNow()`; only the on-screen picker is absent.
 
 ## Method
 13 parallel subsystem audit agents → adversarial verify on every high/medium finding → 3-lens reconnect

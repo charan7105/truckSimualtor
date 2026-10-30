@@ -204,6 +204,20 @@ namespace MatrackSim.App
             set { if (Set(ref _vin, value)) device.Vin = value; }
         }
 
+        private string _deviceMAC = "";
+        /// <summary>
+        /// Device MAC, field 8 of the LV packet. Editable so the app's MAC validation can be
+        /// exercised: the app checks `^[0-9A-F]{12}$` (added 2026-10-29), and a real tracker can
+        /// report a short MAC padded with 0xFF filler which has to be rejected.
+        /// NOTE the default is EMPTY, which already fails that check.
+        /// Mirrors SimController.deviceMAC in the Swift build.
+        /// </summary>
+        public string DeviceMAC
+        {
+            get => _deviceMAC;
+            set { if (Set(ref _deviceMAC, value)) device.DeviceMAC = value; }
+        }
+
         private string _firmware = "";
         public string Firmware { get => _firmware; set => Set(ref _firmware, value); }
 
@@ -290,6 +304,7 @@ namespace MatrackSim.App
         {
             ApplyConfigToEngine();
             Vin = device.Vin;
+            DeviceMAC = device.DeviceMAC;
             Firmware = $"{device.McuFW} · BLE {device.BleFW}";
             InitPresentation();      // wire derived UI bindings + start the refresh timer (see partial)
             StartBLE();              // begin advertising the tracker service on launch (like the macOS app)
@@ -637,6 +652,21 @@ namespace MatrackSim.App
         {
             SendReliable(MTPacket.Version(device));
             Info($"↻ VIN packet sent ({(string.IsNullOrEmpty(device.Vin) ? "empty" : device.Vin)})");
+        }
+
+        /// <summary>
+        /// Resend the LV packet after changing the MAC. The app reads the MAC from the LV it gets on
+        /// connect (readdata sends two, readvin one), so setting the MAC before the phone connects is
+        /// what reproduces "the first LV packet after connect is invalid"; this covers the case where
+        /// the phone is already attached. Mirrors SimController.sendMACNow in the Swift build.
+        /// </summary>
+        public void SendMacNow()
+        {
+            SendReliable(MTPacket.Version(device));
+            string shown = string.IsNullOrEmpty(device.DeviceMAC) ? "empty" : device.DeviceMAC;
+            string verdict = DeviceInfo.MacPassesAppCheck(device.DeviceMAC)
+                ? "" : "  [fails the app's ^[0-9A-F]{12}$ check]";
+            Info($"↻ LV packet sent — MAC {shown}{verdict}");
         }
 
         /// <summary>
@@ -1231,7 +1261,7 @@ namespace MatrackSim.App
                         break;
                     case Emitted.Kind.Malformed:
                         Push(new LogLine(Stamp(), em.Wire + "  [malformed — app should reject]", LogLine.Kind.Drop));
-                        Transmit(Encoding.UTF8.GetBytes(em.Wire));                     // sent un-framed; the app validator rejects it
+                        Transmit(MTPacket.WireBytes(em.Wire));                         // sent un-framed; the app validator rejects it
                         break;
                     default:
                         Push(new LogLine(Stamp(), em.Wire, em.ItemKind == Emitted.Kind.Stored ? LogLine.Kind.Info : LogLine.Kind.Out));
@@ -1335,7 +1365,7 @@ namespace MatrackSim.App
         }
 
         // MARK: - Outbound (raw control replies vs framed data packets) + network effects
-        private void SendRaw(string s) { Transmit(Encoding.UTF8.GetBytes(s)); Push(new LogLine(Stamp(), s, LogLine.Kind.Out)); }
+        private void SendRaw(string s) { Transmit(MTPacket.WireBytes(s)); Push(new LogLine(Stamp(), s, LogLine.Kind.Out)); }
 
         /// <summary>
         /// Command reply / important state packet — always delivered cleanly.

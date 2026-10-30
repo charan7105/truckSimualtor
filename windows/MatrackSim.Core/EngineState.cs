@@ -26,6 +26,22 @@ namespace MatrackSim.Core
         /// </summary>
         public string DeviceMAC = "";
 
+        /// <summary>
+        /// Mirror of the app's device-ID validation (`^[0-9A-F]{12}$`, added app-side 2026-10-29),
+        /// so the simulator can state the verdict it expects for what it just sent.
+        /// Spelled out rather than using char.IsDigit or an 'A'..'F' range: those accept Unicode
+        /// digits and decorated letters that the app's regex rejects.
+        /// Mirrors SimController.macPassesAppCheck in the Swift build.
+        /// </summary>
+        public static bool MacPassesAppCheck(string mac) =>
+            mac != null && mac.Length == 12 && AllHex(mac);
+
+        static bool AllHex(string mac)
+        {
+            foreach (char ch in mac) if ("0123456789ABCDEF".IndexOf(ch) < 0) return false;
+            return true;
+        }
+
         /// <summary>Active fault codes, e.g. ["P0143"]. Reported on `readdtc`.</summary>
         public List<string> DtcCodes = new List<string>();
     }

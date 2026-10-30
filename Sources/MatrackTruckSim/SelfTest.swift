@@ -372,6 +372,23 @@ enum SelfTest {
             cases.append(("every MAC variant rides LV field 8 verbatim", macRides))
             cases.append(("MAC check mirror agrees on all \(macCases.count) variants", macVerdicts))
 
+            // The filler MAC has to leave as three 0xFF BYTES. Checking only that the string round
+            // trips hid the real defect: under UTF-8 each 0xFF went out as C3 BF, so a 12-character
+            // MAC arrived as 15 bytes and never matched the tracker it was imitating.
+            var fillerDev = DeviceInfo(); fillerDev.deviceMAC = "87CB6819A\u{FF}\u{FF}\u{FF}"
+            let lvBytes = [UInt8](MTPacket.wireBytes(MTPacket.version(fillerDev)))
+            cases.append(("filler MAC leaves as three 0xFF bytes, not C3 BF",
+                          lvBytes.suffix(3) == [0xFF, 0xFF, 0xFF] && !lvBytes.contains(0xC3)))
+            // And the framing must agree, since frame() slices by character count.
+            let framed = MTPacket.frame(MTPacket.version(fillerDev))
+            let rebuilt = framed.map { [UInt8]($0).dropFirst(4) }.joined()   // strip "$<tot><cur>0"
+            cases.append(("framed chunks carry the same 0xFF bytes",
+                          [UInt8](rebuilt).filter { $0 == 0xFF }.count == 3))
+            // Every ordinary packet must be untouched by the encoding change.
+            let plain = MTPacket.version(DeviceInfo())
+            cases.append(("ASCII packets are byte-identical under the new encoding",
+                          MTPacket.wireBytes(plain) == Data(plain.utf8)))
+
             for (name, ok) in cases {
                 print("  [\(ok ? "OK" : "FAIL")] \(name)")
                 if !ok { allPass = false }

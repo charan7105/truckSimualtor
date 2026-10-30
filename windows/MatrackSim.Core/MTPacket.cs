@@ -145,6 +145,20 @@ namespace MatrackSim.Core
         /// the assembled payload ends with "$$"; total/current are single HEX digits — the iOS/Android
         /// parsers both read them with radix 16, so we emit hex to match byte-exactly (≤9 chunks here).
         /// </summary>
+        /// <summary>
+        /// Encode a packet for the wire as Latin-1, so one character is one byte.
+        /// A real tracker sends single bytes and some fields carry raw 0xFF filler; under UTF-8 each
+        /// 0xFF went out as C3 BF, so a MAC padded with three filler bytes arrived 15 bytes long
+        /// instead of 12. Latin-1 maps U+0000-U+00FF to 0x00-0xFF one to one, and every packet the
+        /// simulator builds is otherwise ASCII where the two encodings are byte-identical — so
+        /// nothing else on the wire changes. It also makes Frame's chunk arithmetic honest: it
+        /// slices by CHARACTER count, which only equals the byte count at one byte per character.
+        /// Mirrors MTPacket.wireBytes in the Swift build.
+        /// </summary>
+        public static byte[] WireBytes(string s) => Latin1.GetBytes(s);
+
+        static readonly Encoding Latin1 = Encoding.GetEncoding(28591);   // ISO-8859-1
+
         public static List<byte[]> Frame(string payload)
         {
             char[] body = (payload + "$$").ToCharArray();
@@ -165,7 +179,7 @@ namespace MatrackSim.Core
                 string frame = "$" + total.ToString("x", CultureInfo.InvariantCulture)
                                    + i.ToString("x", CultureInfo.InvariantCulture)
                                    + "0" + new string(slices[i]);
-                frames.Add(Encoding.UTF8.GetBytes(frame));
+                frames.Add(WireBytes(frame));
             }
             return frames;
         }

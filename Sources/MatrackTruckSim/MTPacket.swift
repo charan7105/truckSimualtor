@@ -100,6 +100,18 @@ enum MTPacket {
     /// Each frame = "$" + <total digit> + <current digit> + <1 reserved char> + <payload slice>;
     /// the assembled payload ends with "$$"; total/current are single HEX digits — the iOS/Android
     /// parsers both read them with radix 16, so we emit hex to match byte-exactly (≤9 chunks here).
+    /// Encode a packet for the wire as Latin-1, falling back to UTF-8 only if a character cannot be
+    /// represented. A real tracker sends single bytes, and some fields carry raw 0xFF filler — under
+    /// UTF-8 that went out as C3 BF, so a MAC padded with three filler bytes arrived 15 bytes long
+    /// instead of 12 and could never reproduce the device it was imitating. Latin-1 maps U+0000-U+00FF
+    /// to 0x00-0xFF one to one, and every packet the simulator builds is otherwise ASCII, where the
+    /// two encodings are byte-identical — so nothing else on the wire changes.
+    /// It also makes the chunk arithmetic in `frame` honest: that slices by CHARACTER count, which
+    /// only equals the byte count when one character is one byte.
+    static func wireBytes(_ s: String) -> Data {
+        s.data(using: .isoLatin1) ?? Data(s.utf8)
+    }
+
     static func frame(_ payload: String) -> [Data] {
         let body = Array(payload + "$$")
         let size = max(16, Int((Double(body.count) / 9.0).rounded(.up)))
@@ -109,7 +121,7 @@ enum MTPacket {
         let total = slices.count
         return slices.enumerated().map { (i, slice) in
             // reserved char = '0' (app ignores index 3); hex digits match the apps' radix-16 parse
-            Data(("$\(String(total, radix: 16))\(String(i, radix: 16))0" + String(slice)).utf8)
+            wireBytes("$\(String(total, radix: 16))\(String(i, radix: 16))0" + String(slice))
         }
     }
 }

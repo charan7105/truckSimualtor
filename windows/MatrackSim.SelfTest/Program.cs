@@ -330,6 +330,47 @@ namespace MatrackSim.SelfTest
                 cases.Add(Tuple.Create("odometer-source packet is well formed",
                     MTPacket.OdoSource(true, 1).EndsWith("$$")));
 
+                // Device MAC — mirrors the Swift selftest. The app validates with ^[0-9A-F]{12}$
+                // (added app-side 2026-10-29); the 0xFF-padded value is the case Teja reported from
+                // a real tracker: 9 hex characters and the rest filler.
+                var macCases = new[] {
+                    Tuple.Create("87CB6819AFFF", true),                      // the only shape that passes
+                    Tuple.Create("87CB6819A\u00FF\u00FF\u00FF", false),      // 0xFF filler
+                    Tuple.Create("87cb6819afff", false),                     // lowercase
+                    Tuple.Create("87CB6819A",    false),                     // too short
+                    Tuple.Create("",             false),                     // the simulator's own DEFAULT
+                    Tuple.Create("87CB6819AFFFF", false),                    // too long
+                };
+                bool macRides = true, macVerdicts = true;
+                foreach (var mc in macCases)
+                {
+                    var d = new DeviceInfo(); d.DeviceMAC = mc.Item1;
+                    if (MTPacket.Version(d).Split(',')[8] != mc.Item1) macRides = false;
+                    if (DeviceInfo.MacPassesAppCheck(mc.Item1) != mc.Item2) macVerdicts = false;
+                }
+                cases.Add(Tuple.Create("every MAC variant rides LV field 8 verbatim", macRides));
+                cases.Add(Tuple.Create("MAC check mirror agrees on all " + macCases.Length + " variants", macVerdicts));
+
+                // The filler MAC has to leave as three 0xFF BYTES. Checking only that the string
+                // round trips hid the real defect: under UTF-8 each 0xFF went out as C3 BF.
+                var fillerDev = new DeviceInfo(); fillerDev.DeviceMAC = "87CB6819A\u00FF\u00FF\u00FF";
+                byte[] lvBytes = MTPacket.WireBytes(MTPacket.Version(fillerDev));
+                bool tail3 = lvBytes.Length >= 3
+                    && lvBytes[lvBytes.Length - 1] == 0xFF
+                    && lvBytes[lvBytes.Length - 2] == 0xFF
+                    && lvBytes[lvBytes.Length - 3] == 0xFF;
+                bool noC3 = Array.IndexOf(lvBytes, (byte)0xC3) < 0;
+                cases.Add(Tuple.Create("filler MAC leaves as three 0xFF bytes, not C3 BF", tail3 && noC3));
+
+                // Every ordinary packet must be untouched by the encoding change.
+                string plainLv = MTPacket.Version(new DeviceInfo());
+                bool sameAsUtf8 = true;
+                var utf8 = System.Text.Encoding.UTF8.GetBytes(plainLv);
+                var wire = MTPacket.WireBytes(plainLv);
+                if (utf8.Length != wire.Length) sameAsUtf8 = false;
+                else for (int i = 0; i < utf8.Length; i++) if (utf8[i] != wire[i]) { sameAsUtf8 = false; break; }
+                cases.Add(Tuple.Create("ASCII packets are byte-identical under the new encoding", sameAsUtf8));
+
                 foreach (var c in cases)
                 {
                     Console.WriteLine("  [" + (c.Item2 ? "OK" : "FAIL") + "] " + c.Item1);

@@ -842,7 +842,10 @@ struct FaultPanel: View {
                                 .allowsHitTesting(false)
                         }
                     }
-                    .onChange(of: sim.deviceMAC) { _ in macCase = .custom }
+                    // Only a HAND edit means "custom". Choosing a preset also writes deviceMAC, and
+                    // reacting to that flipped the picker straight back to "My own value", so the
+                    // case you picked never stayed selected and its help line never appeared.
+                    .onChange(of: sim.deviceMAC) { v in if macCase.value != v { macCase = .custom } }
                 Text(ok ? "phone accepts" : "phone rejects")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(ok ? Theme.green : Theme.amber).fixedSize()
