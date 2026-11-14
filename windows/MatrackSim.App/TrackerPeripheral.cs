@@ -529,11 +529,17 @@ namespace MatrackSim.App
             {
                 // The odometer-source flip rewrites field 4 every tick, so it would silently
                 // overwrite any other odometer fault. Turn it off rather than let them fight.
-                if (field == 4 && Config.OdoFlipEnabled)
+                if (field == 4)
                 {
-                    Config.OdoFlipEnabled = false;
-                    RefreshOdoBindings();
-                    Info("  (odometer-source flip turned off — it would overwrite this)");
+                    // Hand field 4 over completely: stop the flip AND drop our ownership claim, or
+                    // the next tick would clear the fault we are about to arm.
+                    if (Config.OdoFlipEnabled)
+                    {
+                        Config.OdoFlipEnabled = false;
+                        RefreshOdoBindings();
+                        Info("  (odometer-source flip turned off — it would overwrite this)");
+                    }
+                    odoOwnsField4 = false;
                 }
                 engine.WireFaults[field] = new WireFault(value, probability, requiresMotion);
                 string how = probability >= 1 ? "every packet" : $"~{(int)(probability * 100)}% of packets";
@@ -627,7 +633,10 @@ namespace MatrackSim.App
             // runs every tick, so ODOMETER STUCK / ODOMETER JUMP / DEFAULT ODOMETER 1-IN-5 /
             // ODOMETER AND HOURS MISSING were all wiped before a packet could carry them.
             int chosen;
-            var action = OdoLadder.DecideField4(CurrentOdoSlot, Config.OdoSources, odoOwnsField4, out chosen);
+            // Anything sitting in field 4 that we did not put there belongs to the tester.
+            bool userFault = engine.WireFaults.ContainsKey(4) && !odoOwnsField4;
+            var action = OdoLadder.DecideField4(CurrentOdoSlot, Config.OdoSources, odoOwnsField4,
+                                                userFault, out chosen);
             if (action == OdoLadder.Field4Action.ClearOurs) { engine.WireFaults.Remove(4); odoOwnsField4 = false; }
             else if (action == OdoLadder.Field4Action.Write)
             {

@@ -92,9 +92,13 @@ namespace MatrackSim.Core
         /// the 1-in-5 variants) before a single packet carries it. Mirrors OdoLadder.field4Action.
         /// </summary>
         public static Field4Action DecideField4(int? selected, List<OdoSourceConfig> sources,
-                                                bool weOwnIt, out int slot)
+                                                bool weOwnIt, bool userFaultPresent, out int slot)
         {
             slot = selected ?? -1;
+            // A fault the tester armed owns field 4 outright. Without this the source model either
+            // DELETED it (stale ownership on an offset-0 slot) or OVERWROTE it every tick (a locked
+            // slot with a non-zero offset).
+            if (userFaultPresent) return Field4Action.LeaveAlone;
             double offset = selected.HasValue && selected.Value < sources.Count
                 ? sources[selected.Value].OffsetMiles : 0;
             if (!selected.HasValue || offset == 0)

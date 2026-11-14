@@ -406,17 +406,31 @@ enum SelfTest {
             // 4 unconditionally erased ODOMETER STUCK / JUMP / the 1-in-5 variants before a single
             // packet carried them, with nothing on screen to say so.
             let defaults = SimConfig()
-            let leaves = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources, weOwnIt: false)
-            let stillLeaves = OdoLadder.field4Action(selected: nil, sources: defaults.odoSources, weOwnIt: false)
+            let leaves = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources,
+                                                weOwnIt: false, userFaultPresent: false)
+            let stillLeaves = OdoLadder.field4Action(selected: nil, sources: defaults.odoSources,
+                                                     weOwnIt: false, userFaultPresent: false)
             let noWipe = leaves == .leaveAlone && stillLeaves == .leaveAlone
             print("  [\(noWipe ? "OK" : "FAIL")] the source model leaves someone else's field-4 fault alone")
             if !noWipe { allPass = false }
 
             // ...but it must clean up after ITSELF, or a stale flip value would stick for ever.
-            let cleans = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources, weOwnIt: true) == .clearOurs
-            let writes = OdoLadder.field4Action(selected: 1, sources: defaults.odoSources, weOwnIt: false) == .write(slot: 1)
+            let cleans = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources,
+                                                weOwnIt: true, userFaultPresent: false) == .clearOurs
+            let writes = OdoLadder.field4Action(selected: 1, sources: defaults.odoSources,
+                                                weOwnIt: false, userFaultPresent: false) == .write(slot: 1)
             print("  [\(cleans && writes ? "OK" : "FAIL")] it still clears its own value and writes an offset source")
             if !(cleans && writes) { allPass = false }
+
+            // REGRESSION — a fault the tester armed owns field 4 outright. Both ways this broke:
+            // stale ownership on an offset-0 slot DELETED it, and a locked offset source
+            // OVERWROTE it on every tick.
+            let notDeleted = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources,
+                                                    weOwnIt: true, userFaultPresent: true) == .leaveAlone
+            let notOverwritten = OdoLadder.field4Action(selected: 1, sources: defaults.odoSources,
+                                                        weOwnIt: true, userFaultPresent: true) == .leaveAlone
+            print("  [\(notDeleted && notOverwritten ? "OK" : "FAIL")] an armed odometer fault is neither deleted nor overwritten")
+            if !(notDeleted && notOverwritten) { allPass = false }
 
             // END TO END — drive the exact chain the controller runs on every tick (pick a slot,
             // write field 4, build the live packet) and read the odometer back OFF THE WIRE. The

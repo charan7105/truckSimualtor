@@ -528,9 +528,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             // other odometer fault the tester arms. Turn it off rather than let them fight — a
             // control that appears armed while something else wins is exactly the confusion this
             // panel exists to avoid.
-            if field == 4 && config.odoFlipEnabled {
-                config.odoFlipEnabled = false
-                info("  (odometer-source flip turned off — it would overwrite this)")
+            if field == 4 {
+                // Hand field 4 over completely: stop the flip AND drop our ownership claim, or the
+                // next tick would clear the fault we are about to arm.
+                if config.odoFlipEnabled {
+                    config.odoFlipEnabled = false
+                    info("  (odometer-source flip turned off — it would overwrite this)")
+                }
+                odoOwnsField4 = false
             }
             engine.wireFaults[field] = WireFault(value: value, probability: probability, requiresMotion: requiresMotion)
             let how = probability >= 1 ? "every packet" : "~\(Int(probability * 100))% of packets"
@@ -650,8 +655,10 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         // Clearing unconditionally was a regression: with the default slot 0 at offset 0 this runs
         // every tick, so ODOMETER STUCK / ODOMETER JUMP / DEFAULT ODOMETER 1-IN-5 / ODOMETER & HOURS
         // MISSING were all wiped before a single packet could carry them.
+        // Anything sitting in field 4 that we did not put there belongs to the tester.
+        let userFault = engine.wireFaults[4] != nil && !odoOwnsField4
         switch OdoLadder.field4Action(selected: currentOdoSlot, sources: config.odoSources,
-                                      weOwnIt: odoOwnsField4) {
+                                      weOwnIt: odoOwnsField4, userFaultPresent: userFault) {
         case .leaveAlone:
             break
         case .clearOurs:

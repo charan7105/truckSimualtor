@@ -289,7 +289,13 @@ enum OdoLadder {
         case clearOurs           // we set it last tick and no longer should
     }
 
-    static func field4Action(selected: Int?, sources: [OdoSourceConfig], weOwnIt: Bool) -> Field4Action {
+    static func field4Action(selected: Int?, sources: [OdoSourceConfig],
+                             weOwnIt: Bool, userFaultPresent: Bool) -> Field4Action {
+        // A fault the tester armed owns field 4 outright. Without this the source model either
+        // DELETED it (stale ownership, offset-0 slot -> clearOurs) or OVERWROTE it every tick (a
+        // locked slot with a non-zero offset -> write), and the armed control would sit there
+        // looking active while the wire carried something else.
+        if userFaultPresent { return .leaveAlone }
         let offset = selected.flatMap { sources.indices.contains($0) ? sources[$0].offsetMiles : nil } ?? 0
         guard let slot = selected, offset != 0 else { return weOwnIt ? .clearOurs : .leaveAlone }
         return .write(slot: slot)

@@ -363,15 +363,22 @@ namespace MatrackSim.SelfTest
                 // Mirrors the Swift selftest.
                 var defaults = new SimConfig();
                 int tmp;
-                bool noWipe = OdoLadder.DecideField4(0, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.LeaveAlone
-                           && OdoLadder.DecideField4(null, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.LeaveAlone;
+                bool noWipe = OdoLadder.DecideField4(0, defaults.OdoSources, false, false, out tmp) == OdoLadder.Field4Action.LeaveAlone
+                           && OdoLadder.DecideField4(null, defaults.OdoSources, false, false, out tmp) == OdoLadder.Field4Action.LeaveAlone;
                 Console.WriteLine("  [" + (noWipe ? "OK" : "FAIL") + "] the source model leaves someone else's field-4 fault alone");
                 if (!noWipe) allPass = false;
 
-                bool cleans = OdoLadder.DecideField4(0, defaults.OdoSources, true, out tmp) == OdoLadder.Field4Action.ClearOurs;
-                bool writes = OdoLadder.DecideField4(1, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.Write && tmp == 1;
+                bool cleans = OdoLadder.DecideField4(0, defaults.OdoSources, true, false, out tmp) == OdoLadder.Field4Action.ClearOurs;
+                bool writes = OdoLadder.DecideField4(1, defaults.OdoSources, false, false, out tmp) == OdoLadder.Field4Action.Write && tmp == 1;
                 Console.WriteLine("  [" + (cleans && writes ? "OK" : "FAIL") + "] it still clears its own value and writes an offset source");
                 if (!(cleans && writes)) allPass = false;
+
+                // REGRESSION - a fault the tester armed owns field 4 outright. Mirrors the Swift
+                // selftest: stale ownership DELETED it, a locked offset source OVERWROTE it.
+                bool notDeleted = OdoLadder.DecideField4(0, defaults.OdoSources, true, true, out tmp) == OdoLadder.Field4Action.LeaveAlone;
+                bool notOverwritten = OdoLadder.DecideField4(1, defaults.OdoSources, true, true, out tmp) == OdoLadder.Field4Action.LeaveAlone;
+                Console.WriteLine("  [" + (notDeleted && notOverwritten ? "OK" : "FAIL") + "] an armed odometer fault is neither deleted nor overwritten");
+                if (!(notDeleted && notOverwritten)) allPass = false;
 
                 // END TO END - drive the exact chain the controller runs on every tick and read the
                 // odometer back OFF THE WIRE. Mirrors the Swift selftest.
