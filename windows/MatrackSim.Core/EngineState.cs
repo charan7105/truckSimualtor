@@ -73,6 +73,23 @@ namespace MatrackSim.Core
         public double FuelBurnPctPerMile = 0.02;
 
         /// <summary>GPS-derived speed on the wire (km/h). Tracks vehicle speed.</summary>
+        /// <summary>
+        /// Per-slot odometer offsets in miles. Applied on top of OdometerMiles, so every source
+        /// counts with the truck but reads from its own base - the behaviour the customer capture
+        /// shows. Mirrors EngineState.odoSourceOffsetMiles in the Swift build.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<int, double> OdoSourceOffsetMiles =
+            new System.Collections.Generic.Dictionary<int, double>();
+
+        /// <summary>What slot reads right now, in miles. Never negative: the wire counter is unsigned.</summary>
+        public double OdoSourceMiles(int slot)
+        {
+            double off;
+            if (!OdoSourceOffsetMiles.TryGetValue(slot, out off)) off = 0;
+            double v = OdometerMiles + off;
+            return v < 0 ? 0 : v;
+        }
+
         public int GpsSpeedKmh => (int)System.Math.Round(SpeedMph * 1.60934, System.MidpointRounding.AwayFromZero);
 
         /// <summary>

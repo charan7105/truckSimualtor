@@ -148,8 +148,6 @@ namespace MatrackSim.App
         private void FaultGpsLock_Click(object sender, RoutedEventArgs e) =>
             Sim.SetWireOverride(8, Sim.IsFaked(8) ? null : "0", 0.2, true);
 
-        private void FaultTwoOdo_Click(object sender, RoutedEventArgs e) =>
-            Sim.SetOdoAlternating(!Sim.OdoAlternating);
 
         private void FaultBadTime_Click(object sender, RoutedEventArgs e) =>
             Sim.SetWireOverride(10, Sim.IsFaked(10) ? null : "999999", 0.2);
@@ -158,7 +156,17 @@ namespace MatrackSim.App
             Sim.SetWireOverride(4, Sim.IsFaked(4, SimConfig.OdometerUnavailableSentinel)
                 ? null : SimConfig.OdometerUnavailableSentinel, 0.2);
 
-        private void FaultOdoSource_Click(object sender, RoutedEventArgs e) => Sim.SendOdoSourcePacket(true);
+        private void SendOdoReport_Click(object sender, RoutedEventArgs e) => Sim.SendOdoReport();
+
+        /// <summary>LO is what 00FD firmware sends; XO is what the ELD app actually parses.</summary>
+        private void OdoPrefix_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (Sim == null) return;
+            var item = OdoPrefixBox.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            Sim.Config.OdoReportPrefix = (item.Tag as string) ?? "LO";
+            Sim.RefreshOdoBindings();
+        }
 
         private void FaultMalformed_Click(object sender, RoutedEventArgs e) => Sim.SendMalformedPacket();
 

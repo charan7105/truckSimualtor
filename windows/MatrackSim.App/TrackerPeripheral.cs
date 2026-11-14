@@ -527,13 +527,13 @@ namespace MatrackSim.App
             string name = WireFieldNames[field];
             if (!string.IsNullOrEmpty(value))
             {
-                // TWO ECU ODOMETERS rewrites field 4 every tick, so it would silently overwrite any
-                // other odometer fault. Turn it off rather than let them fight — a control that
-                // appears armed while something else wins is the confusion this panel exists to avoid.
-                if (field == 4 && OdoAlternating)
+                // The odometer-source flip rewrites field 4 every tick, so it would silently
+                // overwrite any other odometer fault. Turn it off rather than let them fight.
+                if (field == 4 && Config.OdoFlipEnabled)
                 {
-                    OdoAlternating = false;
-                    Info("  (two ECU odometers turned off — it would overwrite this)");
+                    Config.OdoFlipEnabled = false;
+                    RefreshOdoBindings();
+                    Info("  (odometer-source flip turned off — it would overwrite this)");
                 }
                 engine.WireFaults[field] = new WireFault(value, probability, requiresMotion);
                 string how = probability >= 1 ? "every packet" : $"~{(int)(probability * 100)}% of packets";
@@ -548,23 +548,6 @@ namespace MatrackSim.App
             RefreshFaultBindings();
         }
 
-        /// <summary>
-        /// Two ECU odometer series, flipping every packet — the shape Praboo described. The app never
-        /// alerts: it books the jump as driven miles, or freezes the event's mileage at 0 if the low
-        /// series sits below where the duty event began.
-        /// </summary>
-        public void SetOdoAlternating(bool on)
-        {
-            OdoAlternating = on;
-            if (on)
-            {
-                // Same reason in reverse: only one thing may own field 4.
-                if (engine.WireFaults.Remove(4)) Info("  (cleared the other odometer fault — only one can own that field)");
-                Info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)");
-            }
-            else { engine.WireFaults.Remove(4); Info("✓ odometer back to one series"); }
-            Mirror(); RefreshFaultBindings();
-        }
 
         /// <summary>
         /// Re-send the previous dump byte for byte — the cross-connection duplicate case. The app's
@@ -593,11 +576,102 @@ namespace MatrackSim.App
             Info("☠︎ malformed packet sent — the app should reject it and keep running");
         }
 
-        /// <summary>Send the odometer-source packet — sending it PROVES the app does nothing with it.</summary>
-        public void SendOdoSourcePacket(bool virtualSource)
+        // ---- Odometer sources (Sandeep, 13 Nov 2026) ------------------------------------------
+        // Mirrors applyOdoSources / odoReportWire / sendOdoReport in the Swift build.
+
+        private bool odoFlipOnSecond;          // which of the top two sources field 4 is reading
+        private bool odoOwnsField4;            // true while the source model is writing field 4
+        private double odoFlipCountdown;
+
+        /// <summary>Enabled slots in priority order (virtual first when on).</summary>
+        public List<int> ActiveOdoSlots => OdoLadder.ActiveSlots(Config.OdoSources);
+
+        /// <summary>Which slot the live odometer reads from. Locked beats the flip.</summary>
+        public int? CurrentOdoSlot => OdoLadder.Selected(Config.OdoSources, Config.OdoFlipEnabled,
+                                                         Config.OdoLockedSlot, odoFlipOnSecond);
+
+        /// <summary>What a slot reads right now, in miles - for the UI, which has no engine access.</summary>
+        public double EngineOdoSourceMiles(int slot) => engine.OdoSourceMiles(slot);
+
+        /// <summary>
+        /// Push the selected source onto the wire and run the flip clock. Writes field 4 through the
+        /// same WireFaults channel the old two-series fault used, so the truck's own odometer keeps
+        /// running underneath - that is what makes every source rise together.
+        /// </summary>
+        private void ApplyOdoSources(double dt)
         {
-            SendRaw(MTPacket.OdoSource(virtualSource, virtualSource ? 1 : 0));
-            Info($"↻ odometer-source packet sent ({(virtualSource ? "virtual" : "ECU")}) — the app parses it into a variable nothing reads");
+            engine.OdoSourceOffsetMiles.Clear();
+            for (int i = 0; i < Config.OdoSources.Count; i++)
+                engine.OdoSourceOffsetMiles[i] = Config.OdoSources[i].OffsetMiles;
+
+            if (Config.OdoFlipEnabled && !Config.OdoLockedSlot.HasValue && ActiveOdoSlots.Count >= 2)
+            {
+                // Simulated time, not wall clock: every other clock in Step() is scaled.
+                odoFlipCountdown -= dt * Config.TimeMultiplier;
+                if (odoFlipCountdown <= 0)
+                {
+                    odoFlipCountdown = Math.Max(0.25, Config.OdoFlipIntervalSec);
+                    odoFlipOnSecond = !odoFlipOnSecond;
+                }
+            }
+            else
+            {
+                odoFlipCountdown = Math.Max(0.25, Config.OdoFlipIntervalSec);
+                odoFlipOnSecond = false;
+            }
+
+            // Only steer field 4 when a source other than the plain odometer is in charge, and only
+            // CLEAR it when this code is the thing that set it.
+            //
+            // Clearing unconditionally was a regression: with the default slot 0 at offset 0 this
+            // runs every tick, so ODOMETER STUCK / ODOMETER JUMP / DEFAULT ODOMETER 1-IN-5 /
+            // ODOMETER AND HOURS MISSING were all wiped before a packet could carry them.
+            int chosen;
+            var action = OdoLadder.DecideField4(CurrentOdoSlot, Config.OdoSources, odoOwnsField4, out chosen);
+            if (action == OdoLadder.Field4Action.ClearOurs) { engine.WireFaults.Remove(4); odoOwnsField4 = false; }
+            else if (action == OdoLadder.Field4Action.Write)
+            {
+                engine.WireFaults[4] = new WireFault(
+                    MTPacket.RawOdometer(engine.OdoSourceMiles(chosen)).ToString(CultureInfo.InvariantCulture));
+                odoOwnsField4 = true;
+            }
+        }
+
+        /// <summary>The odo report for the current state, or null with fewer than two sources.</summary>
+        public string OdoReportWire(string prefix = null)
+        {
+            if (!OdoLadder.ShouldReport(Config.OdoSources)) return null;
+            var slots = ActiveOdoSlots;
+            var raws = OdoSourceSlotNames.All
+                .Select(s => slots.Contains((int)s)
+                    ? MTPacket.RawOdometer(engine.OdoSourceMiles((int)s)).ToString(CultureInfo.InvariantCulture)
+                    : "0")
+                .ToList();
+            double shown = CurrentOdoSlot.HasValue
+                ? engine.OdoSourceMiles(CurrentOdoSlot.Value) : engine.OdometerMiles;
+            bool virt = (int)OdoSourceSlot.VirtualGps < Config.OdoSources.Count
+                        && Config.OdoSources[(int)OdoSourceSlot.VirtualGps].Enabled;
+            return MTPacket.OdoReport(prefix ?? Config.OdoReportPrefix, DateTime.UtcNow,
+                                      Config.OdoLockedSlot, Config.OdoLockedSlot.HasValue,
+                                      virt, false, Config.OdoCanMode,
+                                      MTPacket.RawOdometer(shown), raws);
+        }
+
+        /// <summary>
+        /// Send the odo report now. Live only - never buffered into the stored backlog, because the
+        /// firmware never saves it ("never reported as saved packets. Only available as live").
+        /// </summary>
+        public void SendOdoReport()
+        {
+            var wire = OdoReportWire();
+            if (wire == null)
+            {
+                Info($"⚠ odo report needs 2+ sources switched on — only {ActiveOdoSlots.Count} is");
+                return;
+            }
+            SendRaw(wire);
+            var names = string.Join(" + ", ActiveOdoSlots.Select(s => OdoSourceSlotNames.Display((OdoSourceSlot)s)));
+            Info($"↻ {Config.OdoReportPrefix} odo report sent — {ActiveOdoSlots.Count} sources ({names})");
         }
 
         /// <summary>Re-publish the armed-fault bindings after a change that is not a wire override
@@ -610,11 +684,10 @@ namespace MatrackSim.App
         public bool IsFaked(int field, string value = null) =>
             engine.WireFaults.TryGetValue(field, out WireFault f) && (value == null || f.Value == value);
 
-        private bool _odoAlternating;
-        public bool OdoAlternating { get => _odoAlternating; set => Set(ref _odoAlternating, value); }
-        private bool odoSeriesHigh;
 
-        public bool FaultsArmed => engine.WireFaults.Count > 0 || Config.TimeSkewSec != 0 || OdoAlternating;
+        // The odometer-source flip has to be in here. It writes field 4 every tick, so leaving it
+        // out would let RESET TO CLEAN DATA report a clean wire while the odometer kept flipping.
+        public bool FaultsArmed => engine.WireFaults.Count > 0 || Config.TimeSkewSec != 0 || Config.OdoFlipEnabled;
 
         /// <summary>Everything currently being faked, in field order — drives the UI's status line.</summary>
         public string ArmedFaultsSummary
@@ -624,7 +697,7 @@ namespace MatrackSim.App
                 var parts = new List<string>();
                 if (Config.TimeSkewSec != 0)
                     parts.Add($"clock {(Config.TimeSkewSec > 0 ? "+" : "")}{(int)(Config.TimeSkewSec / 60)} min");
-                if (OdoAlternating) parts.Add("two ECU odometers");
+                if (Config.OdoFlipEnabled) parts.Add("odometer-source flip");
                 foreach (var k in new List<int>(engine.WireFaults.Keys))
                 {
                     var f = engine.WireFaults[k];
@@ -639,10 +712,10 @@ namespace MatrackSim.App
         /// <summary>One button back to a clean wire — the tester must never have to remember what they armed.</summary>
         public void ClearAllFaults()
         {
-            int n = engine.WireFaults.Count + (Config.TimeSkewSec != 0 ? 1 : 0) + (OdoAlternating ? 1 : 0);
+            int n = engine.WireFaults.Count + (Config.TimeSkewSec != 0 ? 1 : 0) + (Config.OdoFlipEnabled ? 1 : 0);
             engine.WireFaults.Clear();
             Config.TimeSkewSec = 0;
-            OdoAlternating = false;
+            Config.OdoFlipEnabled = false;   // the flip is a fault too — clearing must stop it
             Mirror();
             RefreshFaultBindings();
             Info(n > 0 ? $"✓ wire is clean again — {n} fault{(n == 1 ? "" : "s")} cleared" : "wire was already clean");
@@ -1369,7 +1442,13 @@ namespace MatrackSim.App
             // re-render the dashboard every tick and starve the map's render loop.
             if (SpeedMph != engine.SpeedMph) SpeedMph = engine.SpeedMph;
             if (Rpm != engine.Rpm) Rpm = engine.Rpm;
-            if (Math.Round(OdometerMiles) != Math.Round(engine.OdometerMiles)) OdometerMiles = engine.OdometerMiles;
+            if (Math.Round(OdometerMiles) != Math.Round(engine.OdometerMiles))
+            {
+                OdometerMiles = engine.OdometerMiles;
+                // Per-source readings and the LIVE marker move with the odometer; republish them on
+                // the same whole-mile boundary so the rows stay correct without re-rendering every tick.
+                RefreshOdoBindings();
+            }
             if (Math.Round(EngineHours * 10) != Math.Round(engine.EngineHours * 10)) EngineHours = engine.EngineHours;
             if (Math.Round(FuelPct) != Math.Round(engine.FuelLevelPct)) FuelPct = engine.FuelLevelPct;
             if (Math.Round(Fuel2Pct) != Math.Round(engine.FuelLevel2Pct)) Fuel2Pct = engine.FuelLevel2Pct;
@@ -1556,11 +1635,7 @@ namespace MatrackSim.App
                 engine.Advance(dt * Config.TimeMultiplier);
                 DeadReckon(dt * Config.TimeMultiplier);             // no route loaded: still move the GPS
             }
-            if (OdoAlternating)                                     // two ECU series: flip on every tick
-            {
-                odoSeriesHigh = !odoSeriesHigh;
-                engine.WireFaults[4] = new WireFault(odoSeriesHigh ? Config.OdoSeriesHighRaw : Config.OdoSeriesLowRaw);
-            }
+            ApplyOdoSources(dt);                                    // multi-source odometer + the customer's flip
             stateSaveCountdown -= dt;                               // persist so a restart resumes, not resets
             if (stateSaveCountdown <= 0) { stateSaveCountdown = 5; engine.Persisted.Save(); }
             Mirror();

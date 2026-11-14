@@ -274,12 +274,145 @@ namespace MatrackSim.SelfTest
                 Console.WriteLine("  [" + (junkRejected ? "OK" : "FAIL") + "] the malformed packet is genuinely invalid");
                 if (!junkRejected) allPass = false;
 
-                // The odometer-source packet must match the shape the app's parser demands.
-                var xo = MTPacket.OdoSource(true, 1);
-                bool xoOk = xo.StartsWith("xO,") && xo.EndsWith("$$")
-                         && xo.Replace("$$", "").Split(',').Length >= 10;
-                Console.WriteLine("  [" + (xoOk ? "OK" : "FAIL") + "] the odometer-source packet matches the app parser's shape");
-                if (!xoOk) allPass = false;
+                // ---- Odometer sources (Sandeep, 13 Nov 2026) --------------------------------
+                // Same assertions as the Swift selftest, written against the ELD app's OWN parser
+                // rules (MatrackELD/Utils/OdoSource.swift), so the two builds cannot drift.
+                var cfg2 = new SimConfig();
+                var eng2 = new EngineState { OdometerMiles = 10000 };
+                for (int i = 0; i < cfg2.OdoSources.Count; i++)
+                    eng2.OdoSourceOffsetMiles[i] = cfg2.OdoSources[i].OffsetMiles;
+
+                var enabledSlots = OdoLadder.ActiveSlots(cfg2.OdoSources);
+                var vals = enabledSlots.Select(s => (int)System.Math.Round(eng2.OdoSourceMiles(s))).ToList();
+                bool twoPlus = enabledSlots.Count >= 2;
+                bool allDifferent = vals.Distinct().Count() == vals.Count;
+                Console.WriteLine("  [" + (twoPlus ? "OK" : "FAIL") + "] REQ1: " + enabledSlots.Count + " odo sources are on by default");
+                if (!twoPlus) allPass = false;
+                Console.WriteLine("  [" + (allDifferent ? "OK" : "FAIL") + "] REQ2: each source starts from a different value ["
+                                  + string.Join(", ", vals) + "]");
+                if (!allDifferent) allPass = false;
+
+                var raws = OdoSourceSlotNames.All
+                    .Select(s => enabledSlots.Contains((int)s)
+                        ? MTPacket.RawOdometer(eng2.OdoSourceMiles((int)s)).ToString(CultureInfo.InvariantCulture)
+                        : "0").ToList();
+                string loX = MTPacket.OdoReport("XO", DateTime.UtcNow, null, false, false, false,
+                                                cfg2.OdoCanMode, MTPacket.RawOdometer(eng2.OdometerMiles), raws);
+                var fx = loX.Replace("$$", "").Split(',');
+                bool shapeOk = fx[0].ToUpperInvariant() == "XO" && fx.Length >= 10
+                               && fx.Length - 9 == OdoSourceSlotNames.All.Length;
+                Console.WriteLine("  [" + (shapeOk ? "OK" : "FAIL") + "] REQ3: the odo report parses with the app's own parser rules");
+                if (!shapeOk) allPass = false;
+
+                var present = fx.Skip(9).Where(x => x != "0").ToList();
+                bool distinct = present.Distinct().Count() == present.Count && present.Count >= 2;
+                Console.WriteLine("  [" + (distinct ? "OK" : "FAIL") + "] the report's source fields differ, so a flip is visible ["
+                                  + string.Join(", ", present) + "]");
+                if (!distinct) allPass = false;
+
+                int sampleN = "LO,002910,010100,1,0,0,0,2,1000013,1000013,0,1500000,863".Split(',').Length;
+                bool sameShape = fx.Length == sampleN;
+                Console.WriteLine("  [" + (sameShape ? "OK" : "FAIL") + "] field count matches the 00FD capture ("
+                                  + fx.Length + " vs " + sampleN + ")");
+                if (!sameShape) allPass = false;
+
+                // OBJ1 - reproduce the customer's flip.
+                var seen = new HashSet<int>();
+                for (int k = 0; k < 8; k++)
+                {
+                    var s = OdoLadder.Selected(cfg2.OdoSources, true, null, k % 2 == 1);
+                    if (s.HasValue) seen.Add(s.Value);
+                }
+                bool flips = seen.Count == 2;
+                Console.WriteLine("  [" + (flips ? "OK" : "FAIL") + "] OBJ1: the live odometer alternates between 2 sources");
+                if (!flips) allPass = false;
+
+                // OBJ2 - Pranav's lock must beat the flip.
+                var lockedSeen = new HashSet<int>();
+                for (int k = 0; k < 8; k++)
+                {
+                    var s = OdoLadder.Selected(cfg2.OdoSources, true, 1, k % 2 == 1);
+                    if (s.HasValue) lockedSeen.Add(s.Value);
+                }
+                bool holds = lockedSeen.Count == 1 && lockedSeen.Contains(1);
+                Console.WriteLine("  [" + (holds ? "OK" : "FAIL") + "] OBJ2: a locked source overrides the flip");
+                if (!holds) allPass = false;
+
+                var withVirtual = new SimConfig();
+                withVirtual.OdoSources[(int)OdoSourceSlot.VirtualGps].Enabled = true;
+                bool leads = OdoLadder.ActiveSlots(withVirtual.OdoSources)[0] == (int)OdoSourceSlot.VirtualGps;
+                Console.WriteLine("  [" + (leads ? "OK" : "FAIL") + "] the virtual source overrides all, per the priority table");
+                if (!leads) allPass = false;
+
+                var lone = new SimConfig();
+                for (int i = 0; i < lone.OdoSources.Count; i++) lone.OdoSources[i].Enabled = (i == 0);
+                bool suppressed = !OdoLadder.ShouldReport(lone.OdoSources) && OdoLadder.ShouldReport(cfg2.OdoSources);
+                Console.WriteLine("  [" + (suppressed ? "OK" : "FAIL") + "] the report is sent with 2+ sources and suppressed with 1");
+                if (!suppressed) allPass = false;
+
+                // Sources must COUNT WITH THE TRUCK, keeping their own base.
+                double beforeA = eng2.OdoSourceMiles(0), beforeB = eng2.OdoSourceMiles(1);
+                eng2.IgnitionOn = true; eng2.SpeedMph = 60; eng2.Advance(3600);
+                bool rose = System.Math.Abs((eng2.OdoSourceMiles(0) - beforeA) - 60) < 0.5
+                         && System.Math.Abs((eng2.OdoSourceMiles(1) - beforeB) - 60) < 0.5
+                         && eng2.OdoSourceMiles(0) != eng2.OdoSourceMiles(1);
+                Console.WriteLine("  [" + (rose ? "OK" : "FAIL") + "] every source counts with the truck but keeps its own base");
+                if (!rose) allPass = false;
+
+                // REGRESSION - the source model must not wipe an odometer fault the tester armed.
+                // Mirrors the Swift selftest.
+                var defaults = new SimConfig();
+                int tmp;
+                bool noWipe = OdoLadder.DecideField4(0, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.LeaveAlone
+                           && OdoLadder.DecideField4(null, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.LeaveAlone;
+                Console.WriteLine("  [" + (noWipe ? "OK" : "FAIL") + "] the source model leaves someone else's field-4 fault alone");
+                if (!noWipe) allPass = false;
+
+                bool cleans = OdoLadder.DecideField4(0, defaults.OdoSources, true, out tmp) == OdoLadder.Field4Action.ClearOurs;
+                bool writes = OdoLadder.DecideField4(1, defaults.OdoSources, false, out tmp) == OdoLadder.Field4Action.Write && tmp == 1;
+                Console.WriteLine("  [" + (cleans && writes ? "OK" : "FAIL") + "] it still clears its own value and writes an offset source");
+                if (!(cleans && writes)) allPass = false;
+
+                // END TO END - drive the exact chain the controller runs on every tick and read the
+                // odometer back OFF THE WIRE. Mirrors the Swift selftest.
+                Func<bool, int?, string> wireOdoRaw = (onSecond, locked) =>
+                {
+                    var e3 = new EngineState { OdometerMiles = 10000 };
+                    for (int i = 0; i < cfg2.OdoSources.Count; i++)
+                        e3.OdoSourceOffsetMiles[i] = cfg2.OdoSources[i].OffsetMiles;
+                    var slot = OdoLadder.Selected(cfg2.OdoSources, true, locked, onSecond);
+                    if (slot.HasValue && cfg2.OdoSources[slot.Value].OffsetMiles != 0)
+                        e3.WireFaults[4] = new WireFault(
+                            MTPacket.RawOdometer(e3.OdoSourceMiles(slot.Value)).ToString(CultureInfo.InvariantCulture));
+                    return MTPacket.LivePosition(e3, DateTime.UtcNow).Split(',')[4];
+                };
+                string wireA = wireOdoRaw(false, null), wireB = wireOdoRaw(true, null);
+                bool wireFlips = wireA != wireB;
+                Console.WriteLine("  [" + (wireFlips ? "OK" : "FAIL") + "] ON THE WIRE: LP field 4 flips "
+                                  + wireA + " <-> " + wireB);
+                if (!wireFlips) allPass = false;
+
+                string lockA = wireOdoRaw(false, 1), lockB = wireOdoRaw(true, 1);
+                bool wireHolds = lockA == lockB && lockA == wireB;
+                Console.WriteLine("  [" + (wireHolds ? "OK" : "FAIL") + "] ON THE WIRE: locked to slot 1 it stays " + lockA);
+                if (!wireHolds) allPass = false;
+
+                bool numbersRight = wireA == MTPacket.RawOdometer(10000).ToString(CultureInfo.InvariantCulture)
+                                 && wireB == MTPacket.RawOdometer(13700).ToString(CultureInfo.InvariantCulture);
+                Console.WriteLine("  [" + (numbersRight ? "OK" : "FAIL") + "] the wire values are the two sources' real readings");
+                if (!numbersRight) allPass = false;
+
+                // The app ONLY dispatches on "XO," - LO is correct 00FD firmware but the phone drops it.
+                string loL = MTPacket.OdoReport("LO", DateTime.UtcNow, null, false, false, false, 2, 1, raws);
+                bool appIgnoresLO = loL.Replace("$$", "").Split(',')[0].ToUpperInvariant() != "XO";
+                Console.WriteLine("  [" + (appIgnoresLO ? "OK" : "FAIL") + "] LO is built correctly but the ELD app parses only XO");
+                if (!appIgnoresLO) allPass = false;
+
+                // Locked slot is reported 1-based, like OdoSourceEntry.commandValue.
+                string lockedPkt = MTPacket.OdoReport("XO", DateTime.UtcNow, 1, true, false, false, 2, 1, raws);
+                bool lockOk = lockedPkt.Replace("$$", "").Split(',')[3] == "2";
+                Console.WriteLine("  [" + (lockOk ? "OK" : "FAIL") + "] locked slot 1 is reported as command value 2");
+                if (!lockOk) allPass = false;
             }
 
             // Every requested fault, end to end: arm it exactly as the UI does, build a real packet,
@@ -298,10 +431,16 @@ namespace MatrackSim.SelfTest
                 var cfg = SimConfig.Default;
                 var cases = new List<Tuple<string, bool>>();
 
-                string low = armed(e => e.WireFaults[4] = new WireFault(cfg.OdoSeriesLowRaw));
-                string high = armed(e => e.WireFaults[4] = new WireFault(cfg.OdoSeriesHighRaw));
-                cases.Add(Tuple.Create("two ECU odometer series differ on the wire",
-                    field(4, low) != field(4, high) && field(4, low) == cfg.OdoSeriesLowRaw));
+                // Two odometer sources reach the wire as different values. Uses the real source
+                // model now, not two hardcoded constants: the constants could not count with the
+                // truck, so they never matched the customer evidence. Mirrors the Swift selftest.
+                string srcLowRaw = MTPacket.RawOdometer(25000).ToString(CultureInfo.InvariantCulture);
+                string srcHighRaw = MTPacket.RawOdometer(25000 + cfg.OdoSources[1].OffsetMiles)
+                                             .ToString(CultureInfo.InvariantCulture);
+                string low = armed(e => e.WireFaults[4] = new WireFault(srcLowRaw));
+                string high = armed(e => e.WireFaults[4] = new WireFault(srcHighRaw));
+                cases.Add(Tuple.Create("two odometer sources differ on the wire",
+                    field(4, low) != field(4, high) && field(4, low) == srcLowRaw));
 
                 cases.Add(Tuple.Create("invalid time reaches field 10",
                     field(10, armed(e => e.WireFaults[10] = new WireFault("999999"))) == "999999"));
@@ -327,8 +466,9 @@ namespace MatrackSim.SelfTest
                 cases.Add(Tuple.Create("both bad VINs ride the LV packet verbatim",
                     MTPacket.Version(zeroVin).Split(',')[1] == zeroVin.Vin
                     && MTPacket.Version(shortVin).Split(',')[1] == shortVin.Vin));
-                cases.Add(Tuple.Create("odometer-source packet is well formed",
-                    MTPacket.OdoSource(true, 1).EndsWith("$$")));
+                cases.Add(Tuple.Create("odometer-report packet is well formed",
+                    MTPacket.OdoReport("LO", DateTime.UtcNow, null, false, true, false, 2, 160934,
+                                       new[] { "160934", "220000", "0", "0" }).EndsWith("$$")));
 
                 // Device MAC — mirrors the Swift selftest. The app validates with ^[0-9A-F]{12}$
                 // (added app-side 2026-10-29); the 0xFF-padded value is the case Teja reported from

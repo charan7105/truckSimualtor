@@ -85,7 +85,17 @@ struct ContentView: View {
             if ProcessInfo.processInfo.arguments.contains("dash") {
                 sim.skipStartup()                    // jump straight to the live dashboard (static, for screenshots)
             }
-            // `tab=stored` etc. opens the inspector on a given tab at launch. Same purpose as `dash`:
+            // `odoflip` arms the multi-source odometer flip at launch and starts driving, so the
+            // customer's 00F6 pattern can be reproduced with one command — no clicking. Sandeep
+            // asked for a bench repro; this is it.
+            if ProcessInfo.processInfo.arguments.contains("odoflip") {
+                sim.skipStartup()
+                sim.config.odoFlipEnabled = true
+                sim.config.odoFlipIntervalSec = 2          // tight, so a short capture shows several flips
+                sim.setEngine(true)
+                sim.setSpeed(60)
+            }
+                        // `tab=stored` etc. opens the inspector on a given tab at launch. Same purpose as `dash`:
             // capturing each panel for the manual without clicking, so documentation screenshots are
             // reproducible instead of depending on someone driving the mouse.
             if let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("tab=") }),

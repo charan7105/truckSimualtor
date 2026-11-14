@@ -165,6 +165,110 @@ namespace MatrackSim.App
         public string SpeedMphText =>
             ((int)Math.Round(SpeedMph, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
 
+        // ---- Odometer sources (Sandeep, 13 Nov 2026) ------------------------------------------
+        // One set of bindings per slot. WPF cannot index into a list from XAML cleanly, so each slot
+        // gets explicit properties; the logic itself lives in Core's OdoLadder, shared with Swift.
+
+        private OdoSourceConfig Src(int i) =>
+            i < Config.OdoSources.Count ? Config.OdoSources[i] : new OdoSourceConfig(false, 0);
+
+        public void RefreshOdoBindings() => OdoChanged();
+
+        private void OdoChanged()
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                Raise("OdoSrc" + i + "Enabled"); Raise("OdoSrc" + i + "Offset");
+                Raise("OdoSrc" + i + "Text");    Raise("OdoSrc" + i + "Brush");
+                Raise("OdoSrc" + i + "Locked");
+            }
+            Raise(nameof(OdoFlipEnabled));   // RESET TO CLEAN DATA clears it; the toggle must follow
+            Raise(nameof(OdoSourceSummary)); Raise(nameof(OdoSourceSummaryBrush));
+            Raise(nameof(OdoLockHint)); Raise(nameof(OdoLockHintBrush));
+            Raise(nameof(OdoPrefixHint)); Raise(nameof(OdoFlipIntervalText));
+        }
+
+        private bool GetEnabled(int i) => Src(i).Enabled;
+        private void SetEnabled(int i, bool v)
+        {
+            if (i >= Config.OdoSources.Count || Config.OdoSources[i].Enabled == v) return;
+            Config.OdoSources[i].Enabled = v;
+            // A source that is switched off cannot stay locked.
+            if (!v && Config.OdoLockedSlot == i) Config.OdoLockedSlot = null;
+            OdoChanged();
+        }
+        private double GetOffset(int i) => Src(i).OffsetMiles;
+        private void SetOffset(int i, double v)
+        {
+            if (i >= Config.OdoSources.Count) return;
+            v = Math.Round(v);
+            if (Math.Abs(Config.OdoSources[i].OffsetMiles - v) < 0.001) return;
+            Config.OdoSources[i].OffsetMiles = v;
+            OdoChanged();
+        }
+        private bool GetLocked(int i) => Config.OdoLockedSlot == i;
+        private void SetLocked(int i, bool v)
+        {
+            // Refuse to lock a source that is switched off. OdoLadder.Selected ignores a lock on an
+            // inactive slot, so allowing it would show "locked" in the UI while the wire kept
+            // flipping — the exact disagreement this panel exists to avoid.
+            if (v && !Src(i).Enabled) { OdoChanged(); return; }
+            Config.OdoLockedSlot = v ? i : (Config.OdoLockedSlot == i ? (int?)null : Config.OdoLockedSlot);
+            OdoChanged();
+        }
+        private string SrcText(int i) =>
+            Src(i).Enabled ? ((int)engine.OdoSourceMiles(i)).ToString(CultureInfo.InvariantCulture) + " mi" : "—";
+        private Brush SrcBrush(int i) =>
+            CurrentOdoSlot == i ? ThemeBrushes.Green : ThemeBrushes.Dim;
+
+        public bool OdoSrc0Enabled { get => GetEnabled(0); set => SetEnabled(0, value); }
+        public bool OdoSrc1Enabled { get => GetEnabled(1); set => SetEnabled(1, value); }
+        public bool OdoSrc2Enabled { get => GetEnabled(2); set => SetEnabled(2, value); }
+        public bool OdoSrc3Enabled { get => GetEnabled(3); set => SetEnabled(3, value); }
+        public double OdoSrc0Offset { get => GetOffset(0); set => SetOffset(0, value); }
+        public double OdoSrc1Offset { get => GetOffset(1); set => SetOffset(1, value); }
+        public double OdoSrc2Offset { get => GetOffset(2); set => SetOffset(2, value); }
+        public double OdoSrc3Offset { get => GetOffset(3); set => SetOffset(3, value); }
+        public bool OdoSrc0Locked { get => GetLocked(0); set => SetLocked(0, value); }
+        public bool OdoSrc1Locked { get => GetLocked(1); set => SetLocked(1, value); }
+        public bool OdoSrc2Locked { get => GetLocked(2); set => SetLocked(2, value); }
+        public bool OdoSrc3Locked { get => GetLocked(3); set => SetLocked(3, value); }
+        public string OdoSrc0Text => SrcText(0);
+        public string OdoSrc1Text => SrcText(1);
+        public string OdoSrc2Text => SrcText(2);
+        public string OdoSrc3Text => SrcText(3);
+        public Brush OdoSrc0Brush => SrcBrush(0);
+        public Brush OdoSrc1Brush => SrcBrush(1);
+        public Brush OdoSrc2Brush => SrcBrush(2);
+        public Brush OdoSrc3Brush => SrcBrush(3);
+
+        public bool OdoFlipEnabled
+        {
+            get => Config.OdoFlipEnabled;
+            set { if (Config.OdoFlipEnabled == value) return; Config.OdoFlipEnabled = value; OdoChanged(); Raise(nameof(OdoFlipEnabled)); }
+        }
+        public double OdoFlipIntervalSec
+        {
+            get => Config.OdoFlipIntervalSec;
+            set { double v = Math.Round(value); if (Math.Abs(Config.OdoFlipIntervalSec - v) < 0.001) return;
+                  Config.OdoFlipIntervalSec = v; Raise(nameof(OdoFlipIntervalSec)); Raise(nameof(OdoFlipIntervalText)); }
+        }
+        public string OdoFlipIntervalText => ((int)Config.OdoFlipIntervalSec).ToString(CultureInfo.InvariantCulture) + "s";
+
+        public string OdoSourceSummary =>
+            ActiveOdoSlots.Count >= 2 ? ActiveOdoSlots.Count + " sources" : "needs 2+";
+        public Brush OdoSourceSummaryBrush =>
+            ActiveOdoSlots.Count >= 2 ? ThemeBrushes.Green : ThemeBrushes.Amber;
+
+        public string OdoLockHint => Config.OdoLockedSlot.HasValue
+            ? "LOCKED — the live odometer stays on the locked source even while the flip is on. That is the 00FD fix under test."
+            : "Live odometer alternates between the two highest-priority sources, like the customer's 00F6 data.";
+        public Brush OdoLockHintBrush => Config.OdoLockedSlot.HasValue ? ThemeBrushes.Amber : ThemeBrushes.Dim;
+
+        public string OdoPrefixHint => Config.OdoReportPrefix == "LO"
+            ? "00FD sends LO. The ELD app only reads XO, so it will DROP this one — use it to check the wire, not the phone."
+            : "The app parses XO, but stores it in a variable nothing reads — so still nothing shows on the phone.";
+
         public string ModeText
         {
             get

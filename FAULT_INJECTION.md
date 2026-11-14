@@ -45,7 +45,7 @@ control sends correct bad data; the app's detector is broken. Filed in the audit
 
 | Control | What it sends | Where to look |
 |---|---|---|
-| **TWO ECU ODOMETERS** | Two odometer series ~3,700 mi apart, flipping every packet | Help → Bluetooth → BLE Values: the odometer visibly flips. No warning — that *is* the finding |
+| **FLIP BETWEEN SOURCES** (Odometer sources) | The live odometer alternates between two sources that read ~3,700 mi apart and both count with the truck | Help → Bluetooth → BLE Values: the odometer visibly flips. No warning — that *is* the finding |
 | **ODOMETER JUMP +58,000 mi** | One packet with a huge odometer | Logs → today: the Driving event's odometer jumps and stays. No warning at all |
 | **ODOMETER STUCK** | The "odometer not available" value | The app keeps showing the **last** odometer as if it were live. Nothing changes on screen |
 | **BAD TIME ON 1 IN 5 PACKETS** | An impossible time, scattered | Intermittent — watch the event list, don't wait for a banner |
@@ -63,7 +63,7 @@ them.
 |---|---|
 | **SEND BAD VIN** (ALL ZEROS / LAST 6 ONLY) | Both fail the same check and behave identically. Only Troubleshoot → Run Diagnostic Check shows the VIN row red |
 | **DEFAULT DATE ON 1 IN 5 PACKETS** | Both the MT and PT parsers rewrite the packet date to phone time |
-| **ODOMETER SOURCE → VIRTUAL** | The app parses this packet into a variable with **zero readers** and posts a notification with **zero observers** |
+| **SEND ODO REPORT** (Odometer sources) | Sends the odo-source report. As `LO` (00FD firmware) the app **drops it** — it only dispatches on `XO`. As `XO` it parses into a variable with **zero readers** and notifies **zero observers** |
 | **MALFORMED PACKET** | Sends one packet that is not valid at all. The app should reject it and carry on — a crash or a stalled stream is the bug. This is the only fault the live path cannot produce on its own, which is why it lives here rather than needing a scenario |
 
 ---
@@ -156,3 +156,33 @@ one button clears it.
 
 **One fault at a time, unless you mean it.** The status line lists everything armed. Two faults at
 once makes it much harder to attribute what you see on the phone.
+
+## Odometer sources — reproducing the flipping odometer (Sandeep, 13 Nov 2026)
+
+Customer case 00F6 shows the live `LP` odometer alternating between two counters about every 21 s,
+both rising with the truck but from different bases. The simulator reproduces that on a bench.
+
+**Where:** CONNECTION → **Bad data** → *Odometer sources*.
+
+| Control | What it does |
+|---|---|
+| Tick box per source | Which sources the "truck" has. The four slots are the J1939 priority ladder: PGN 65248 (best), PGN 65217 SA17, PGN 65217 SA0, and Virtual (GPS) which overrides all. |
+| **offset** | How far above the truck's odometer that source reads. This is what makes two sources tell each other apart — with equal values a flip is invisible, which is exactly what the 00FD capture showed (`…,1000013,1000013,…`). |
+| **FLIP BETWEEN SOURCES** | Alternates the live odometer between the two highest-priority sources. |
+| **Flip every** | Seconds between flips. 21 s is the median gap measured in the customer capture. |
+| **LOCK** (per row) | Pins the live odometer to that source. **This is the 00FD fix under test** — with a source locked the flip must have no effect. |
+| **Report as** | `LO` is what 00FD firmware sends. `XO` is what the ELD app actually parses. |
+| **SEND ODO REPORT** | Sends the report. Live only, and only with 2+ sources on — the firmware never saves it. |
+
+**One-command repro:** `MatrackTruckSim dash odoflip` starts driving with the flip armed at 2 s.
+
+### Known: the ELD app drops `LO`
+
+00FD firmware sends `LO`, but the app only dispatches on `XO,`
+(`BleClass.swift` → `case let v where v.hasPrefix("XO,")`) and its parser rejects anything whose
+first field is not `XO` (`MatrackELD/Utils/OdoSource.swift`). Checked in the current build and in
+r5176 — **neither parses `LO`**. So an `LO` packet is correct firmware behaviour but the phone will
+drop it silently. Switch *Report as* to `XO` when the point is to see the app parse it.
+
+Even then, nothing appears on screen: the parsed packet lands in `GlobalVar.shared.mtOdoPacket`,
+which has **zero readers**, and raises a notification with **zero observers**.

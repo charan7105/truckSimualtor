@@ -60,16 +60,48 @@ enum MTPacket {
         ["LV", d.vin, d.mcuHW, d.mcuFW, d.bleHW, d.bleFW, d.canMode, d.canMask, d.deviceMAC].joined(separator: ",")
     }
 
-    /// Odometer-source packet: `xO,<fields>$$`. The app parses this (BleClass.handleOdoSourcePacket
-    /// → OdoSource.swift) into `GlobalVar.shared.mtOdoPacket` — which has ZERO readers — and posts a
-    /// notification with ZERO observers. Shipped so a tester can demonstrate that the app ignores an
-    /// odometer-source switch entirely, which is the honest answer to "does it alert when the source
-    /// changes". Layout follows the app's parser: 9 fixed header fields, then the source list.
-    static func odoSource(virtualEnabled: Bool, activeSource: Int) -> String {
-        let f = ["xO", "1", "\(activeSource)", virtualEnabled ? "1" : "0", "0",
-                 virtualEnabled ? "1" : "0", "0", "0", "0", "\(activeSource)"]
+    /// Odometer-report packet — `LO,...$$` on 00FD firmware, `xO,...$$` on the older build.
+    ///
+    /// The layout is NOT guessed: it is copied from the ELD app's own parser,
+    /// `MatrackELD/Utils/OdoSource.swift`, which documents nine fixed header fields followed by a
+    /// DYNAMIC source list ("the number of odo-source value fields may be 5 or 6 in future firmware
+    /// — do NOT hardcode 3"). Verified field-for-field against Sandeep's 00FD capture
+    /// `LO,002910,010100,1,0,0,0,2,1000013,1000013,0,1500000,863$$`.
+    ///
+    ///   [0] prefix        [1] UTC time HHMMSS   [2] UTC date DDMMYY
+    ///   [3] locked source [4] override          [5] virtual enabled
+    ///   [6] discovery     [7] CAN mode          [8] odometer (the value in use)
+    ///   [9...] one field per source slot, in priority order
+    ///
+    /// The previous builder got eight of these thirteen fields wrong — it put "1" where the UTC time
+    /// belongs, never sent a date or an odometer, and emitted a single source value, so it could
+    /// never have shown a flip.
+    ///
+    /// `sourceRaws` are already in wire units (x10 km); pass "0" for a slot that is not present,
+    /// which is what the capture shows for an absent source.
+    static func odoReport(prefix: String = "LO",
+                          date: Date = Date(),
+                          lockedSlot: Int?,
+                          overrideActive: Bool,
+                          virtualEnabled: Bool,
+                          discoveryActive: Bool,
+                          canMode: Int,
+                          odometerRaw: Int,
+                          sourceRaws: [String]) -> String {
+        let (hhmmss, ddmmyy) = utcTokens(date)
+        // The app reads this with Int(field); it treats a non-numeric value as "unlocked" (nil).
+        // 0 is the firmware's own "not locked" marker in the capture, so use it rather than a blank.
+        let locked = lockedSlot.map { $0 + 1 } ?? 0      // 1-based, matching OdoSourceEntry.commandValue
+        let f = [prefix, hhmmss, ddmmyy, "\(locked)",
+                 overrideActive ? "1" : "0",
+                 virtualEnabled ? "1" : "0",
+                 discoveryActive ? "1" : "0",
+                 "\(canMode)", "\(odometerRaw)"] + sourceRaws
         return f.joined(separator: ",") + "$$"
     }
+
+    /// Miles -> the raw x10 km integer the wire carries, same conversion the telemetry packet uses.
+    static func rawOdometer(_ miles: Double) -> Int { Int((miles / milesPerRawOdo).rounded()) }
 
     /// DTC packet (OBD-II path): LD,ign,rpm,canMode(0),count,spare(0),hexBlob
     static func dtc(_ codes: [String], ignition: Int, rpm: Int) -> String {

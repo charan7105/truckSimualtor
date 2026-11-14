@@ -755,8 +755,6 @@
                                     <TextBlock Text="Phone: the Driving event's odometer jumps and stays. No warning at all." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="ODOMETER STUCK" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultOdoStuck_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Sends 'odometer not available'. Phone keeps showing the last value — that is the finding." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                    <Button Content="TWO ECU ODOMETERS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultTwoOdo_Click" Margin="0,0,0,2" />
-                                    <TextBlock Text="Two series ~3,700 mi apart, flipping every packet. Phone: BLE Values shows it flipping. No warning — that is the finding." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="BAD TIME ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultBadTime_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Scatters an impossible time through the stream instead of corrupting every packet." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="DEFAULT ODOMETER ON 1 IN 5 PACKETS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultDefaultOdo_Click" Margin="0,0,0,2" />
@@ -764,7 +762,88 @@
                                     <Button Content="POWER CYCLE STORM x10" Style="{StaticResource NeonButton}" Foreground="{StaticResource Amber}" Click="FaultPowerStorm_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="Phone speaks 'Vehicle Power up' each time. It never raises Power Compliance." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                                    <TextBlock Text="THE PHONE IGNORES THESE" Style="{StaticResource Sec}" Foreground="{StaticResource Dim}" Margin="0,0,0,4" />
+                                                                        <!-- Odometer sources (Sandeep, 13 Nov 2026): two or more sources each reading from its OWN
+                                         base, the 00FD odo report, and the lock the report exists to prove.
+                                         Mirrors odoSourceSection in the Swift build. -->
+                                    <TextBlock Text="ODOMETER SOURCES" Style="{StaticResource Sec}" Margin="0,0,0,4" />
+                                    <TextBlock Text="{Binding OdoSourceSummary}" Foreground="{Binding OdoSourceSummaryBrush}"
+                                               FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                    <DockPanel Margin="0,0,0,3">
+                                      <CheckBox Content="Odo PGN65248" Width="146" VerticalAlignment="Center" FontSize="11"
+                                                Foreground="{StaticResource Text}" IsChecked="{Binding OdoSrc0Enabled, Mode=TwoWay}" />
+                                      <ToggleButton Content="LOCK" DockPanel.Dock="Right" Width="46" Margin="6,0,0,0" FontSize="10"
+                                                    Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}"
+                                                    IsChecked="{Binding OdoSrc0Locked, Mode=TwoWay}"
+                                                    ToolTip="Lock the live odometer to this source" />
+                                      <TextBlock Text="{Binding OdoSrc0Text}" DockPanel.Dock="Right" Width="92" TextAlignment="Right"
+                                                 FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding OdoSrc0Brush}"
+                                                 VerticalAlignment="Center" />
+                                      <Slider Minimum="-5000" Maximum="20000" Value="{Binding OdoSrc0Offset, Mode=TwoWay}"
+                                              ToolTip="How far above the truck odometer this source reads" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,3">
+                                      <CheckBox Content="Odo PGN65217 SA17" Width="146" VerticalAlignment="Center" FontSize="11"
+                                                Foreground="{StaticResource Text}" IsChecked="{Binding OdoSrc1Enabled, Mode=TwoWay}" />
+                                      <ToggleButton Content="LOCK" DockPanel.Dock="Right" Width="46" Margin="6,0,0,0" FontSize="10"
+                                                    Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}"
+                                                    IsChecked="{Binding OdoSrc1Locked, Mode=TwoWay}"
+                                                    ToolTip="Lock the live odometer to this source" />
+                                      <TextBlock Text="{Binding OdoSrc1Text}" DockPanel.Dock="Right" Width="92" TextAlignment="Right"
+                                                 FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding OdoSrc1Brush}"
+                                                 VerticalAlignment="Center" />
+                                      <Slider Minimum="-5000" Maximum="20000" Value="{Binding OdoSrc1Offset, Mode=TwoWay}"
+                                              ToolTip="How far above the truck odometer this source reads" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,3">
+                                      <CheckBox Content="Odo PGN65217 SA0" Width="146" VerticalAlignment="Center" FontSize="11"
+                                                Foreground="{StaticResource Text}" IsChecked="{Binding OdoSrc2Enabled, Mode=TwoWay}" />
+                                      <ToggleButton Content="LOCK" DockPanel.Dock="Right" Width="46" Margin="6,0,0,0" FontSize="10"
+                                                    Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}"
+                                                    IsChecked="{Binding OdoSrc2Locked, Mode=TwoWay}"
+                                                    ToolTip="Lock the live odometer to this source" />
+                                      <TextBlock Text="{Binding OdoSrc2Text}" DockPanel.Dock="Right" Width="92" TextAlignment="Right"
+                                                 FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding OdoSrc2Brush}"
+                                                 VerticalAlignment="Center" />
+                                      <Slider Minimum="-5000" Maximum="20000" Value="{Binding OdoSrc2Offset, Mode=TwoWay}"
+                                              ToolTip="How far above the truck odometer this source reads" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,0,0,3">
+                                      <CheckBox Content="Virtual (GPS)" Width="146" VerticalAlignment="Center" FontSize="11"
+                                                Foreground="{StaticResource Text}" IsChecked="{Binding OdoSrc3Enabled, Mode=TwoWay}" />
+                                      <ToggleButton Content="LOCK" DockPanel.Dock="Right" Width="46" Margin="6,0,0,0" FontSize="10"
+                                                    Style="{StaticResource NeonToggle}" Tag="{StaticResource Amber}"
+                                                    IsChecked="{Binding OdoSrc3Locked, Mode=TwoWay}"
+                                                    ToolTip="Lock the live odometer to this source" />
+                                      <TextBlock Text="{Binding OdoSrc3Text}" DockPanel.Dock="Right" Width="92" TextAlignment="Right"
+                                                 FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{Binding OdoSrc3Brush}"
+                                                 VerticalAlignment="Center" />
+                                      <Slider Minimum="-5000" Maximum="20000" Value="{Binding OdoSrc3Offset, Mode=TwoWay}"
+                                              ToolTip="How far above the truck odometer this source reads" />
+                                    </DockPanel>
+                                    <ToggleButton Content="FLIP BETWEEN SOURCES" Style="{StaticResource NeonToggle}" Tag="{StaticResource Red}"
+                                                  IsChecked="{Binding OdoFlipEnabled, Mode=TwoWay}" Margin="0,4,0,4" />
+                                    <DockPanel Margin="0,0,0,4">
+                                      <TextBlock Text="Flip every" Width="62" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                      <TextBlock Text="{Binding OdoFlipIntervalText}" Width="40" DockPanel.Dock="Right" TextAlignment="Right"
+                                                 FontFamily="{StaticResource Mono}" FontSize="11" Foreground="{StaticResource Ice}" VerticalAlignment="Center" />
+                                      <Slider Minimum="1" Maximum="60" Value="{Binding OdoFlipIntervalSec, Mode=TwoWay}" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding OdoLockHint}" Foreground="{Binding OdoLockHintBrush}" FontSize="9"
+                                               TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <DockPanel Margin="0,0,0,4">
+                                      <TextBlock Text="Report as" Width="62" Foreground="{StaticResource Dim}" FontSize="11" VerticalAlignment="Center" />
+                                      <ComboBox x:Name="OdoPrefixBox" SelectedIndex="0" SelectionChanged="OdoPrefix_Changed">
+                                        <ComboBoxItem Content="LO (00FD firmware)" Tag="LO" />
+                                        <ComboBoxItem Content="XO (what the app reads)" Tag="XO" />
+                                      </ComboBox>
+                                    </DockPanel>
+                                    <Button Content="SEND ODO REPORT" Style="{StaticResource NeonButton}" Click="SendOdoReport_Click" Margin="0,0,0,2" />
+                                    <TextBlock Text="{Binding OdoPrefixHint}" Foreground="{StaticResource Amber}" FontSize="9"
+                                               TextWrapping="Wrap" Margin="0,0,0,2" />
+                                    <TextBlock Text="Sent live only, and only with 2+ sources on. The firmware never saves it."
+                                               Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
+<TextBlock Text="THE PHONE IGNORES THESE" Style="{StaticResource Sec}" Foreground="{StaticResource Dim}" Margin="0,0,0,4" />
                                     <TextBlock Text="Verified against the app source. Send these to PROVE the app ignores them, not to wait for an alert." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,4" />
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <Button Content="ALL ZEROS" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="VinZeros_Click" Margin="0,0,6,0" />
@@ -787,8 +866,6 @@
                                     <TextBlock Text="Sends the previous dump again, byte for byte. Run a dump, drop the link, reconnect, then press this." Foreground="{StaticResource Dim}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <Button Content="MALFORMED PACKET" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultMalformed_Click" Margin="0,0,0,2" />
                                     <TextBlock Text="One packet that is not valid at all. Phone: should reject it and carry on; a crash or a stalled stream is the bug." Foreground="{StaticResource Dim}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6" />
-                                    <Button Content="ODOMETER SOURCE → VIRTUAL" Style="{StaticResource NeonButton}" Foreground="{StaticResource Dim}" Click="FaultOdoSource_Click" Margin="0,0,0,2" />
-                                    <TextBlock Text="The xO packet that says the odometer source changed. Phone: nothing at all — it parses this into a variable with no readers." Foreground="{StaticResource Dim}" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,8" />
                                     <Border Height="1" Background="{StaticResource Stroke}" Margin="0,4,0,8" />
 
                                     <!-- TEST SETUP: dial the truck to a starting state instead of driving to it.

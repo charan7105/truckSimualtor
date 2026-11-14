@@ -78,17 +78,37 @@ namespace MatrackSim.Core
         private static readonly Random Rng = new Random();
 
         /// <summary>
-        /// Odometer-source packet: xO,&lt;fields&gt;$$. The app parses this into GlobalVar.mtOdoPacket —
-        /// which has ZERO readers — and posts a notification with ZERO observers. Shipped so a tester
-        /// can demonstrate that the app ignores an odometer-source switch entirely.
+        /// Odometer-report packet - `LO,...$$` on 00FD firmware, `xO,...$$` on the older build.
+        ///
+        /// Layout copied from the ELD app's own parser, MatrackELD/Utils/OdoSource.swift: nine fixed
+        /// header fields then a DYNAMIC source list. Verified field-for-field against Sandeep's 00FD
+        /// capture LO,002910,010100,1,0,0,0,2,1000013,1000013,0,1500000,863$$.
+        ///   [0] prefix [1] UTC time [2] UTC date [3] locked [4] override [5] virtual
+        ///   [6] discovery [7] CAN mode [8] odometer in use, then one field per source slot.
+        /// Mirrors MTPacket.odoReport in the Swift build.
         /// </summary>
-        public static string OdoSource(bool virtualEnabled, int activeSource)
+        public static string OdoReport(string prefix, DateTime date, int? lockedSlot,
+                                       bool overrideActive, bool virtualEnabled, bool discoveryActive,
+                                       int canMode, int odometerRaw, IReadOnlyList<string> sourceRaws)
         {
-            string v = virtualEnabled ? "1" : "0";
-            var f = new[] { "xO", "1", activeSource.ToString(CultureInfo.InvariantCulture), v, "0", v, "0", "0", "0",
-                            activeSource.ToString(CultureInfo.InvariantCulture) };
+            var (hhmmss, ddmmyy) = UtcTokens(date);
+            // The app reads this with Int(field); 0 is the firmware's own "not locked" marker in the
+            // capture, so use it rather than a blank. 1-based, matching OdoSourceEntry.commandValue.
+            int locked = lockedSlot.HasValue ? lockedSlot.Value + 1 : 0;
+            var f = new List<string>
+            {
+                prefix, hhmmss, ddmmyy, locked.ToString(CultureInfo.InvariantCulture),
+                overrideActive ? "1" : "0", virtualEnabled ? "1" : "0", discoveryActive ? "1" : "0",
+                canMode.ToString(CultureInfo.InvariantCulture),
+                odometerRaw.ToString(CultureInfo.InvariantCulture)
+            };
+            f.AddRange(sourceRaws);
             return string.Join(",", f) + "$$";
         }
+
+        /// <summary>Miles -> the raw x10 km integer the wire carries. Mirrors MTPacket.rawOdometer.</summary>
+        public static int RawOdometer(double miles) =>
+            (int)Math.Round(miles / MilesPerRawOdo, MidpointRounding.AwayFromZero);
 
         /// <summary>DTC packet (OBD-II path): LD,ign,rpm,canMode(0),count,spare(0),hexBlob</summary>
         public static string Dtc(IReadOnlyList<string> codes, int ignition, int rpm)

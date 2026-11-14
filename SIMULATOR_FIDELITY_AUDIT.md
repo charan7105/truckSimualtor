@@ -220,7 +220,7 @@ odometer jump is booked as driven miles in full. A downward jump is silently dro
 `odoInception > eventStartOdo` guard (`:1812`), freezing the event's mileage with no diagnostic.
 
 **This is the answer to "when the odometer fluctuates, shouldn't the app alert?" — it does not, and
-no code exists that could.** Demonstrate with the simulator's `TWO ECU ODOMETERS` control.
+no code exists that could.** Demonstrate with the simulator's `FLIP BETWEEN SOURCES` control (Odometer sources).
 
 ### A6 — the odometer-source channel is parsed and then discarded
 The MT `xO,…$$` packet is dispatched at `BleClass.swift:3272`, parsed by

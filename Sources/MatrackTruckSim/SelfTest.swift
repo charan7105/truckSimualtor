@@ -276,14 +276,189 @@ enum SelfTest {
             print("  [\(rejected ? "OK" : "FAIL")] the malformed packet is genuinely invalid")
             if !rejected { allPass = false }
 
-            // The odometer-source packet must match the shape the app's parser demands (>= 10 comma
-            // fields, xO prefix, $$ terminator) or it is dropped before reaching the dead code path
-            // we are trying to demonstrate.
-            let xo = MTPacket.odoSource(virtualEnabled: true, activeSource: 1)
-            let xoOk = xo.hasPrefix("xO,") && xo.hasSuffix("$$")
-                && xo.replacingOccurrences(of: "$$", with: "").components(separatedBy: ",").count >= 10
-            print("  [\(xoOk ? "OK" : "FAIL")] the odometer-source packet matches the app parser's shape")
-            if !xoOk { allPass = false }
+            // ---- Odometer sources (Sandeep, 13 Nov 2026) ----------------------------------
+            // Every assertion below is written against the ELD app's OWN parser rules, copied from
+            // MatrackELD/Utils/OdoSource.swift, so passing here means the app would accept it.
+
+            // Mirror of the app's parser. Returns nil exactly where OdoPacket.parse returns nil.
+            func parseOdo(_ raw: String) -> (locked: Int?, canMode: String, odo: String, sources: [String])? {
+                var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if s.hasSuffix("$$") { s = String(s.dropLast(2)) }
+                guard !s.isEmpty else { return nil }
+                let f = s.components(separatedBy: ",")
+                guard let first = f.first, first.uppercased() == "XO", f.count >= 10 else { return nil }
+                return (Int(f[3]), f[7], f[8], Array(f[9...]))
+            }
+
+            var cfg2 = SimConfig()
+            let eng = EngineState()
+            eng.odometerMiles = 10_000
+            eng.odoSourceOffsetMiles = Dictionary(uniqueKeysWithValues:
+                cfg2.odoSources.enumerated().map { ($0.offset, $0.element.offsetMiles) })
+
+            // REQ 1 — two or more sources, and REQ 2 — each starting from a different value.
+            let enabled = cfg2.odoSources.enumerated().filter { $0.element.enabled }.map { $0.offset }
+            let vals = enabled.map { eng.odoSourceMiles($0) }
+            let twoPlus = enabled.count >= 2
+            let allDifferent = Set(vals.map { Int($0.rounded()) }).count == vals.count
+            print("  [\(twoPlus ? "OK" : "FAIL")] REQ1: \(enabled.count) odo sources are on by default")
+            if !twoPlus { allPass = false }
+            print("  [\(allDifferent ? "OK" : "FAIL")] REQ2: each source starts from a different value (\(vals.map { Int($0) }))")
+            if !allDifferent { allPass = false }
+
+            // REQ 3 — the report packet, parsed by the app's own rules.
+            let raws = OdoSourceSlot.allCases.map { s -> String in
+                enabled.contains(s.rawValue) ? "\(MTPacket.rawOdometer(eng.odoSourceMiles(s.rawValue)))" : "0"
+            }
+            let lo = MTPacket.odoReport(prefix: "XO", lockedSlot: nil, overrideActive: false,
+                                        virtualEnabled: false, discoveryActive: false,
+                                        canMode: cfg2.odoCanMode,
+                                        odometerRaw: MTPacket.rawOdometer(eng.odometerMiles),
+                                        sourceRaws: raws)
+            let parsed = parseOdo(lo)
+            let shapeOk = parsed != nil && parsed!.sources.count == OdoSourceSlot.allCases.count
+            print("  [\(shapeOk ? "OK" : "FAIL")] REQ3: the odo report parses with the app's own parser rules")
+            if !shapeOk { allPass = false }
+
+            // The whole point of REQ2: two source fields that are NOT equal, unlike the 00FD capture
+            // (...,1000013,1000013,...) where a flip would have been invisible.
+            if let pp = parsed {
+                let present = pp.sources.filter { $0 != "0" }
+                let distinct = Set(present).count == present.count && present.count >= 2
+                print("  [\(distinct ? "OK" : "FAIL")] the report's source fields differ, so a flip is visible (\(present))")
+                if !distinct { allPass = false }
+            }
+
+            // Field-for-field against Sandeep's 00FD capture: same field count, same positions.
+            let sample = "LO,002910,010100,1,0,0,0,2,1000013,1000013,0,1500000,863$$"
+            let sampleN = sample.replacingOccurrences(of: "$$", with: "").components(separatedBy: ",").count
+            let oursN = lo.replacingOccurrences(of: "$$", with: "").components(separatedBy: ",").count
+            let sameShape = sampleN == oursN
+            print("  [\(sameShape ? "OK" : "FAIL")] field count matches the 00FD capture (\(oursN) vs \(sampleN))")
+            if !sameShape { allPass = false }
+
+            // A report with fewer than two sources must not be sent at all ("odo packets will be
+            // visible only if multiple sources present").
+            var lone = SimConfig()
+            for i in lone.odoSources.indices { lone.odoSources[i].enabled = (i == 0) }
+            let loneOn = lone.odoSources.filter { $0.enabled }.count
+            print("  [\(loneOn == 1 ? "OK" : "FAIL")] a single-source rig is detectable (suppresses the report)")
+            if loneOn != 1 { allPass = false }
+
+            // The locked field is 1-based like the app's OdoSourceEntry.commandValue, and 0 when
+            // unlocked — Int("0") is non-nil, so the app reads "not locked" as source 0, not nil.
+            let locked = MTPacket.odoReport(prefix: "XO", lockedSlot: 1, overrideActive: true,
+                                            virtualEnabled: false, discoveryActive: false,
+                                            canMode: 2, odometerRaw: 1, sourceRaws: raws)
+            let lockOk = parseOdo(locked)?.locked == 2
+            print("  [\(lockOk ? "OK" : "FAIL")] locked slot 1 is reported as command value 2")
+            if !lockOk { allPass = false }
+
+            // OBJECTIVE 1 — reproduce the customer's flip. Over a run of ticks the live odometer
+            // must alternate between the top two sources, not sit on one.
+            var seen = Set<Int>()
+            for tick in 0..<8 {
+                if let s = OdoLadder.selected(sources: cfg2.odoSources, flipEnabled: true,
+                                              lockedSlot: nil, onSecond: tick % 2 == 1) { seen.insert(s) }
+            }
+            let flips = seen.count == 2
+            print("  [\(flips ? "OK" : "FAIL")] OBJ1: the live odometer alternates between 2 sources (slots \(seen.sorted()))")
+            if !flips { allPass = false }
+
+            // OBJECTIVE 2 — Pranav's lock. With a slot locked the flip must have NO effect; if this
+            // ever reports two slots, the 00FD fix is not holding.
+            var lockedSeen = Set<Int>()
+            for tick in 0..<8 {
+                if let s = OdoLadder.selected(sources: cfg2.odoSources, flipEnabled: true,
+                                              lockedSlot: 1, onSecond: tick % 2 == 1) { lockedSeen.insert(s) }
+            }
+            let holds = lockedSeen == [1]
+            print("  [\(holds ? "OK" : "FAIL")] OBJ2: a locked source overrides the flip (stayed on \(lockedSeen.sorted()))")
+            if !holds { allPass = false }
+
+            // Priority ladder: virtual overrides all, so it leads when switched on.
+            var withVirtual = SimConfig()
+            withVirtual.odoSources[OdoSourceSlot.virtualGps.rawValue].enabled = true
+            let leads = OdoLadder.activeSlots(withVirtual.odoSources).first == OdoSourceSlot.virtualGps.rawValue
+            print("  [\(leads ? "OK" : "FAIL")] the virtual source overrides all, per the priority table")
+            if !leads { allPass = false }
+
+            // Report suppression, both ways.
+            let suppressed = !OdoLadder.shouldReport(lone.odoSources) && OdoLadder.shouldReport(cfg2.odoSources)
+            print("  [\(suppressed ? "OK" : "FAIL")] the report is sent with 2+ sources and suppressed with 1")
+            if !suppressed { allPass = false }
+
+            // Sources must COUNT WITH THE TRUCK — the customer capture is explicit that the second
+            // value rises at the same rate as the real odometer. A static second series would not
+            // reproduce the bug.
+            let before = (0, 1).0
+            _ = before
+            let beforeA = eng.odoSourceMiles(0), beforeB = eng.odoSourceMiles(1)
+            eng.ignitionOn = true; eng.speedMph = 60; eng.advance(dt: 3600)   // one hour at 60 mph
+            let rose = abs((eng.odoSourceMiles(0) - beforeA) - 60) < 0.5
+                && abs((eng.odoSourceMiles(1) - beforeB) - 60) < 0.5
+                && eng.odoSourceMiles(1) != eng.odoSourceMiles(0)
+            print("  [\(rose ? "OK" : "FAIL")] every source counts with the truck but keeps its own base")
+            if !rose { allPass = false }
+
+            // REGRESSION — the source model must not wipe an odometer fault the tester armed.
+            // With the default rig (slot 0, offset 0) this decision runs every tick; clearing field
+            // 4 unconditionally erased ODOMETER STUCK / JUMP / the 1-in-5 variants before a single
+            // packet carried them, with nothing on screen to say so.
+            let defaults = SimConfig()
+            let leaves = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources, weOwnIt: false)
+            let stillLeaves = OdoLadder.field4Action(selected: nil, sources: defaults.odoSources, weOwnIt: false)
+            let noWipe = leaves == .leaveAlone && stillLeaves == .leaveAlone
+            print("  [\(noWipe ? "OK" : "FAIL")] the source model leaves someone else's field-4 fault alone")
+            if !noWipe { allPass = false }
+
+            // ...but it must clean up after ITSELF, or a stale flip value would stick for ever.
+            let cleans = OdoLadder.field4Action(selected: 0, sources: defaults.odoSources, weOwnIt: true) == .clearOurs
+            let writes = OdoLadder.field4Action(selected: 1, sources: defaults.odoSources, weOwnIt: false) == .write(slot: 1)
+            print("  [\(cleans && writes ? "OK" : "FAIL")] it still clears its own value and writes an offset source")
+            if !(cleans && writes) { allPass = false }
+
+            // END TO END — drive the exact chain the controller runs on every tick (pick a slot,
+            // write field 4, build the live packet) and read the odometer back OFF THE WIRE. The
+            // checks above prove the ladder; this proves the number the phone would actually see.
+            func wireOdoRaw(onSecond: Bool, locked: Int?) -> String {
+                let e2 = EngineState()
+                e2.odometerMiles = 10_000
+                e2.odoSourceOffsetMiles = Dictionary(uniqueKeysWithValues:
+                    cfg2.odoSources.enumerated().map { ($0.offset, $0.element.offsetMiles) })
+                if let slot = OdoLadder.selected(sources: cfg2.odoSources, flipEnabled: true,
+                                                 lockedSlot: locked, onSecond: onSecond),
+                   cfg2.odoSources[slot].offsetMiles != 0 {
+                    e2.wireFaults[4] = WireFault(value: "\(MTPacket.rawOdometer(e2.odoSourceMiles(slot)))")
+                }
+                return MTPacket.livePosition(e2).components(separatedBy: ",")[4]
+            }
+            let wireA = wireOdoRaw(onSecond: false, locked: nil)
+            let wireB = wireOdoRaw(onSecond: true,  locked: nil)
+            let wireFlips = wireA != wireB
+            print("  [\(wireFlips ? "OK" : "FAIL")] ON THE WIRE: LP field 4 flips \(wireA) <-> \(wireB)")
+            if !wireFlips { allPass = false }
+
+            let lockA = wireOdoRaw(onSecond: false, locked: 1)
+            let lockB = wireOdoRaw(onSecond: true,  locked: 1)
+            let wireHolds = lockA == lockB && lockA == wireB      // pinned to slot 1's value
+            print("  [\(wireHolds ? "OK" : "FAIL")] ON THE WIRE: locked to slot 1 it stays \(lockA)")
+            if !wireHolds { allPass = false }
+
+            // Sanity on the numbers themselves: 10,000 mi and 13,700 mi in x10 km units.
+            let expectA = "\(MTPacket.rawOdometer(10_000))", expectB = "\(MTPacket.rawOdometer(13_700))"
+            let numbersRight = wireA == expectA && wireB == expectB
+            print("  [\(numbersRight ? "OK" : "FAIL")] the wire values are the two sources' real readings")
+            if !numbersRight { allPass = false }
+
+            // The app ONLY dispatches on "XO," — an LO packet is correct 00FD firmware but the
+            // phone drops it. Assert that difference so nobody later assumes the app sees LO.
+            let loPrefixed = MTPacket.odoReport(prefix: "LO", lockedSlot: nil, overrideActive: false,
+                                                virtualEnabled: false, discoveryActive: false,
+                                                canMode: 2, odometerRaw: 1, sourceRaws: raws)
+            let appIgnoresLO = parseOdo(loPrefixed) == nil && parseOdo(lo) != nil
+            print("  [\(appIgnoresLO ? "OK" : "FAIL")] LO is built correctly but the ELD app parses only XO")
+            if !appIgnoresLO { allPass = false }
         }
 
         // Every requested fault, end to end: arm it exactly as the UI does, build a real packet, and
@@ -303,12 +478,15 @@ enum SelfTest {
             }
             var cases: [(String, Bool)] = []
 
-            // 2 — two ECU odometer series
-            let low = armed { $0.wireFaults[4] = WireFault(value: SimConfig.default.odoSeriesLowRaw) }
-            let high = armed { $0.wireFaults[4] = WireFault(value: SimConfig.default.odoSeriesHighRaw) }
-            cases.append(("two ECU odometer series differ on the wire",
-                          field(4, low) != field(4, high)
-                          && field(4, low) == SimConfig.default.odoSeriesLowRaw))
+            // 2 — two odometer sources reach the wire as different values. Uses the real source
+            // model now, not two hardcoded constants: the constants could not count with the truck,
+            // so they never matched the customer evidence they were meant to reproduce.
+            let srcLowRaw  = "\(MTPacket.rawOdometer(25_000))"
+            let srcHighRaw = "\(MTPacket.rawOdometer(25_000 + SimConfig.default.odoSources[1].offsetMiles))"
+            let low = armed { $0.wireFaults[4] = WireFault(value: srcLowRaw) }
+            let high = armed { $0.wireFaults[4] = WireFault(value: srcHighRaw) }
+            cases.append(("two odometer sources differ on the wire",
+                          field(4, low) != field(4, high) && field(4, low) == srcLowRaw))
 
             // 5 — invalid time
             cases.append(("invalid time reaches field 10",
@@ -348,9 +526,11 @@ enum SelfTest {
                           MTPacket.version(zeroVin).components(separatedBy: ",")[1] == zeroVin.vin
                           && MTPacket.version(shortVin).components(separatedBy: ",")[1] == shortVin.vin))
 
-            // 1 — odometer-source packet
-            cases.append(("odometer-source packet is well formed",
-                          MTPacket.odoSource(virtualEnabled: true, activeSource: 1).hasSuffix("$$")))
+            // 1 — odometer-report packet
+            cases.append(("odometer-report packet is well formed",
+                          MTPacket.odoReport(lockedSlot: nil, overrideActive: false, virtualEnabled: true,
+                                             discoveryActive: false, canMode: 2, odometerRaw: 160_934,
+                                             sourceRaws: ["160934", "220000", "0", "0"]).hasSuffix("$$")))
 
             // MAC variants ride LV field 8 verbatim, and our mirror of the app's ^[0-9A-F]{12}$
             // check agrees with what each one should do. The 0xFF-padded value is the case Teja

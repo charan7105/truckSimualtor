@@ -51,6 +51,17 @@ final class EngineState {
     var rpmPerMphConfig = 26.0
     var fuelBurnPctPerMile = 0.02
 
+    /// Per-slot odometer offsets in miles, indexed by `OdoSourceSlot.rawValue`. Applied on top of
+    /// `odometerMiles`, so every source counts with the truck but reads from its own base — the
+    /// behaviour the customer capture shows. Empty = only the truck's own odometer exists.
+    var odoSourceOffsetMiles: [Int: Double] = [:]
+
+    /// What slot `slot` currently reads, in miles. Never negative: a tracker reports an unsigned
+    /// counter, and a negative offset larger than the odometer would otherwise wrap on the wire.
+    func odoSourceMiles(_ slot: Int) -> Double {
+        max(0, odometerMiles + (odoSourceOffsetMiles[slot] ?? 0))
+    }
+
     /// GPS-derived speed on the wire (km/h). Tracks vehicle speed.
     var gpsSpeedKmh: Int { Int((speedMph * 1.60934).rounded()) }
 

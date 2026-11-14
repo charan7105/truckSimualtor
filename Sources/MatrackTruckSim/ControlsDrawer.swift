@@ -608,6 +608,8 @@ struct FaultPanel: View {
                 Divider().overlay(Theme.stroke)
                 macSection
                 Divider().overlay(Theme.stroke)
+                odoSourceSection
+                Divider().overlay(Theme.stroke)
                 noWarning
                 Divider().overlay(Theme.stroke)
                 ignoredSection
@@ -704,12 +706,6 @@ struct FaultPanel: View {
                 sim.setWireOverride(field: 4, value: armed ? nil : SimConfig.odometerUnavailableSentinel)
             }
 
-            faultToggle(title: "TWO ECU ODOMETERS", on: sim.odoAlternating,
-                        subtitle: "The ECU reports two different odometers about 3,700 miles apart, flipping every packet.",
-                        look: "Phone: Help → Bluetooth → BLE Values, the odometer visibly flips. No warning — this is the finding.") {
-                sim.setOdoAlternating(!sim.odoAlternating)
-            }
-
             faultToggle(title: "BAD TIME ON 1 IN 5 PACKETS",
                         on: sim.activeFaults.contains { $0.field == 10 },
                         subtitle: "Scatters an impossible time through the stream instead of corrupting every packet.",
@@ -802,12 +798,141 @@ struct FaultPanel: View {
                     sim.sendMalformedPacket()
                 }
 
-                faultButton(title: "ODOMETER SOURCE → VIRTUAL",
-                            subtitle: "The xO packet that tells the app the odometer source changed.",
-                            look: "Phone: nothing at all. It parses this into a variable with no readers and posts a notification with no observers.") {
-                    sim.sendOdoSourcePacket(virtual: true)
+            }
+        }
+    }
+
+    /// Odometer sources — Sandeep's requirement (13 Nov 2026).
+    ///
+    /// Two or more sources, each reading from its OWN base, plus the 00FD odo report and the lock
+    /// that the report is meant to prove. Written so the numbers you compare are on screen: each row
+    /// shows what that source reads right now, and the row feeding the live packet is marked.
+    private var odoSourceSection: some View {
+        let live = sim.currentOdoSlot
+        let onCount = sim.activeOdoSlots.count
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text("Odometer sources").sectionLabel()
+                Spacer()
+                Text(onCount >= 2 ? "\(onCount) sources" : "needs 2+")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(onCount >= 2 ? Theme.green : Theme.amber)
+            }
+
+            ForEach(OdoSourceSlot.allCases) { slot in
+                let i = slot.rawValue
+                if sim.config.odoSources.indices.contains(i) {
+                    HStack(spacing: 7) {
+                        // On/off
+                        Button {
+                            sim.config.odoSources[i].enabled.toggle()
+                            if !sim.config.odoSources[i].enabled && sim.config.odoLockedSlot == i {
+                                sim.config.odoLockedSlot = nil      // can't stay locked to a source that is gone
+                            }
+                        } label: {
+                            Image(systemName: sim.config.odoSources[i].enabled ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 13))
+                                .foregroundStyle(sim.config.odoSources[i].enabled ? Theme.ice : Theme.dim)
+                        }
+                        .buttonStyle(.plain).frame(width: 18)
+
+                        Text(slot.displayName)
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(sim.config.odoSources[i].enabled ? Theme.text : Theme.dim)
+                            .frame(width: 118, alignment: .leading)
+
+                        // What this source reads right now — the number to compare.
+                        Text(sim.config.odoSources[i].enabled
+                             ? "\(Int(sim.engineOdoSourceMiles(i))) mi" : "—")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(live == i ? Theme.green : Theme.dim)
+                            .frame(width: 74, alignment: .trailing)
+
+                        // Lock — this is the 00FD fix under test.
+                        Button {
+                            sim.config.odoLockedSlot = (sim.config.odoLockedSlot == i) ? nil : i
+                        } label: {
+                            Image(systemName: sim.config.odoLockedSlot == i ? "lock.fill" : "lock.open")
+                                .font(.system(size: 11))
+                                .foregroundStyle(sim.config.odoLockedSlot == i ? Theme.amber : Theme.dim)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!sim.config.odoSources[i].enabled)
+                        .help("Lock the live odometer to this source")
+
+                        Spacer(minLength: 0)
+                        if live == i {
+                            Text("LIVE").font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(Theme.green)
+                        }
+                    }
+                    // Offset: how far this source reads from the truck's own odometer. This is what
+                    // makes two sources tell each other apart — Sandeep's requirement #2.
+                    HStack(spacing: 7) {
+                        Spacer().frame(width: 18)
+                        Text("offset").font(.system(size: 10, design: .rounded)).foregroundStyle(Theme.dim)
+                            .frame(width: 44, alignment: .leading)
+                        Slider(value: Binding(get: { sim.config.odoSources[i].offsetMiles },
+                                              set: { sim.config.odoSources[i].offsetMiles = $0.rounded() }),
+                               in: -5_000...20_000)
+                            .tint(Theme.ice).disabled(!sim.config.odoSources[i].enabled)
+                        Text("\(Int(sim.config.odoSources[i].offsetMiles)) mi")
+                            .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.dim)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+                    .padding(.bottom, 2)
                 }
             }
+
+            Divider().overlay(Theme.stroke)
+
+            // The flip — the customer's bug, reproduced.
+            NeonButton(title: sim.config.odoFlipEnabled ? "FLIPPING  ● ON" : "FLIP BETWEEN SOURCES",
+                       tint: sim.config.odoFlipEnabled ? Theme.red : Theme.ice,
+                       filled: sim.config.odoFlipEnabled) {
+                sim.config.odoFlipEnabled.toggle()
+            }
+            HStack(spacing: 7) {
+                Text("Flip every").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                    .frame(width: 62, alignment: .leading)
+                Slider(value: Binding(get: { sim.config.odoFlipIntervalSec },
+                                      set: { sim.config.odoFlipIntervalSec = $0.rounded() }), in: 1...60)
+                    .tint(Theme.ice)
+                Text("\(Int(sim.config.odoFlipIntervalSec))s")
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.ice)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            Text(sim.config.odoLockedSlot == nil
+                 ? "Live odometer alternates between the two highest-priority sources, like the customer's 00F6 data."
+                 : "LOCKED — the live odometer stays on the locked source even while the flip is on. That is the 00FD fix under test.")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(sim.config.odoLockedSlot == nil ? Theme.dim : Theme.amber)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider().overlay(Theme.stroke)
+
+            // The report packet.
+            HStack(spacing: 7) {
+                Text("Report as").font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                Picker("", selection: Binding(get: { sim.config.odoReportPrefix },
+                                              set: { sim.config.odoReportPrefix = $0 })) {
+                    Text("LO (00FD)").tag("LO")
+                    Text("XO (app reads)").tag("XO")
+                }
+                .labelsHidden().pickerStyle(.segmented)
+            }
+            NeonButton(title: "SEND ODO REPORT", icon: "arrow.up.circle.fill",
+                       tint: Theme.blue, prominent: onCount >= 2) {
+                sim.sendOdoReport()
+            }
+            Text(sim.config.odoReportPrefix == "LO"
+                 ? "00FD sends LO. The ELD app only reads XO, so it will DROP this one — use it to check the wire, not the phone."
+                 : "The app parses XO, but stores it in a variable nothing reads — so still nothing shows on the phone.")
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.amber)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Sent live only, and only with 2+ sources on — the firmware never saves it.")
+                .font(.system(size: 11, design: .rounded)).foregroundStyle(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

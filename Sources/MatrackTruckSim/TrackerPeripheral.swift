@@ -528,9 +528,9 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             // other odometer fault the tester arms. Turn it off rather than let them fight — a
             // control that appears armed while something else wins is exactly the confusion this
             // panel exists to avoid.
-            if field == 4 && odoAlternating {
-                odoAlternating = false
-                info("  (two ECU odometers turned off — it would overwrite this)")
+            if field == 4 && config.odoFlipEnabled {
+                config.odoFlipEnabled = false
+                info("  (odometer-source flip turned off — it would overwrite this)")
             }
             engine.wireFaults[field] = WireFault(value: value, probability: probability, requiresMotion: requiresMotion)
             let how = probability >= 1 ? "every packet" : "~\(Int(probability * 100))% of packets"
@@ -552,39 +552,24 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         }
     }
 
-    var faultsArmed: Bool { !engine.wireFaults.isEmpty || config.timeSkewSec != 0 || odoAlternating }
+    var faultsArmed: Bool {
+        // The odometer-source flip has to be in here. It writes field 4 every tick, so leaving it
+        // out would let RESET TO CLEAN DATA report a clean wire while the odometer kept flipping.
+        !engine.wireFaults.isEmpty || config.timeSkewSec != 0 || config.odoFlipEnabled
+    }
 
     /// One button back to a clean wire — the tester must never have to remember what they armed.
     func clearAllFaults() {
-        let n = engine.wireFaults.count + (config.timeSkewSec != 0 ? 1 : 0) + (odoAlternating ? 1 : 0)
+        let n = engine.wireFaults.count + (config.timeSkewSec != 0 ? 1 : 0) + (config.odoFlipEnabled ? 1 : 0)
         engine.wireFaults.removeAll()
         config.timeSkewSec = 0
-        odoAlternating = false
+        config.odoFlipEnabled = false      // the flip is a fault too — clearing must stop it
         faultRevision += 1
         mirror()
         info(n > 0 ? "✓ wire is clean again — \(n) fault\(n == 1 ? "" : "s") cleared" : "wire was already clean")
         if n > 0 { faultJournal("ALL CLEARED", "\(n) fault\(n == 1 ? "" : "s") removed — wire is clean") }
     }
 
-    /// Two ECU odometer series, flipping every packet. This is the shape Praboo described: the ECU
-    /// reporting two different odometers. The app never alerts — it books the jump as driven miles,
-    /// or freezes the event's mileage at 0 if the low series sits below where the duty event began.
-    func setOdoAlternating(_ on: Bool) {
-        odoAlternating = on
-        if on {
-            // Same reason in reverse: drop any standing odometer fault so only one thing owns field 4.
-            if engine.wireFaults.removeValue(forKey: 4) != nil {
-                info("  (cleared the other odometer fault — only one can own that field)")
-            }
-            info("⚠ two ECU odometer series — flipping every packet (the app will NOT alert)")
-            faultJournal("ARMED", "two ECU odometer series, flipping every packet")
-        } else {
-            engine.wireFaults.removeValue(forKey: 4)
-            info("✓ odometer back to one series")
-        }
-        faultRevision += 1
-        mirror()
-    }
 
     /// Re-send the previous dump byte for byte.
     ///
@@ -615,12 +600,104 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
         faultJournal("ONE-SHOT", "malformed packet")
     }
 
-    /// Send the odometer-source packet. Included because it is literally what was asked for — and
-    /// because sending it PROVES the app does nothing with it.
-    func sendOdoSourcePacket(virtual: Bool) {
-        sendRaw(MTPacket.odoSource(virtualEnabled: virtual, activeSource: virtual ? 1 : 0))
-        info("↻ odometer-source packet sent (\(virtual ? "virtual" : "ECU")) — the app parses it into a variable nothing reads")
-        faultJournal("ONE-SHOT", "odometer-source packet (\(virtual ? "virtual" : "ECU"))")
+    // MARK: - Odometer sources
+    //
+    // Sandeep (13 Nov 2026): the simulator needs two or more odo sources, each starting from a
+    // DIFFERENT value, and must emit the 00FD `LO` report when more than one is present — so the
+    // flip seen in the customer's 00F6 data can be reproduced on a bench, and Pranav's lock fix
+    // can be checked.
+
+    /// What a slot reads right now, in miles — for the UI, which has no access to `engine`.
+    func engineOdoSourceMiles(_ slot: Int) -> Double { engine.odoSourceMiles(slot) }
+
+    /// Slots that are switched on, in priority order (best first). Virtual is last in the list but
+    /// "overrides all" per the firmware's ladder, so it is pulled to the front when enabled.
+    var activeOdoSlots: [Int] { OdoLadder.activeSlots(config.odoSources) }
+
+    /// The slot the live odometer currently reads from. Locked wins over everything — that IS the
+    /// 00FD fix under test. Otherwise the flip alternates between the top two, and with no flip the
+    /// highest-priority source wins.
+    var currentOdoSlot: Int? {
+        OdoLadder.selected(sources: config.odoSources, flipEnabled: config.odoFlipEnabled,
+                           lockedSlot: config.odoLockedSlot, onSecond: odoFlipOnSecond)
+    }
+
+    /// Push the selected source onto the wire, and run the flip clock.
+    ///
+    /// Writes field 4 through the same `wireFaults` channel the old two-series fault used, so the
+    /// value reaches the packet without touching `engine.odometerMiles` — the truck's own odometer
+    /// must keep running underneath, which is what makes every source rise together.
+    private func applyOdoSources(dt: Double) {
+        engine.odoSourceOffsetMiles = Dictionary(uniqueKeysWithValues:
+            config.odoSources.enumerated().map { ($0.offset, $0.element.offsetMiles) })
+
+        if config.odoFlipEnabled && config.odoLockedSlot == nil && activeOdoSlots.count >= 2 {
+            // Simulated time, not wall clock: every other clock in step() is scaled, so at 30x the
+            // flip would otherwise fire 30x too often relative to the miles the truck covers.
+            odoFlipCountdown -= dt * config.timeMultiplier
+            if odoFlipCountdown <= 0 {
+                odoFlipCountdown = max(0.25, config.odoFlipIntervalSec)
+                odoFlipOnSecond.toggle()
+            }
+        } else {
+            odoFlipCountdown = max(0.25, config.odoFlipIntervalSec)
+            odoFlipOnSecond = false
+        }
+
+        // Only steer field 4 when a source other than the plain odometer is in charge, and only
+        // CLEAR it when this code is the thing that set it.
+        //
+        // Clearing unconditionally was a regression: with the default slot 0 at offset 0 this runs
+        // every tick, so ODOMETER STUCK / ODOMETER JUMP / DEFAULT ODOMETER 1-IN-5 / ODOMETER & HOURS
+        // MISSING were all wiped before a single packet could carry them.
+        switch OdoLadder.field4Action(selected: currentOdoSlot, sources: config.odoSources,
+                                      weOwnIt: odoOwnsField4) {
+        case .leaveAlone:
+            break
+        case .clearOurs:
+            engine.wireFaults[4] = nil
+            odoOwnsField4 = false
+        case .write(let slot):
+            engine.wireFaults[4] = WireFault(value: "\(MTPacket.rawOdometer(engine.odoSourceMiles(slot)))")
+            odoOwnsField4 = true
+        }
+    }
+
+    /// Build the odo-report packet for the current state. `nil` when fewer than two sources are
+    /// present: the firmware only reports when there is something to choose between ("why? odo
+    /// packets will be visible only if multiple sources present").
+    func odoReportWire(prefix: String? = nil) -> String? {
+        let slots = activeOdoSlots
+        guard OdoLadder.shouldReport(config.odoSources) else { return nil }
+        // One field per slot, in slot order — the app reads them positionally. "0" means absent,
+        // which is what the 00FD capture shows for a source the truck does not have.
+        let raws = OdoSourceSlot.allCases.map { s -> String in
+            guard slots.contains(s.rawValue) else { return "0" }
+            return "\(MTPacket.rawOdometer(engine.odoSourceMiles(s.rawValue)))"
+        }
+        let shown = currentOdoSlot.map { engine.odoSourceMiles($0) } ?? engine.odometerMiles
+        return MTPacket.odoReport(prefix: prefix ?? config.odoReportPrefix,
+                                  lockedSlot: config.odoLockedSlot,
+                                  overrideActive: config.odoLockedSlot != nil,
+                                  virtualEnabled: config.odoSources.indices.contains(OdoSourceSlot.virtualGps.rawValue)
+                                      && config.odoSources[OdoSourceSlot.virtualGps.rawValue].enabled,
+                                  discoveryActive: false,
+                                  canMode: config.odoCanMode,
+                                  odometerRaw: MTPacket.rawOdometer(shown),
+                                  sourceRaws: raws)
+    }
+
+    /// Send the odo-report packet now. Live only — never buffered into the stored backlog, because
+    /// the firmware never saves it ("never reported as saved packets. Only available as live").
+    func sendOdoReport() {
+        guard let wire = odoReportWire() else {
+            info("⚠ odo report needs 2+ sources switched on — only \(activeOdoSlots.count) is")
+            return
+        }
+        sendRaw(wire)
+        let names = activeOdoSlots.compactMap { OdoSourceSlot(rawValue: $0)?.displayName }.joined(separator: " + ")
+        info("↻ \(config.odoReportPrefix) odo report sent — \(activeOdoSlots.count) sources (\(names))")
+        faultJournal("ONE-SHOT", "odo report (\(activeOdoSlots.count) sources)")
     }
 
     /// A burst of alternating ignition packets. Cannot go through step(): that path is edge-triggered
@@ -877,13 +954,14 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
     /// Stable for the life of the process, so every fault line in the log belongs to one run.
     private let faultSessionId = String(UInt32.random(in: 0x1000...0xFFFF), radix: 16).uppercased()
     private var faultSessionSeq = 0
-    @Published var odoAlternating = false         // fault injection: two ECU odometer series
     /// Bumped whenever a fault is armed or cleared. `engine` is not an ObservableObject, so mutating
     /// `engine.wireFaults` publishes nothing on its own — with the truck parked, `mirror()` finds no
     /// changed telemetry and the button would not light up until something else moved. This is the
     /// "looks armed but isn't" failure the panel exists to prevent, so it gets its own signal.
     @Published private(set) var faultRevision = 0
-    private var odoSeriesHigh = false
+    private var odoFlipOnSecond = false       // which of the top two sources field 4 is reading
+    private var odoOwnsField4 = false         // true while the source model is the thing writing field 4
+    private var odoFlipCountdown: Double = 0
     private var outageStartedAt: Date?            // when the current offline window began (see step())
     private var undeliveredStored: [Emitted] = [] // backlog handed to the dump but not yet fully sent
     private var flashFullWarned = false
@@ -1204,10 +1282,7 @@ final class SimController: NSObject, ObservableObject, CBPeripheralManagerDelega
             engine.advance(dt: dt * config.timeMultiplier)
             deadReckon(dt: dt * config.timeMultiplier)      // no route loaded: still move the GPS
         }
-        if odoAlternating {                                 // two ECU series: flip on every tick
-            odoSeriesHigh.toggle()
-            engine.wireFaults[4] = WireFault(value: odoSeriesHigh ? config.odoSeriesHighRaw : config.odoSeriesLowRaw)
-        }
+        applyOdoSources(dt: dt)                             // multi-source odometer + the customer's flip
         stateSaveCountdown -= dt                            // persist so a restart resumes, not resets
         if stateSaveCountdown <= 0 { stateSaveCountdown = 5; engine.persisted.save() }
         mirror()

@@ -136,10 +136,39 @@ struct SimConfig: Codable, Equatable {
     /// branch (`speed >= 5`) was never exercised at all. 60 is a normal highway speed and well clear
     /// of the threshold.
     var storedDumpSpeedMph: Double = 60
-    /// The two ECU odometer series the ALTERNATING fault flips between, as raw field-4 values
-    /// (x10 km). ~3,700 miles apart, which is large enough to be obvious in the app's day log.
-    var odoSeriesLowRaw = "402336"
-    var odoSeriesHighRaw = "462336"
+
+    // MARK: Odometer sources
+    /// Per-slot configuration, indexed by `OdoSourceSlot.rawValue`.
+    ///
+    /// Defaults give TWO enabled sources at DIFFERENT offsets, which is requirement #1 and #2 from
+    /// Sandeep: with both sources reading the same number a flip is invisible, which is exactly what
+    /// his 00FD capture showed (`...,1000013,1000013,...`). 3,700 miles apart is large enough to be
+    /// unmistakable in the app's day log and matches the gap the old two-series fault used.
+    var odoSources: [OdoSourceConfig] = [
+        OdoSourceConfig(enabled: true,  offsetMiles: 0),       // PGN 65248 - priority 1, reads the truth
+        OdoSourceConfig(enabled: true,  offsetMiles: 3_700),   // PGN 65217 SA17 - priority 2
+        OdoSourceConfig(enabled: false, offsetMiles: 7_400),   // PGN 65217 SA0 - priority 3
+        OdoSourceConfig(enabled: false, offsetMiles: -1_250),  // Virtual (GPS) - overrides all
+    ]
+    /// Alternate the LIVE odometer between the two highest-priority enabled sources, reproducing the
+    /// customer's flip. Off by default - a truck with several sources is not supposed to flip.
+    var odoFlipEnabled: Bool = false
+    /// Seconds between flips. 21 s is the median gap measured in the customer capture.
+    var odoFlipIntervalSec: Double = 21
+    /// Slot the firmware has LOCKED on, or nil for "not locked". This is the 00FD fix under test:
+    /// once locked the live odometer must stay on that source even with the flip running.
+    var odoLockedSlot: Int? = nil
+    /// Reported in field 7 of the odo-report packet. 2 = J1939, matching Sandeep's 00FD sample.
+    var odoCanMode: Int = 2
+    /// Prefix for the odo-report packet.
+    ///
+    /// 00FD firmware sends `LO`, which is what Sandeep asked for and so is the default. BUT the ELD
+    /// app only dispatches on `XO,` (BleClass.swift `case let v where v.hasPrefix("XO,")`) and its
+    /// parser rejects anything whose first field is not "XO"
+    /// (MatrackELD/Utils/OdoSource.swift: `first.uppercased() == "XO"`). Checked in both the current
+    /// build and r5176. So an `LO` packet is correct firmware behaviour but the phone will drop it
+    /// silently — switch this to `XO` when the point of the test is to see the app parse it.
+    var odoReportPrefix: String = "LO"
 
     // MARK: Hard limits on operator-entered telemetry
     /// Ceilings for the TEST SETUP fields. Two reasons they exist. (1) MTPacket converts miles to a
@@ -184,4 +213,99 @@ struct SimConfig: Codable, Equatable {
     }
 
     static let `default` = SimConfig()
+}
+
+// MARK: - Odometer sources (Sandeep, 13 Nov 2026)
+//
+// A real MT tracker can read the odometer from several places at once and picks one by a priority
+// ladder. The customer case (00F6) shows the live LP odometer alternating between TWO counters about
+// every 21 s — both rising with the truck, but from different bases. To reproduce that on a bench the
+// simulator needs real sources, not one number: each slot keeps its own offset from the truck's
+// odometer, so every source counts with the truck while reading differently.
+//
+// Slots are POSITIONAL: they map 1:1 onto the source fields of the odo-report packet, which the ELD
+// app parses from index 9 onward (MatrackELD/Utils/OdoSource.swift). Order here must not change.
+enum OdoSourceSlot: Int, CaseIterable, Codable, Identifiable {
+    var id: Int { rawValue }
+    case pgn65248 = 0        // J1939 PGN 65248 (SPN 245, by request every 10 s) - priority 1 (best)
+    case pgn65217sa17 = 1    // J1939 PGN 65217 from SA 0x17 (broadcast)         - priority 2
+    case pgn65217sa00 = 2    // J1939 PGN 65217 from SA 0x00 (broadcast)         - priority 3
+    case virtualGps = 3      // J1939 Virtual (GPS/speed accumulator)            - overrides all
+
+    /// Name the ELD app shows for this slot, copied from `OdoPacket.knownSourceNames` so the two
+    /// sides cannot drift apart.
+    var displayName: String {
+        switch self {
+        case .pgn65248:     return "Odo PGN65248"
+        case .pgn65217sa17: return "Odo PGN65217 SA17"
+        case .pgn65217sa00: return "Odo PGN65217 SA0"
+        case .virtualGps:   return "Virtual (GPS)"
+        }
+    }
+
+    /// The command value the firmware expects in `odosrc,<n>` — 1-based, matching the app's
+    /// `OdoSourceEntry.commandValue`.
+    var commandValue: Int { rawValue + 1 }
+}
+
+/// The source-selection ladder, as a pure function so both the app and the self-test exercise the
+/// SAME code. The flip and the lock are the whole point of the requirement, and they used to live
+/// inside the controller's tick where no headless test could reach them.
+enum OdoLadder {
+    /// Enabled slots in priority order. Virtual is last in the table but "overrides all" in the
+    /// firmware's ladder, so it is pulled to the front when present.
+    static func activeSlots(_ sources: [OdoSourceConfig]) -> [Int] {
+        var slots = OdoSourceSlot.allCases
+            .filter { sources.indices.contains($0.rawValue) && sources[$0.rawValue].enabled }
+            .map { $0.rawValue }
+        if let v = slots.firstIndex(of: OdoSourceSlot.virtualGps.rawValue) {
+            slots.insert(slots.remove(at: v), at: 0)
+        }
+        return slots
+    }
+
+    /// Which slot the live odometer reads from.
+    ///
+    /// Order matters: a LOCKED slot wins over the flip. That is exactly the 00FD behaviour under
+    /// test — "once locked, whatever is the locked one" — so if this ever returns the flipping
+    /// source while locked, the fix is not working.
+    static func selected(sources: [OdoSourceConfig], flipEnabled: Bool,
+                         lockedSlot: Int?, onSecond: Bool) -> Int? {
+        let slots = activeSlots(sources)
+        if let locked = lockedSlot, slots.contains(locked) { return locked }
+        guard let first = slots.first else { return nil }
+        guard flipEnabled, slots.count >= 2 else { return first }
+        return onSecond ? slots[1] : first
+    }
+
+    /// What the source model should do with wire field 4 on this tick.
+    ///
+    /// Pulled out as a pure function because getting it wrong is invisible: clearing field 4
+    /// unconditionally wipes any odometer fault the tester armed (ODOMETER STUCK, ODOMETER JUMP,
+    /// the 1-in-5 variants) before a single packet carries it, and nothing on screen says so.
+    enum Field4Action: Equatable {
+        case leaveAlone          // some other fault owns the field, or nothing to do
+        case write(slot: Int)    // this slot's reading goes on the wire
+        case clearOurs           // we set it last tick and no longer should
+    }
+
+    static func field4Action(selected: Int?, sources: [OdoSourceConfig], weOwnIt: Bool) -> Field4Action {
+        let offset = selected.flatMap { sources.indices.contains($0) ? sources[$0].offsetMiles : nil } ?? 0
+        guard let slot = selected, offset != 0 else { return weOwnIt ? .clearOurs : .leaveAlone }
+        return .write(slot: slot)
+    }
+
+    /// The report is only emitted when there is more than one source to choose between
+    /// ("odo packets will be visible only if multiple sources present").
+    static func shouldReport(_ sources: [OdoSourceConfig]) -> Bool { activeSlots(sources).count >= 2 }
+}
+
+/// One configured odometer source.
+struct OdoSourceConfig: Codable, Equatable {
+    var enabled: Bool
+    /// Miles this source reads ABOVE the truck's odometer. An offset rather than an absolute start
+    /// because the customer evidence is explicit that both counters rise with the truck ("within an
+    /// episode it rises at the same rate as the real odometer"); a fixed start would stop counting
+    /// the moment the operator edited the odometer in TEST SETUP.
+    var offsetMiles: Double
 }

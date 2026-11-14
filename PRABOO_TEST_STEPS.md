@@ -17,7 +17,7 @@ Legend: ⚠ the phone warns · ◐ bad data, no warning · ∅ the phone does no
 
 ## 1. Virtual odo → ECU odo switching ∅
 
-**Do:** expand *THE PHONE IGNORES THESE* → click **ODOMETER SOURCE → VIRTUAL**.
+**Do:** scroll to *Odometer sources* → click **SEND ODO REPORT**.
 
 **Expect:** nothing on the phone. Ever.
 
@@ -29,7 +29,7 @@ is invisible to the app by construction. Run this to *demonstrate* that, not to 
 
 ## 2. Two ECU odo switching ◐
 
-**Do:** click **TWO ECU ODOMETERS**. Leave it on for ~30 seconds.
+**Do:** scroll to *Odometer sources* → click **FLIP BETWEEN SOURCES**. Leave it on for ~30 seconds.
 
 **Look:** phone → Help → Bluetooth → **BLE Values**. The odometer visibly flips between two series
 about 3,700 miles apart, every packet.

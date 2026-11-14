@@ -153,9 +153,34 @@ namespace MatrackSim.Core
 
         public static readonly DateTime FutureStoredPacketDate =
             new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        /// <summary>The two ECU odometer series the ALTERNATING fault flips between (raw field-4, x10 km).</summary>
-        public string OdoSeriesLowRaw = "402336";
-        public string OdoSeriesHighRaw = "462336";
+
+        // ---- Odometer sources (Sandeep, 13 Nov 2026) ------------------------------------------
+        // Mirrors SimConfig.odoSources in the Swift build. Two sources ON at DIFFERENT offsets by
+        // default: with both reading the same number a flip is invisible, which is exactly what the
+        // 00FD capture showed (...,1000013,1000013,...).
+        public System.Collections.Generic.List<OdoSourceConfig> OdoSources =
+            new System.Collections.Generic.List<OdoSourceConfig>
+            {
+                new OdoSourceConfig(true,      0),   // PGN 65248       - priority 1, reads the truth
+                new OdoSourceConfig(true,   3700),   // PGN 65217 SA17  - priority 2
+                new OdoSourceConfig(false,  7400),   // PGN 65217 SA0   - priority 3
+                new OdoSourceConfig(false, -1250),   // Virtual (GPS)   - overrides all
+            };
+        /// <summary>Alternate the live odometer between the top two sources (the customer's flip).</summary>
+        public bool OdoFlipEnabled = false;
+        /// <summary>Seconds between flips. 21 s is the median gap in the customer capture.</summary>
+        public double OdoFlipIntervalSec = 21;
+        /// <summary>Slot the firmware has locked on, or null. This is the 00FD fix under test.</summary>
+        public int? OdoLockedSlot = null;
+        /// <summary>Field 7 of the odo report. 2 = J1939, matching the 00FD sample.</summary>
+        public int OdoCanMode = 2;
+        /// <summary>
+        /// Prefix for the odo report. 00FD sends LO, which is the default. BUT the ELD app only
+        /// dispatches on "XO," (BleClass) and its parser rejects anything whose first field is not
+        /// "XO" (MatrackELD/Utils/OdoSource.swift) - checked in the current build and r5176. So LO is
+        /// correct firmware behaviour but the phone drops it silently.
+        /// </summary>
+        public string OdoReportPrefix = "LO";
 
         // ---- Hard limits on operator-entered telemetry -----------------------------------------
         /// <summary>
